@@ -1,3 +1,6 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 """
 detect_alert.py — Phase 1 Step 2
 Adds alert logic to detection:
@@ -59,7 +62,8 @@ def setup_directories():
 def load_model():
     logger.info("Loading YOLOv8 model...")
     model = YOLO("yolov8n.pt")
-    logger.info("Model loaded successfully")
+    model.to("cuda")
+    logger.info(f"Model loaded on: {next(model.model.parameters()).device}")
     return model
 
 # ── Geometry helpers ───────────────────────────────────────────────────────────
@@ -247,173 +251,164 @@ def detect_with_alerts(model, source):
     session_id  = int(time.time())
     source_name = "webcam" if is_webcam else Path(str(source)).stem
 
-    # Output video writer
     output_path = OUTPUT_DIR / f"alert_{source_name}_{session_id}.mp4"
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(str(output_path), fourcc, fps_source, (width, height))
 
-    # Tracking variables
-    all_detections = []
-    all_alerts     = []
-    frame_count    = 0
-    fps_display    = 0.0
-    fps_timer      = time.time()
+    all_detections  = []
+    all_alerts      = []
+    frame_count     = 0
+    fps_display     = 0.0
+    fps_timer       = time.time()
     last_alert_time = 0.0
 
-    logger.info("Detection with alerts running. Press Q to stop.")
+    logger.info("Detection running. Press Q in video window or Ctrl+C to stop.")
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            logger.info("End of video")
-            break
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                logger.info("End of video")
+                break
 
-        frame_count += 1
-        timestamp   = datetime.now().isoformat()
+            frame_count += 1
+            timestamp   = datetime.now().isoformat()
 
-        # Run YOLOv8
-        results = model(frame, verbose=False)
-        result  = results[0]
+            results = model(frame, verbose=False)
+            result  = results[0]
 
-        # Separate persons and objects
-        persons = []
-        objects = []
-        annotated_frame = frame.copy()
-        has_alert = False
+            persons         = []
+            objects         = []
+            annotated_frame = frame.copy()
 
-        if result.boxes is not None and len(result.boxes) > 0:
-            for box in result.boxes:
-                class_id   = int(box.cls[0])
-                confidence = float(box.conf[0])
-                coords     = box.xyxy[0].tolist()
+            if result.boxes is not None and len(result.boxes) > 0:
+                for box in result.boxes:
+                    class_id   = int(box.cls[0])
+                    confidence = float(box.conf[0])
+                    coords     = box.xyxy[0].tolist()
 
-                if class_id not in RELEVANT_CLASSES:
-                    continue
-                if confidence < CONFIDENCE_THRESHOLD:
-                    continue
+                    if class_id not in RELEVANT_CLASSES:
+                        continue
+                    if confidence < CONFIDENCE_THRESHOLD:
+                        continue
 
-                class_name = RELEVANT_CLASSES[class_id]
-                bbox_dict  = {
-                    "x1": int(coords[0]),
-                    "y1": int(coords[1]),
-                    "x2": int(coords[2]),
-                    "y2": int(coords[3]),
-                }
-                bbox_list = [
-                    int(coords[0]),
-                    int(coords[1]),
-                    int(coords[2]),
-                    int(coords[3])
-                ]
+                    class_name = RELEVANT_CLASSES[class_id]
+                    bbox_dict  = {
+                        "x1": int(coords[0]),
+                        "y1": int(coords[1]),
+                        "x2": int(coords[2]),
+                        "y2": int(coords[3]),
+                    }
+                    bbox_list = [
+                        int(coords[0]),
+                        int(coords[1]),
+                        int(coords[2]),
+                        int(coords[3])
+                    ]
 
-                detection = {
-                    "class_id":   class_id,
-                    "class_name": class_name,
-                    "confidence": round(confidence, 4),
-                    "bbox":       bbox_dict,
-                    "bbox_list":  bbox_list,
-                }
+                    detection = {
+                        "class_id":   class_id,
+                        "class_name": class_name,
+                        "confidence": round(confidence, 4),
+                        "bbox":       bbox_dict,
+                        "bbox_list":  bbox_list,
+                    }
 
-                if class_id == 0:
-                    persons.append(detection)
-                    color = (0, 0, 255)  # red for person
-                else:
-                    objects.append(detection)
-                    color = (255, 100, 0)  # blue for object
+                    if class_id == 0:
+                        persons.append(detection)
+                        color = (0, 0, 255)
+                    else:
+                        objects.append(detection)
+                        color = (255, 100, 0)
 
-                all_detections.append({
-                    "frame_index": frame_count,
-                    "timestamp":   timestamp,
-                    **{k: v for k, v in detection.items() if k != "bbox_list"}
-                })
+                    all_detections.append({
+                        "frame_index": frame_count,
+                        "timestamp":   timestamp,
+                        **{k: v for k, v in detection.items() if k != "bbox_list"}
+                    })
 
-                annotated_frame = draw_box(
-                    annotated_frame, coords, class_name, confidence, color
+                    annotated_frame = draw_box(
+                        annotated_frame, coords, class_name, confidence, color
+                    )
+
+            now = time.time()
+            if persons and objects and (now - last_alert_time) > ALERT_COOLDOWN:
+                frame_alerts = check_alerts(
+                    persons, objects,
+                    annotated_frame, frame_count,
+                    timestamp, session_id
                 )
 
-        # Check for alerts
-        now = time.time()
-        if persons and objects and (now - last_alert_time) > ALERT_COOLDOWN:
-            frame_alerts = check_alerts(
-                persons, objects,
-                annotated_frame, frame_count,
-                timestamp, session_id
+                if frame_alerts:
+                    last_alert_time = now
+                    all_alerts.extend(frame_alerts)
+
+                    for alert in frame_alerts:
+                        logger.warning(
+                            f"ALERT [{alert['severity']}] — "
+                            f"Person near {alert['object']['class_name']} "
+                            f"at frame {frame_count}"
+                        )
+
+                        annotated_frame = draw_alert_banner(
+                            annotated_frame,
+                            "person",
+                            frame_alerts[0]["object"]["class_name"]
+                        )
+
+                        snapshot_path = SNAPSHOT_DIR / f"alert_{session_id}_{frame_count}.jpg"
+                        cv2.imwrite(str(snapshot_path), annotated_frame)
+                        logger.info(f"Snapshot saved: {snapshot_path}")
+
+                        alert_path = ALERT_DIR / f"alert_{alert['alert_id']}.json"
+                        with open(alert_path, "w") as f:
+                            json.dump(alert, f, indent=2)
+
+            if frame_count % 10 == 0:
+                elapsed     = time.time() - fps_timer
+                fps_display = 10 / elapsed if elapsed > 0 else 0
+                fps_timer   = time.time()
+
+            annotated_frame = add_status_overlay(
+                annotated_frame,
+                frame_count,
+                len(all_detections),
+                len(all_alerts),
+                fps_display
             )
 
-            if frame_alerts:
-                has_alert       = True
-                last_alert_time = now
-                all_alerts.extend(frame_alerts)
+            writer.write(annotated_frame)
+            cv2.imshow("Theft Detection — press Q to stop", annotated_frame)
 
-                for alert in frame_alerts:
-                    logger.warning(
-                        f"ALERT [{alert['severity']}] — "
-                        f"Person near {alert['object']['class_name']} "
-                        f"at frame {frame_count}"
-                    )
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                logger.info("Stopped by user")
+                break
 
-                    # Draw alert banner
-                    annotated_frame = draw_alert_banner(
-                        annotated_frame,
-                        "person",
-                        frame_alerts[0]["object"]["class_name"]
-                    )
+    except KeyboardInterrupt:
+        logger.info("Stopped by Ctrl+C")
 
-                    # Save snapshot
-                    snapshot_path = SNAPSHOT_DIR / f"alert_{session_id}_{frame_count}.jpg"
-                    cv2.imwrite(str(snapshot_path), annotated_frame)
-                    logger.info(f"Snapshot saved: {snapshot_path}")
+    finally:
+        cap.release()
+        writer.release()
+        cv2.destroyAllWindows()
 
-                    # Save individual alert JSON
-                    alert_path = ALERT_DIR / f"alert_{alert['alert_id']}.json"
-                    with open(alert_path, "w") as f:
-                        json.dump(alert, f, indent=2)
+        session_log = {
+            "session_id":       session_id,
+            "source":           str(source),
+            "total_frames":     frame_count,
+            "total_detections": len(all_detections),
+            "total_alerts":     len(all_alerts),
+            "detections":       all_detections,
+            "alerts":           all_alerts,
+        }
+        log_path = LOG_DIR / f"session_{source_name}_{session_id}.json"
+        with open(log_path, "w") as f:
+            json.dump(session_log, f, indent=2)
 
-        # Update FPS every 10 frames
-        if frame_count % 10 == 0:
-            elapsed     = time.time() - fps_timer
-            fps_display = 10 / elapsed if elapsed > 0 else 0
-            fps_timer   = time.time()
-
-        # Add status bar
-        annotated_frame = add_status_overlay(
-            annotated_frame,
-            frame_count,
-            len(all_detections),
-            len(all_alerts),
-            fps_display
-        )
-
-        writer.write(annotated_frame)
-        cv2.imshow("Theft Detection — press Q to stop", annotated_frame)
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            logger.info("Stopped by user")
-            break
-
-    # Cleanup
-    cap.release()
-    writer.release()
-    cv2.destroyAllWindows()
-
-    # Save full session log
-    session_log = {
-        "session_id":       session_id,
-        "source":           str(source),
-        "total_frames":     frame_count,
-        "total_detections": len(all_detections),
-        "total_alerts":     len(all_alerts),
-        "detections":       all_detections,
-        "alerts":           all_alerts,
-    }
-    log_path = LOG_DIR / f"session_{source_name}_{session_id}.json"
-    with open(log_path, "w") as f:
-        json.dump(session_log, f, indent=2)
-
-    logger.success(f"Session done — {frame_count} frames, {len(all_alerts)} alerts")
-    logger.success(f"Output video:  {output_path}")
-    logger.success(f"Session log:   {log_path}")
-    logger.success(f"Snapshots in:  {SNAPSHOT_DIR}")
+        logger.success(f"Session done — {frame_count} frames, {len(all_alerts)} alerts")
+        logger.success(f"Output video:  {output_path}")
+        logger.success(f"Session log:   {log_path}")
+        logger.success(f"Snapshots in:  {SNAPSHOT_DIR}")
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
