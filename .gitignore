@@ -21,3 +21,12 @@ __pycache__/
 # Windows
 Thumbs.db
 desktop.ini
+
+# Test images
+test_cam*.jpg
+test_cam*.png
+bus.jpg
+*.jpg
+*.png
+*.jpeg
+*.mp4
