@@ -13,6 +13,7 @@ __pycache__/
 *.pyo
 
 # Environment variables
+backend/.env
 .env
 
 # pyenv
