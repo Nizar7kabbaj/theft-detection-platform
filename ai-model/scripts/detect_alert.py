@@ -2,11 +2,12 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 """
-detect_alert.py — Phase 1 Step 2
+detect_alert.py — Phase 1 Step 2 + API Integration
 Adds alert logic to detection:
 - Detects when a person is close to an object
 - Saves snapshot on alert
 - Logs alerts to separate JSON file
+- Sends alerts and detections to FastAPI backend
 """
 
 import cv2
@@ -17,6 +18,8 @@ from pathlib import Path
 from datetime import datetime
 from ultralytics import YOLO
 from loguru import logger
+
+from api_client import send_alert, send_detection, check_api_health
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
@@ -33,20 +36,12 @@ RELEVANT_CLASSES = {
     73: "book",
 }
 
-# Only these classes trigger an alert when near a person
 SUSPICIOUS_OBJECTS = {24, 25, 26, 28, 39, 63, 67}
 
 CONFIDENCE_THRESHOLD = 0.5
+OVERLAP_THRESHOLD    = 0.0
+ALERT_COOLDOWN       = 3.0
 
-# How much two boxes must overlap to trigger alert (0.0 to 1.0)
-# 0.0 = just touching is enough
-# 0.3 = must overlap 30%
-OVERLAP_THRESHOLD = 0.0
-
-# Minimum seconds between two alerts (avoid spam)
-ALERT_COOLDOWN = 3.0
-
-# Output directories
 OUTPUT_DIR   = Path("ai-model/outputs/detections")
 SNAPSHOT_DIR = Path("ai-model/outputs/snapshots")
 LOG_DIR      = Path("ai-model/outputs/logs")
@@ -69,51 +64,33 @@ def load_model():
 # ── Geometry helpers ───────────────────────────────────────────────────────────
 
 def get_box_area(box):
-    """Calculate area of a bounding box."""
     x1, y1, x2, y2 = box
     return max(0, x2 - x1) * max(0, y2 - y1)
 
 
 def get_intersection_area(box_a, box_b):
-    """Calculate the overlapping area between two boxes."""
     ax1, ay1, ax2, ay2 = box_a
     bx1, by1, bx2, by2 = box_b
-
     ix1 = max(ax1, bx1)
     iy1 = max(ay1, by1)
     ix2 = min(ax2, bx2)
     iy2 = min(ay2, by2)
-
     if ix2 <= ix1 or iy2 <= iy1:
         return 0.0
-
     return (ix2 - ix1) * (iy2 - iy1)
 
 
 def get_iou(box_a, box_b):
-    """
-    Calculate IoU (Intersection over Union) between two boxes.
-    IoU = 0.0 means no overlap at all
-    IoU = 1.0 means perfect overlap
-    """
     intersection = get_intersection_area(box_a, box_b)
     if intersection == 0:
         return 0.0
-
     area_a = get_box_area(box_a)
     area_b = get_box_area(box_b)
     union  = area_a + area_b - intersection
-
     return intersection / union if union > 0 else 0.0
 
 
 def boxes_are_close(box_a, box_b, expand_px=60):
-    """
-    Check if two boxes are close to each other.
-    We expand box_a by expand_px pixels in all directions
-    then check if it intersects with box_b.
-    This catches cases where person is near but not touching the object.
-    """
     ax1, ay1, ax2, ay2 = box_a
     expanded = (
         ax1 - expand_px,
@@ -127,9 +104,7 @@ def boxes_are_close(box_a, box_b, expand_px=60):
 
 def draw_box(frame, box, label, confidence, color):
     x1, y1, x2, y2 = map(int, box)
-
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-
     text = f"{label} {confidence:.0%}"
     (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
     cv2.rectangle(frame, (x1, y1 - th - 8), (x1 + tw + 4, y1), color, -1)
@@ -143,14 +118,10 @@ def draw_box(frame, box, label, confidence, color):
 
 
 def draw_alert_banner(frame, person_label, object_label):
-    """Draw a red alert banner at the bottom of the frame."""
     h, w = frame.shape[:2]
-
-    # Red banner at bottom
     overlay = frame.copy()
     cv2.rectangle(overlay, (0, h - 40), (w, h), (0, 0, 180), -1)
     cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
-
     alert_text = f"ALERT: {person_label} near {object_label}"
     cv2.putText(
         frame, alert_text,
@@ -165,7 +136,6 @@ def add_status_overlay(frame, frame_count, detection_count, alert_count, fps):
     overlay = frame.copy()
     cv2.rectangle(overlay, (0, 0), (frame.shape[1], 32), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
-
     status = (
         f"Frame: {frame_count}  |  "
         f"Detections: {detection_count}  |  "
@@ -183,25 +153,16 @@ def add_status_overlay(frame, frame_count, detection_count, alert_count, fps):
 # ── Alert logic ────────────────────────────────────────────────────────────────
 
 def check_alerts(persons, objects, frame, frame_index, timestamp, session_id):
-    """
-    Check if any person is close to any suspicious object.
-    Returns list of alert dictionaries.
-    """
     alerts = []
-
     for person in persons:
         for obj in objects:
-
-            # Skip if object is not in suspicious list
             if obj["class_id"] not in SUSPICIOUS_OBJECTS:
                 continue
-
             is_close = boxes_are_close(
                 person["bbox_list"],
                 obj["bbox_list"],
                 expand_px=80
             )
-
             if is_close:
                 alert = {
                     "alert_id":    f"{session_id}_{frame_index}_{obj['class_id']}",
@@ -220,12 +181,11 @@ def check_alerts(persons, objects, frame, frame_index, timestamp, session_id):
                     "severity": "HIGH" if obj["class_id"] in {63, 28} else "MEDIUM"
                 }
                 alerts.append(alert)
-
     return alerts
 
 # ── Main detection function ────────────────────────────────────────────────────
 
-def detect_with_alerts(model, source):
+def detect_with_alerts(model, source, api_available=False):
     """Run detection with alert logic on webcam or video file."""
 
     is_webcam = isinstance(source, int)
@@ -321,11 +281,21 @@ def detect_with_alerts(model, source):
                         objects.append(detection)
                         color = (255, 100, 0)
 
-                    all_detections.append({
+                    # Build detection record
+                    detection_record = {
+                        "session_id":  session_id,
                         "frame_index": frame_count,
                         "timestamp":   timestamp,
-                        **{k: v for k, v in detection.items() if k != "bbox_list"}
-                    })
+                        "camera_id":   "webcam-01",
+                        "class_name":  detection["class_name"],
+                        "confidence":  detection["confidence"],
+                        "bbox":        detection["bbox"],
+                    }
+                    all_detections.append(detection_record)
+
+                    # Send every 10th detection to API to avoid overload
+                    if api_available and frame_count % 10 == 0:
+                        send_detection(detection_record)
 
                     annotated_frame = draw_box(
                         annotated_frame, coords, class_name, confidence, color
@@ -356,13 +326,19 @@ def detect_with_alerts(model, source):
                             frame_alerts[0]["object"]["class_name"]
                         )
 
+                        # Save snapshot
                         snapshot_path = SNAPSHOT_DIR / f"alert_{session_id}_{frame_count}.jpg"
                         cv2.imwrite(str(snapshot_path), annotated_frame)
                         logger.info(f"Snapshot saved: {snapshot_path}")
 
+                        # Save alert JSON locally
                         alert_path = ALERT_DIR / f"alert_{alert['alert_id']}.json"
                         with open(alert_path, "w") as f:
                             json.dump(alert, f, indent=2)
+
+                        # Send alert to backend API
+                        if api_available:
+                            send_alert(alert, snapshot_path)
 
             if frame_count % 10 == 0:
                 elapsed     = time.time() - fps_timer
@@ -425,10 +401,15 @@ def main():
     setup_directories()
     model = load_model()
 
+    # Check if backend API is running
+    api_available = check_api_health()
+    if not api_available:
+        logger.warning("Running in offline mode — data saved locally only")
+
     if source.isdigit():
-        detect_with_alerts(model, int(source))
+        detect_with_alerts(model, int(source), api_available)
     else:
-        detect_with_alerts(model, source)
+        detect_with_alerts(model, source, api_available)
 
 
 if __name__ == "__main__":
