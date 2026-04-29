@@ -1,0 +1,39 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-primary:    #0a0e1a;
+  --bg-secondary:  #111827;
+  --bg-card:       #1a2235;
+  --bg-hover:      #1e2a42;
+  --accent-blue:   #3b82f6;
+  --accent-cyan:   #06b6d4;
+  --alert-high:    #ef4444;
+  --alert-medium:  #f59e0b;
+  --alert-low:     #10b981;
+  --text-primary:  #f1f5f9;
+  --text-secondary:#94a3b8;
+  --text-muted:    #64748b;
+  --border:        #1e293b;
+  --border-light:  #2d3748;
+  --success:       #10b981;
+  --sidebar-width: 240px;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+
+.badge-high   { background: rgba(239,68,68,0.15);  color: #ef4444; }
+.badge-medium { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.badge-low    { background: rgba(16,185,129,0.15); color: #10b981; }
