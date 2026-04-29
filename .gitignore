@@ -17,3 +17,7 @@ __pycache__/
 
 # pyenv
 .python-version
+
+# Windows
+Thumbs.db
+desktop.ini
