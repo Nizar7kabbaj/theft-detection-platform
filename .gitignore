@@ -1,29 +1,46 @@
-# Virtual environment
+# === Python ===
 venv/
-
-# Model weights (too large for Git)
-*.pt
-
-# Output files (generated, not source code)
-ai-model/outputs/
-
-# Python cache
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
 
-# Environment variables
-backend/.env
-.env
-
-# pyenv
+# === pyenv ===
 .python-version
 
-# Windows
+# === Environment variables / secrets ===
+backend/.env
+.env
+*.pem
+*.key
+secrets.json
+
+# === Model weights (too large for Git) ===
+*.pt
+
+# === AI output files (generated, not source) ===
+ai-model/outputs/
+
+# === Node / Frontend ===
+node_modules/
+.next/
+dist/
+build/
+*.log
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+
+# === OS junk ===
 Thumbs.db
 desktop.ini
+.DS_Store
 
-# Test images
+# === Test images / videos ===
 test_cam*.jpg
 test_cam*.png
 bus.jpg
