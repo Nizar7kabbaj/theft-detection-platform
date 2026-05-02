@@ -1,5 +1,6 @@
 """
 alerts.py — Alert management endpoints
+Updated TDP-32: handle bend alerts (no object field)
 """
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
@@ -16,20 +17,25 @@ async def create_alert(alert: AlertCreate):
     """Save an alert from the AI model."""
     db = get_database()
     alert_doc = {
-        "alert_id":     alert.alert_id,
-        "session_id":   alert.session_id,
-        "frame_index":  alert.frame_index,
-        "timestamp":    alert.timestamp,
-        "camera_id":    alert.camera_id,
-        "person":       alert.person,
-        "object":       alert.object,
-        "severity":     alert.severity,
+        "alert_id":      alert.alert_id,
+        "session_id":    alert.session_id,
+        "frame_index":   alert.frame_index,
+        "timestamp":     alert.timestamp,
+        "camera_id":     alert.camera_id,
+        "person":        alert.person,
+        "object":        alert.object,
+        "severity":      alert.severity,
         "snapshot_path": alert.snapshot_path,
-        "created_at":   datetime.utcnow(),
-        "acknowledged": False,
+        "alert_type":    alert.alert_type,
+        "keypoints":     alert.keypoints,
+        "torso_angle":   alert.torso_angle,
+        "created_at":    datetime.utcnow(),
+        "acknowledged":  False,
     }
     result = await db.alerts.insert_one(alert_doc)
-    logger.warning(f"Alert saved: {alert.severity} — {alert.object.get('class_name')}")
+
+    label = alert.object.get("class_name") if alert.object else alert.alert_type
+    logger.warning(f"Alert saved: {alert.severity} — {label}")
     return {"id": str(result.inserted_id), "message": "Alert saved"}
 
 
@@ -48,16 +54,27 @@ async def get_alerts(
     alerts = []
     cursor = db.alerts.find(query).sort("created_at", -1).skip(skip).limit(limit)
     async for alert in cursor:
+        obj = alert.get("object") or {}
+        alert_type = alert.get("alert_type", "object_proximity")
+
+        if obj:
+            object_name = obj.get("class_name", "unknown")
+            confidence  = obj.get("confidence")
+        else:
+            object_name = "person bending" if alert_type == "bending" else alert_type
+            confidence  = None
+
         alerts.append({
-            "id":           str(alert["_id"]),
-            "alert_id":     alert["alert_id"],
-            "session_id":   alert["session_id"],
-            "timestamp":    alert["timestamp"],
-            "camera_id":    alert["camera_id"],
-            "severity":     alert["severity"],
-            "object_name":  alert["object"].get("class_name"),
-            "confidence":   alert["object"].get("confidence"),
-            "acknowledged": alert["acknowledged"],
+            "id":            str(alert["_id"]),
+            "alert_id":      alert["alert_id"],
+            "session_id":    alert["session_id"],
+            "timestamp":     alert["timestamp"],
+            "camera_id":     alert["camera_id"],
+            "severity":      alert["severity"],
+            "object_name":   object_name,
+            "confidence":    confidence,
+            "alert_type":    alert_type,
+            "acknowledged":  alert["acknowledged"],
             "snapshot_path": alert.get("snapshot_path"),
         })
     return alerts
