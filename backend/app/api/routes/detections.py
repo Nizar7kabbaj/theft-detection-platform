@@ -1,5 +1,6 @@
 """
 detections.py — Detection event endpoints
+Updated TDP-32: save keypoints if present
 """
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
@@ -23,6 +24,7 @@ async def create_detection(detection: DetectionCreate):
         "class_name":  detection.class_name,
         "confidence":  detection.confidence,
         "bbox":        detection.bbox.dict(),
+        "keypoints":   [kp.dict() for kp in detection.keypoints] if detection.keypoints else None,
         "created_at":  datetime.utcnow(),
     }
     result = await db.detections.insert_one(detection_doc)
@@ -48,6 +50,7 @@ async def get_detections(
             "class_name":  det["class_name"],
             "confidence":  det["confidence"],
             "bbox":        det["bbox"],
+            "keypoints":   det.get("keypoints"),
         })
     return detections
 
@@ -67,6 +70,7 @@ async def get_detections_by_session(session_id: int):
             "class_name":  det["class_name"],
             "confidence":  det["confidence"],
             "bbox":        det["bbox"],
+            "keypoints":   det.get("keypoints"),
         })
     return detections
 

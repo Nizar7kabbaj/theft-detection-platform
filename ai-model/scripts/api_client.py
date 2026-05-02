@@ -1,8 +1,7 @@
 """
 api_client.py — Sends detection events and alerts to FastAPI backend
-Uses background threads so API calls never block the detection loop
+Updated TDP-32: supports pose keypoints and bend alerts
 """
-
 import requests
 import threading
 from loguru import logger
@@ -15,7 +14,7 @@ def _post_in_background(url: str, payload: dict):
     try:
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code != 200:
-            logger.error(f"API error {response.status_code}: {url}")
+            logger.error(f"API error {response.status_code}: {url} — {response.text[:200]}")
     except requests.exceptions.ConnectionError:
         logger.warning("API not reachable")
     except Exception as e:
@@ -31,9 +30,12 @@ def send_alert(alert: dict, snapshot_path=None):
         "timestamp":     alert["timestamp"],
         "camera_id":     alert.get("camera_id", "webcam-01"),
         "person":        alert["person"],
-        "object":        alert["object"],
+        "object":        alert.get("object"),
         "severity":      alert["severity"],
         "snapshot_path": str(snapshot_path) if snapshot_path else None,
+        "alert_type":    alert.get("alert_type", "object_proximity"),
+        "keypoints":     alert.get("keypoints"),
+        "torso_angle":   alert.get("torso_angle"),
     }
     thread = threading.Thread(
         target=_post_in_background,
@@ -54,6 +56,7 @@ def send_detection(detection: dict):
         "class_name":  detection["class_name"],
         "confidence":  detection["confidence"],
         "bbox":        detection["bbox"],
+        "keypoints":   detection.get("keypoints"),
     }
     thread = threading.Thread(
         target=_post_in_background,
