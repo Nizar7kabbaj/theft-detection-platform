@@ -10,7 +10,7 @@ TDP-36: send_photo  (JPEG snapshot + caption)
 import os
 import requests
 from loguru import logger
-from backend.app.core.config import settings
+from ..core.config import settings
 
 
 TELEGRAM_API_URL = "https://api.telegram.org/bot{token}/{method}"

@@ -1,0 +1,31 @@
+﻿# Backend Python dependencies - pinned to versions tested in venv as of TDP-37
+# Heavy AI libraries (torch, ultralytics, opencv) intentionally excluded -
+# they belong to ai-model/, not the backend HTTP service.
+
+# Web framework
+fastapi==0.136.1
+uvicorn[standard]==0.46.0
+
+# MongoDB Atlas async driver
+motor==3.7.1
+pymongo==4.17.0
+
+# Auth / security (currently used by routes; SECRET_KEY is in .env)
+python-jose==3.5.0
+passlib==1.7.4
+bcrypt==5.0.0
+
+# Request handling
+python-multipart==0.0.27
+aiofiles==25.1.0
+requests==2.33.1
+
+# Configuration
+pydantic-settings==2.14.0
+python-dotenv==1.2.2
+
+# Logging
+loguru==0.7.3
+
+# Image handling (for Telegram sendPhoto multipart upload - TDP-36)
+Pillow==12.2.0
