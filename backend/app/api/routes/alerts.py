@@ -2,14 +2,19 @@
 alerts.py — Alert management endpoints
 Updated TDP-32: handle bend alerts (no object field)
 Updated TDP-35: send Telegram notification on new alert (background task)
+Updated TDP-36: send snapshot image (sendPhoto) when available, fallback to text
 """
+import os
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from datetime import datetime
 from bson import ObjectId
 from loguru import logger
 from ...core.database import get_database
 from ...models.schemas import AlertCreate
-from ...services.telegram_service import send_message as send_telegram
+from ...services.telegram_service import (
+    send_message as send_telegram_message,
+    send_photo   as send_telegram_photo,
+)
 
 router = APIRouter()
 
@@ -34,6 +39,27 @@ def _build_telegram_text(alert: AlertCreate) -> str:
         f"🕒 {alert.timestamp}"
         f"{angle_line}"
     )
+
+
+def _notify_telegram(alert: AlertCreate) -> None:
+    """
+    TDP-36: prefer sendPhoto when a snapshot file exists on disk,
+    otherwise fall back to sendMessage so we still get a text alert.
+    Runs inside BackgroundTasks — must never raise.
+    """
+    text = _build_telegram_text(alert)
+    snapshot = alert.snapshot_path
+
+    if snapshot and os.path.isfile(snapshot):
+        ok = send_telegram_photo(snapshot, caption=text)
+        if not ok:
+            # photo failed (network, Telegram error) — still try text so the user is notified
+            logger.warning("Photo send failed, falling back to text message")
+            send_telegram_message(text)
+    else:
+        if snapshot:
+            logger.warning(f"Snapshot path set but file missing: {snapshot} — sending text only")
+        send_telegram_message(text)
 
 
 @router.post("/", response_model=dict)
@@ -61,8 +87,8 @@ async def create_alert(alert: AlertCreate, background_tasks: BackgroundTasks):
     label = alert.object.get("class_name") if alert.object else alert.alert_type
     logger.warning(f"Alert saved: {alert.severity} — {label}")
 
-    # TDP-35: notify Telegram AFTER response is sent (non-blocking, fail-safe)
-    background_tasks.add_task(send_telegram, _build_telegram_text(alert))
+    # TDP-36: send photo if available, fall back to text otherwise (non-blocking, fail-safe)
+    background_tasks.add_task(_notify_telegram, alert)
 
     return {"id": str(result.inserted_id), "message": "Alert saved"}
 
