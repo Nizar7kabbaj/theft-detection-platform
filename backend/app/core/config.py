@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     SNAPSHOTS_DIR:    str = "ai-model/outputs/snapshots"
     ALERTS_DIR:       str = "ai-model/outputs/alerts"
 
+    # Telegram (TDP-35) — optional, app runs fine if not set
+    TELEGRAM_BOT_TOKEN: str | None = None
+    TELEGRAM_CHAT_ID:   str | None = None
+
     class Config:
         env_file = "backend/.env"
 
