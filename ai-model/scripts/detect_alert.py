@@ -3,9 +3,11 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 """
 detect_alert.py — Phase 4 / TDP-32: Pose-based detection
+TDP-43: also publishes pose events and bend alerts to Azure Event Hub.
 - Uses YOLOv8-pose to extract 17 keypoints per person
 - Detects bending posture (torso angle > 60° for 2+ seconds)
-- Sends pose data + bend alerts to FastAPI backend
+- Sends pose data + bend alerts to FastAPI backend (Phase 4 path)
+- Sends pose data + bend alerts to Azure Event Hub (Phase 5 path)
 """
 
 import cv2
@@ -20,6 +22,12 @@ from ultralytics import YOLO
 from loguru import logger
 
 from api_client import send_alert, send_detection, check_api_health
+from event_hub_client import (
+    init_publisher,
+    close_publisher,
+    publish_detection_event,
+    publish_alert_event,
+)
 
 # ── Configuration ────────────────────────────────────────────────────────
 
@@ -37,8 +45,8 @@ RIGHT_HIP      = 12
 
 CONFIDENCE_THRESHOLD     = 0.5
 KEYPOINT_CONF_THRESHOLD  = 0.5
-BEND_ANGLE_THRESHOLD     = 60.0   # degrees from vertical
-BEND_DURATION_THRESHOLD  = 2.0    # seconds
+BEND_ANGLE_THRESHOLD     = 60.0
+BEND_DURATION_THRESHOLD  = 2.0
 ALERT_COOLDOWN           = 3.0
 
 OUTPUT_DIR   = Path("ai-model/outputs/detections")
@@ -65,7 +73,6 @@ def load_model():
 # ── Pose helpers ─────────────────────────────────────────────────────────
 
 def extract_keypoints_data(kpts_xy, kpts_conf):
-    """Convert YOLO keypoint tensors into a list of 17 dicts."""
     data = []
     for i in range(17):
         x = float(kpts_xy[i][0])
@@ -81,13 +88,6 @@ def extract_keypoints_data(kpts_xy, kpts_conf):
 
 
 def compute_torso_angle(kpts_xy, kpts_conf):
-    """
-    Returns the lean angle from vertical, in degrees.
-    Uses nose vs mid-shoulders (works for desk cams and full body).
-    0  = head directly above shoulders (upright)
-    60+ = leaning forward significantly
-    Returns None if keypoints are not visible enough.
-    """
     NOSE = 0
     needed = [NOSE, LEFT_SHOULDER, RIGHT_SHOULDER]
     for i in needed:
@@ -100,12 +100,10 @@ def compute_torso_angle(kpts_xy, kpts_conf):
     sy = (float(kpts_xy[LEFT_SHOULDER][1]) + float(kpts_xy[RIGHT_SHOULDER][1])) / 2
 
     dx = nx - sx
-    dy = sy - ny  # image y grows downward, flip so up = positive
+    dy = sy - ny
     if dx == 0 and dy == 0:
         return None
 
-    # When upright: nose is above shoulders → dy positive, dx ~0 → angle ~0°
-    # When leaning forward: nose moves ahead → dx grows → angle grows
     angle_rad = math.atan2(abs(dx), abs(dy))
     return math.degrees(angle_rad)
 
@@ -139,7 +137,7 @@ def add_status_overlay(frame, frame_count, person_count, alert_count, fps):
 
 # ── Main detection loop ──────────────────────────────────────────────────
 
-def detect_with_alerts(model, source, api_available=False):
+def detect_with_alerts(model, source, api_available=False, eh_available=False):
     is_webcam = isinstance(source, int)
 
     if is_webcam:
@@ -174,7 +172,6 @@ def detect_with_alerts(model, source, api_available=False):
     fps_timer       = time.time()
     last_alert_time = 0.0
 
-    # Track per-person bend duration. Key = person index in this frame.
     bend_start_time = defaultdict(lambda: None)
 
     logger.info("Pose detection running. Press Q in video window to stop.")
@@ -192,7 +189,7 @@ def detect_with_alerts(model, source, api_available=False):
 
             results         = model(frame, verbose=False)
             result          = results[0]
-            annotated_frame = result.plot()  # YOLO draws skeleton automatically
+            annotated_frame = result.plot()
 
             persons_in_frame = []
 
@@ -237,11 +234,12 @@ def detect_with_alerts(model, source, api_available=False):
                     persons_in_frame.append(person_record)
                     all_detections.append(person_record)
 
-                    # Send every 10th detection to API (avoid overload)
-                    if api_available and frame_count % 10 == 0:
-                        send_detection(person_record)
+                    if frame_count % 10 == 0:
+                        if api_available:
+                            send_detection(person_record)
+                        if eh_available:
+                            publish_detection_event(person_record)
 
-                    # Bend alert tracking per person index
                     if torso_angle is not None and torso_angle >= BEND_ANGLE_THRESHOLD:
                         if bend_start_time[i] is None:
                             bend_start_time[i] = now
@@ -286,10 +284,11 @@ def detect_with_alerts(model, source, api_available=False):
 
                             if api_available:
                                 send_alert(alert, snapshot_path)
+                            if eh_available:
+                                publish_alert_event(alert)
                     else:
                         bend_start_time[i] = None
 
-            # FPS update every 10 frames
             if frame_count % 10 == 0:
                 elapsed     = time.time() - fps_timer
                 fps_display = 10 / elapsed if elapsed > 0 else 0
@@ -304,7 +303,7 @@ def detect_with_alerts(model, source, api_available=False):
             )
 
             writer.write(annotated_frame)
-            cv2.imshow("Pose Detection — TDP-32 — press Q to stop", annotated_frame)
+            cv2.imshow("Pose Detection — TDP-43 — press Q to stop", annotated_frame)
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 logger.info("Stopped by user")
@@ -317,6 +316,9 @@ def detect_with_alerts(model, source, api_available=False):
         cap.release()
         writer.release()
         cv2.destroyAllWindows()
+
+        if eh_available:
+            close_publisher()
 
         session_log = {
             "session_id":       session_id,
@@ -340,7 +342,7 @@ def detect_with_alerts(model, source, api_available=False):
 # ── Entry point ──────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Pose-based Theft Detection (TDP-32)")
+    parser = argparse.ArgumentParser(description="Pose-based Theft Detection (TDP-43)")
     parser.add_argument("--source", default="1",
                         help="Camera index (0,1,2) or path to video file")
     args   = parser.parse_args()
@@ -351,12 +353,16 @@ def main():
 
     api_available = check_api_health()
     if not api_available:
-        logger.warning("Running in offline mode — data saved locally only")
+        logger.warning("Backend API offline — Phase 4 path disabled")
+
+    eh_available = init_publisher()
+    if not eh_available:
+        logger.warning("Event Hub offline — Phase 5 path disabled")
 
     if source.isdigit():
-        detect_with_alerts(model, int(source), api_available)
+        detect_with_alerts(model, int(source), api_available, eh_available)
     else:
-        detect_with_alerts(model, source, api_available)
+        detect_with_alerts(model, source, api_available, eh_available)
 
 
 if __name__ == "__main__":
