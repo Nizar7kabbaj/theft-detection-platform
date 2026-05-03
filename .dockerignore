@@ -1,0 +1,45 @@
+# Python virtual environment (host-only)
+venv
+.venv
+__pycache__
+*.pyc
+
+# AI model artifacts (huge, regenerated, never go in containers)
+ai-model/outputs
+ai-model/data
+ai-model/models/*.pt
+
+# Node
+node_modules
+
+# Environment files (security)
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Docs / project process (not part of any build)
+PROJECT_CONTEXT.md
+*.md
+!README.md
+
+# Logs
+*.log
+logs
+
+# Compose files (referenced from outside, never copied into images)
+docker-compose.yml
+docker-compose.override.yml
+.dockerignore
