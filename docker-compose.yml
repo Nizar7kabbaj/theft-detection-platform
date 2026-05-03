@@ -1,0 +1,23 @@
+services:
+  backend:
+    build: ./backend
+    image: theft-backend:dev
+    container_name: theft-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend/theft-detection-ui
+      args:
+        REACT_APP_API_URL: http://localhost:8000
+    image: theft-frontend:dev
+    container_name: theft-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
