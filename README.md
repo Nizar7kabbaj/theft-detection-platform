@@ -1,208 +1,155 @@
+<div align="center">
+
 # 🛡️ Real-Time AI Theft Detection Platform
 
-> Pose-based shoplifting detection with a full Azure data pipeline, deployed
-> end-to-end from camera to alert in under 2 seconds.
+**Pose-based behavioral surveillance with instant Telegram alerts**
 
-[![Status](https://img.shields.io/badge/status-active-brightgreen)]()
-[![License](https://img.shields.io/badge/license-MIT-blue)]()
-[![Python](https://img.shields.io/badge/python-3.11-blue)]()
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688)]()
-[![React](https://img.shields.io/badge/React-18-61DAFB)]()
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED)]()
-[![Azure](https://img.shields.io/badge/Azure-EventHub-0078D4)]()
-[![PyTorch](https://img.shields.io/badge/PyTorch-LSTM-EE4C2C)]()
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=flat&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+[![CUDA](https://img.shields.io/badge/CUDA-12.1-76B900?style=flat&logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
+[![Telegram](https://img.shields.io/badge/Telegram-Bot-26A5E4?style=flat&logo=telegram&logoColor=white)](https://core.telegram.org/bots)
 
----
-
-## 🎯 What this is
-
-A production-grade AI surveillance platform that detects shoplifting behavior
-in real time from a live camera feed, streams events into the cloud, persists
-them for analytics, and notifies a human guard via Telegram for review.
-
-The system is built on the principle that **shoplifting is a behavior over
-time, not a single-frame visual** — so it uses **pose-based sequence
-classification** instead of frame-by-frame object detection. This is the
-current state-of-the-art approach (WACV 2025) and is fundamentally more
-accurate, more privacy-preserving, and more explainable than pixel-based CCTV
-analytics.
+</div>
 
 ---
+
+## 🎯 What it does
+
+Detects suspicious bending posture in real time using YOLOv8 pose estimation, persists every event to MongoDB Atlas, and pushes instant photo alerts to Telegram — all running at **28–30 FPS** on a laptop GPU.
+
+## 🧰 Tech stack
+
+| Layer | Technology |
+|---|---|
+| 🤖 **AI** | YOLOv8-pose · OpenCV · PyTorch (CUDA 12.1) |
+| ⚡ **Backend** | FastAPI · Motor (async MongoDB) · Pydantic |
+| 🖥️ **Frontend** | React 19 · TypeScript · Recharts · Tailwind |
+| 🗄️ **Database** | MongoDB Atlas (cloud) |
+| 🔔 **Notifications** | Telegram Bot API |
+| 🐳 **DevOps** | Docker · Docker Compose · Multi-stage builds |
+| ☁️ **Future** | Azure Event Hub · Databricks · AKS · Terraform |
 
 ## 🏗️ Architecture
-  ┌────────────┐
-  │   Camera   │  (RTSP / webcam)
-  └─────┬──────┘
-        │
-        ▼
-  ┌────────────────────────┐
-  │  YOLOv8-Pose (GPU)     │  COCO17 keypoints @ 30 FPS
-  │  + ByteTrack tracking  │
-  └─────┬──────────────────┘
-        │
-        ▼
-  ┌────────────────────────┐
-  │   LSTM Classifier      │  pose-sequence binary classification
-  │   (PyTorch, 63K params)│  ~2-second sliding window
-  └─────┬──────────────────┘
-        │
-        ├──────────────────────────► Azure Event Hub (Kafka API)
-        │                            (real-time stream, partitioned)
-        ▼
-  ┌────────────────────────┐
-  │   FastAPI Backend      │
-  │  (BackgroundTasks)     │
-  └─────┬─────────┬────────┘
-        │         │
-        ▼         ▼
-  ┌────────┐  ┌──────────────┐
-  │ MongoDB│  │ Telegram Bot │ (human-in-the-loop alert)
-  │  Atlas │  │  → guard     │
-  └────────┘  └──────────────┘
-        │
-        ▼
-  ┌────────────────────────┐
-  │  React Dashboard       │  live alerts, history, analytics
-  │  (TS + Tailwind)       │
-  └────────────────────────┘
 
-### Why pose-based?
+```mermaid
+flowchart LR
+    A[📹 Camera] --> B[🤖 YOLOv8-poseHost + GPU]
+    B --> C[⚡ FastAPIDocker]
+    C --> D[(🗄️ MongoDBAtlas)]
+    C --> E[📊 React DashboardDocker + nginx]
+    C --> F[🔔 TelegramPhoto + Caption]
 
-| Approach | Accuracy | Privacy | Domain shift | Compute |
-|---|---|---|---|---|
-| Single-frame CNN | Low | Faces leak | Severe | Heavy |
-| 3D CNN (video) | Medium | Faces leak | Severe | Very heavy |
-| **Pose-based LSTM (this project)** | **High** | **GDPR-by-design** | **Robust** | **Light** |
-
-Pose extraction discards everything except joint positions — no faces, no
-clothing, no skin tone, no biometric pixels ever leave the camera. This is a
-**fundamental architectural privacy advantage**, not a bolt-on feature.
-
----
-
-## 🧠 Machine Learning
-
-- **Dataset:** PoseLift (TeCSAR-UNCC, WACV 2025) — 47 labeled retail
-  shoplifting instances with pre-extracted COCO17 keypoints and ByteTrack IDs
-- **Model:** 2-layer LSTM, hidden size 64, ~63K trainable parameters
-- **Training:** 5-fold cross-validation on Kaggle Tesla T4
-- **Preprocessing:** bbox-relative keypoint normalization + NaN sanitization
-- **Honest results:**
-  - 5-fold CV F1 = **0.57 ± 0.08** (small dataset → high variance, openly disclosed)
-  - Deployed model F1 = **0.69**, recall = **0.93**
-  - Recall > precision by design (a guard can dismiss a false alarm in
-    seconds; a missed theft is unrecoverable)
-
-The training notebook, trained weights, metadata sidecar, and 5-fold CV plots
-are all version-controlled in this repo for full reproducibility.
-
----
-
-## ⚙️ Tech stack
-
-**AI & Computer Vision**
-- PyTorch · YOLOv8-pose · Ultralytics · OpenCV · NumPy
-
-**Backend**
-- FastAPI · Pydantic · Motor (async MongoDB) · BackgroundTasks · Uvicorn
-
-**Frontend**
-- React 18 · TypeScript · Tailwind CSS · Recharts · Axios
-
-**Data & Cloud**
-- Azure Event Hub (Kafka API) · MongoDB Atlas · Azure for Students
-
-**Infra & DevOps**
-- Docker · Docker Compose (multi-stage builds, dev/prod overlays)
-- Git Flow · GitHub PR workflow · Jira (Scrum, story-pointed sprints)
-- Planned: Terraform · Azure DevOps CI/CD · AKS · Databricks · APIM ·
-  Power BI · Service Bus · DevSecOps (Trivy, Snyk, Checkov, Gitleaks)
-
-**Notifications**
-- Telegram Bot API (multipart photo upload, BackgroundTasks)
-
----
+    style A fill:#FFE4B5,stroke:#333,color:#000
+    style B fill:#76B900,stroke:#333,color:#fff
+    style C fill:#009688,stroke:#333,color:#fff
+    style D fill:#47A248,stroke:#333,color:#fff
+    style E fill:#61DAFB,stroke:#333,color:#000
+    style F fill:#26A5E4,stroke:#333,color:#fff
+```
 
 ## 🚀 Quick start
 
-```powershell
-# 1. Clone
+### Prerequisites
+- Docker Desktop (Compose v2.40+)
+- For AI inference: NVIDIA GPU + CUDA 12.1 + Python 3.11
+
+### 1️⃣ Clone & configure
+
+```bash
 git clone https://github.com/Nizar7kabbaj/theft-detection-platform.git
 cd theft-detection-platform
-
-# 2. Create your .env (see backend/.env.example)
-# 3. Start the full stack
-docker compose up --build
-
-# Backend:  http://localhost:8000/docs
-# Frontend: http://localhost:8080
-
-# 4. Run AI on your webcam (separate terminal, host machine, GPU required)
-venv\Scripts\activate
-python ai-model\scripts\detect_alert.py --source 1
 ```
 
----
+Create `backend/.env` with:
+```env
+MONGODB_URL=mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/
+DATABASE_NAME=theft_detection_db
+TELEGRAM_BOT_TOKEN=<from @BotFather>
+TELEGRAM_CHAT_ID=<your group/chat id>
+```
 
-## 📊 Project status
+### 2️⃣ Launch the stack 🐳
 
-**Currently active sprint: Demo Prep (Sprint 5)** — preparing a defensible
-client demo with trained classifier, live webcam overlay, evaluation metrics,
-Power BI mockup, and ethical/legal disclosure.
+```bash
+docker compose up --build
+```
 
-**Completed phases:**
-- ✅ Phase 1 — AI foundation (YOLOv8 + GPU + 30 FPS pipeline)
-- ✅ Phase 2 — FastAPI backend + MongoDB Atlas
-- ✅ Phase 3 — React TypeScript dashboard
-- ✅ Phase 4 — End-to-end integration + Docker Compose + Telegram alerts
-- 🚧 Phase 5 — Real-time streaming + ML classifier (in progress)
-- ⏳ Phase 6 — Full Azure deployment via Terraform + AKS
-- ⏳ Phase 7 — Documentation, ADRs, demo video, final report
+| Service | URL |
+|---|---|
+| 📊 Dashboard | http://localhost:8080 |
+| 📚 API Docs | http://localhost:8000/docs |
 
-**Live numbers:**
-- 14+ merged PRs across feature branches (Git Flow)
-- 60+ Jira tickets, every commit and branch traceable to a ticket ID
-- 30 FPS sustained on RTX 3070 with concurrent inference + streaming
+### 3️⃣ Run the AI on host (needs GPU + webcam)
 
----
+```bash
+python -m venv venv
+venv\Scripts\activate
+pip install ultralytics opencv-python
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+python ai-model/scripts/detect_alert.py --source 1
+```
 
-## ⚠️ Honest limitations (because I believe in honest engineering)
+## 💻 Development
 
-- **Dataset size:** 47 labeled instances is small. CV variance is real and
-  documented (F1 = 0.57 ± 0.08).
-- **Single retail environment:** PoseLift was filmed in one store. Domain
-  shift is expected on any other camera.
-- **Item-value bias:** dataset over-represents large-item theft and
-  under-represents palmed small items.
-- **Demo-mode supervised training:** PoseLift is designed for unsupervised
-  anomaly detection. Supervised mode is used here for client-communicable
-  metrics; unsupervised is the post-meeting iteration.
+### Backend hot-reload (free with `docker compose up`)
+The repo ships with `docker-compose.override.yml` that enables `uvicorn --reload` and mounts `./backend/app` as a volume. Edit Python files → server restarts automatically. No rebuild.
 
-These are documented in detail in [`docs/LEGAL_ETHICAL.md`](docs/LEGAL_ETHICAL.md)
-(Phase 5) along with GDPR / Swiss FADP considerations and
-human-in-the-loop architecture rationale.
+### Frontend dev mode
+```bash
+cd frontend/theft-detection-ui
+npm install
+npm start
+```
+→ http://localhost:3000 (faster than rebuilding the nginx image)
 
----
+## 📅 Roadmap
+
+| Phase | Scope | Status |
+|---|---|---|
+| 1️⃣ | AI Model — pose detection on webcam | ✅ Done |
+| 2️⃣ | FastAPI backend + MongoDB Atlas | ✅ Done |
+| 3️⃣ | React dashboard | ✅ Done |
+| 4️⃣ | Full integration — Telegram + Docker + Compose | ✅ Done |
+| 5️⃣ | Data pipeline — Event Hub, Databricks, Power BI | 🟡 Planned |
+| 6️⃣ | Azure deployment — AKS, Terraform, Azure DevOps | 🟡 Planned |
+
+## 📁 Repository structure
+
+```
+theft-detection-platform/
+├── 🤖 ai-model/                    YOLOv8-pose scripts + outputs
+├── ⚡ backend/                     FastAPI service (Dockerized)
+│   ├── app/                       Routes, services, schemas
+│   └── Dockerfile                 python:3.11-slim, 317 MB
+├── 🖥️ frontend/theft-detection-ui/ React 19 dashboard
+│   └── Dockerfile                 Multi-stage: node + nginx, 98 MB
+├── 🐳 docker-compose.yml           Service orchestration
+├── 🛠️ docker-compose.override.yml  Dev hot-reload
+└── 📖 README.md
+```
+
+## 📊 Performance
+
+| Metric | Value |
+|---|---|
+| Inference FPS | **28–30** (RTX 3070 Laptop) |
+| Backend image | **317 MB** (slim Python 3.11) |
+| Frontend image | **98 MB** (multi-stage build, ~92% reduction) |
+| Cold start (compose) | **~3 s** |
+| Telegram alert latency | **< 2 s** end-to-end |
 
 ## 👤 Author
 
-**Nizar Kabbaj** — DevOps & Data Engineering · Morocco → Switzerland
-- 🐙 GitHub: [@Nizar7kabbaj](https://github.com/Nizar7kabbaj)
-- 💼 Portfolio target role: Ingénieur DevOps Azure Data
-
-This project was built end-to-end as a portfolio piece covering the full
-modern data engineering stack: AI/CV, backend, frontend, real-time
-streaming, cloud architecture, IaC, CI/CD, and observability.
-
-If you're a recruiter or hiring manager, the entire 60+ ticket backlog,
-sprint history, ADRs, and decision log are public — every architectural
-trade-off is documented, including the ones I got wrong and reverted.
+**Nizar Kabbaj** — Portfolio project for **DevOps Azure Data Engineer** role.
+🔗 GitHub: [@Nizar7kabbaj](https://github.com/Nizar7kabbaj)
 
 ---
 
-## 📜 License
+<div align="center">
 
-MIT — see [LICENSE](LICENSE).
+⭐ If you find this project useful, consider starring the repo!
 
-You are free to use, study, fork, and adapt this code with attribution.
-If this project helps you, a ⭐ on GitHub is appreciated.
+</div>
