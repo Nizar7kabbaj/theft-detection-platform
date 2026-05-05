@@ -54,3 +54,13 @@ ai-model/data/raw/
 ai-model/data/processed/
 *.pkl
 *.npy
+
+
+# === TDP-87 — model and training artifacts ===
+# *.pt and *.png are ignored globally above, but we explicitly commit:
+# - the trained classifier (small, ~0.25 MB, deliverable)
+# - the metadata sidecar
+# - the training curves figure (deliverable for client meeting)
+!ai-model/models/*.pt
+!ai-model/models/*.json
+!ai-model/notebooks/*.png
