@@ -48,3 +48,9 @@ bus.jpg
 *.png
 *.jpeg
 *.mp4
+
+# === Datasets (too large for Git, fetched from external sources) ===
+ai-model/data/raw/
+ai-model/data/processed/
+*.pkl
+*.npy
