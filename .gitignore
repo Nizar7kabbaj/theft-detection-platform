@@ -64,3 +64,11 @@ ai-model/data/processed/
 !ai-model/models/*.pt
 !ai-model/models/*.json
 !ai-model/notebooks/*.png
+
+# === TDP-88 — evaluation artifacts ===
+# Re-enter the outputs/ tree, ignore everything inside, then allow evaluation/
+!ai-model/outputs/
+ai-model/outputs/*
+!ai-model/outputs/evaluation/
+!ai-model/outputs/evaluation/*.png
+!ai-model/outputs/evaluation/*.json
