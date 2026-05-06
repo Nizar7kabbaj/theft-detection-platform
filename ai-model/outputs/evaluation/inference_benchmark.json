@@ -1,0 +1,12 @@
+{
+  "device": "cuda",
+  "gpu": "NVIDIA GeForce RTX 3070 Laptop GPU",
+  "iterations": 1000,
+  "mean_ms": 0.334,
+  "median_ms": 0.3,
+  "p95_ms": 0.572,
+  "p99_ms": 0.676,
+  "fps_mean": 2993.6,
+  "demo_target_fps": 15,
+  "demo_target_met": true
+}
