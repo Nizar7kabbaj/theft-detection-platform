@@ -2,32 +2,50 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 """
-detect_alert.py — Phase 4 / TDP-32: Pose-based detection
-TDP-43: also publishes pose events and bend alerts to Azure Event Hub.
-- Uses YOLOv8-pose to extract 17 keypoints per person
-- Detects bending posture (torso angle > 60° for 2+ seconds)
-- Sends pose data + bend alerts to FastAPI backend (Phase 4 path)
-- Sends pose data + bend alerts to Azure Event Hub (Phase 5 path)
+detect_alert.py — Phase 4 / TDP-32 / TDP-43 / TDP-89
+
+Live webcam theft-detection demo.
+
+Detectors active:
+  - TDP-32 BEND DETECTOR (geometric)  — torso angle > 60° for 2+ sec
+                                        --> fires Telegram + snapshot + Event Hub
+  - TDP-89 LSTM CLASSIFIER (visual)   — colors the bounding box red/green
+                                        --> NO live alerts (see lesson #60)
+
+Why the split? The LSTM was trained on overhead retail CCTV (PoseLift). On a
+laptop desk camera the keypoint distribution is different — domain shift.
+The bend rule is camera-agnostic and reliable, so it owns the alert path.
+The LSTM's published metrics live in EVALUATION.md (F1=0.69, recall=0.93,
+2994 FPS) — that's the academic artifact, not the live signal.
+
+Output paths (created on startup):
+  ai-model/outputs/detections   recorded mp4 of the run
+  ai-model/outputs/snapshots    jpg per bend alert
+  ai-model/outputs/alerts       json per bend alert
+  ai-model/outputs/logs         session_*.json with all detections + alerts
 """
 
-import cv2
+import argparse
 import json
 import math
 import time
-import argparse
-from pathlib import Path
-from datetime import datetime
 from collections import defaultdict
-from ultralytics import YOLO
-from loguru import logger
+from datetime import datetime
+from pathlib import Path
 
-from api_client import send_alert, send_detection, check_api_health
+import cv2
+from loguru import logger
+from ultralytics import YOLO
+
+from api_client import check_api_health, send_alert, send_detection
 from event_hub_client import (
-    init_publisher,
     close_publisher,
-    publish_detection_event,
+    init_publisher,
     publish_alert_event,
+    publish_detection_event,
 )
+from predictor import ShoplifterPredictor
+
 
 # ── Configuration ────────────────────────────────────────────────────────
 
@@ -35,7 +53,7 @@ KEYPOINT_NAMES = [
     "nose", "left_eye", "right_eye", "left_ear", "right_ear",
     "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
     "left_wrist", "right_wrist", "left_hip", "right_hip",
-    "left_knee", "right_knee", "left_ankle", "right_ankle"
+    "left_knee", "right_knee", "left_ankle", "right_ankle",
 ]
 
 LEFT_SHOULDER  = 5
@@ -48,6 +66,23 @@ KEYPOINT_CONF_THRESHOLD  = 0.5
 BEND_ANGLE_THRESHOLD     = 60.0
 BEND_DURATION_THRESHOLD  = 2.0
 ALERT_COOLDOWN           = 3.0
+
+# TDP-89 — visual threshold only.
+# The LSTM colors the box red at p_anomaly >= threshold but does NOT trigger
+# Telegram / Mongo / Event Hub alerts. Only the bend rule fires real alerts.
+DEFAULT_ANOMALY_THRESHOLD = 0.65
+
+MODEL_PATH = Path("ai-model/models/shoplifting_classifier.pt")
+DEMO_METRICS = {
+    "F1":     0.693,
+    "Recall": 0.929,
+    "FPS":    2994,
+}
+
+# BGR colors
+COLOR_NORMAL  = (60, 200, 60)    # green
+COLOR_ANOMALY = (40, 40, 220)    # red
+COLOR_WARMUP  = (160, 160, 160)  # gray
 
 OUTPUT_DIR   = Path("ai-model/outputs/detections")
 SNAPSHOT_DIR = Path("ai-model/outputs/snapshots")
@@ -62,12 +97,19 @@ def setup_directories():
         d.mkdir(parents=True, exist_ok=True)
 
 
-def load_model():
+def load_yolo():
     logger.info("Loading YOLOv8-pose model...")
     model = YOLO("yolov8n-pose.pt")
     model.to("cuda")
     logger.info(f"Model loaded on: {next(model.model.parameters()).device}")
     return model
+
+
+def load_predictor():
+    logger.info(f"Loading ShoplifterLSTM from {MODEL_PATH} ...")
+    pred = ShoplifterPredictor(str(MODEL_PATH))
+    logger.info(f"Predictor ready on {pred.device} (window={pred.window})")
+    return pred
 
 
 # ── Pose helpers ─────────────────────────────────────────────────────────
@@ -108,6 +150,16 @@ def compute_torso_angle(kpts_xy, kpts_conf):
     return math.degrees(angle_rad)
 
 
+def build_keypoints_array(kpts_xy_one, kpts_conf_one):
+    """Return ndarray (17, 3) of (x, y, conf) — what ShoplifterPredictor needs."""
+    import numpy as np
+    arr = np.zeros((17, 3), dtype=np.float32)
+    arr[:, 0] = kpts_xy_one[:, 0]
+    arr[:, 1] = kpts_xy_one[:, 1]
+    arr[:, 2] = kpts_conf_one
+    return arr
+
+
 # ── Drawing helpers ──────────────────────────────────────────────────────
 
 def draw_alert_banner(frame, label):
@@ -135,9 +187,71 @@ def add_status_overlay(frame, frame_count, person_count, alert_count, fps):
     return frame
 
 
+def add_demo_metrics_overlay(frame):
+    """Bottom-right panel with the LSTM's published metrics for the demo."""
+    h, w = frame.shape[:2]
+    pad = 8
+    lines = [
+        "Model: Pose-LSTM (PoseLift)",
+        f"F1: {DEMO_METRICS['F1']:.2f}   Recall: {DEMO_METRICS['Recall']:.2f}",
+        f"Inference: {DEMO_METRICS['FPS']} FPS (RTX 3070)",
+    ]
+    box_w = 280
+    box_h = 18 * len(lines) + 2 * pad
+    x1 = w - box_w - 10
+    y1 = h - box_h - 10
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x1, y1), (x1 + box_w, y1 + box_h), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
+    for i, ln in enumerate(lines):
+        cv2.putText(frame, ln, (x1 + pad, y1 + pad + 14 + i * 18),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (230, 230, 230), 1, cv2.LINE_AA)
+    return frame
+
+
+def draw_classifier_box(frame, bbox, color, label_text):
+    """Replace whatever YOLO drew with our classifier-colored box + tag."""
+    x1, y1, x2, y2 = (int(v) for v in bbox)
+    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+    (tw, th), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+    ty1 = max(0, y1 - th - 8)
+    cv2.rectangle(frame, (x1, ty1), (x1 + tw + 8, y1), color, -1)
+    cv2.putText(frame, label_text, (x1 + 4, y1 - 5),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
+    return frame
+
+
+# ── Alert dispatcher ─────────────────────────────────────────────────────
+
+def fire_alert(annotated_frame, alert, all_alerts, api_available, eh_available):
+    """Single place that does Telegram + snapshot + Event Hub + JSON log + banner."""
+    all_alerts.append(alert)
+
+    person_id = alert.get("person", {}).get("track_id", "?")
+    annotated_frame = draw_alert_banner(
+        annotated_frame, f"{alert['alert_type']} (id={person_id})"
+    )
+
+    snapshot_path = SNAPSHOT_DIR / f"alert_{alert['alert_id']}.jpg"
+    cv2.imwrite(str(snapshot_path), annotated_frame)
+    logger.info(f"Snapshot saved: {snapshot_path}")
+
+    alert_path = ALERT_DIR / f"alert_{alert['alert_id']}.json"
+    with open(alert_path, "w") as f:
+        json.dump(alert, f, indent=2)
+
+    if api_available:
+        send_alert(alert, snapshot_path)
+    if eh_available:
+        publish_alert_event(alert)
+
+    return annotated_frame
+
+
 # ── Main detection loop ──────────────────────────────────────────────────
 
-def detect_with_alerts(model, source, api_available=False, eh_available=False):
+def detect_with_alerts(model, predictor, source, anomaly_threshold,
+                       api_available=False, eh_available=False):
     is_webcam = isinstance(source, int)
 
     if is_webcam:
@@ -165,14 +279,13 @@ def detect_with_alerts(model, source, api_available=False, eh_available=False):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(str(output_path), fourcc, fps_source, (width, height))
 
-    all_detections  = []
-    all_alerts      = []
-    frame_count     = 0
-    fps_display     = 0.0
-    fps_timer       = time.time()
-    last_alert_time = 0.0
-
-    bend_start_time = defaultdict(lambda: None)
+    all_detections   = []
+    all_alerts       = []
+    frame_count      = 0
+    fps_display      = 0.0
+    fps_timer        = time.time()
+    last_alert_time  = 0.0
+    bend_start_time  = defaultdict(lambda: None)
 
     logger.info("Pose detection running. Press Q in video window to stop.")
 
@@ -187,17 +300,31 @@ def detect_with_alerts(model, source, api_available=False, eh_available=False):
             timestamp   = datetime.now().isoformat()
             now         = time.time()
 
-            results         = model(frame, verbose=False)
-            result          = results[0]
-            annotated_frame = result.plot()
+            # TDP-89: model.track() so we get track IDs (deque key for the LSTM).
+            results = model.track(frame, persist=True, verbose=False)
+            result  = results[0]
+
+            # TDP-89: skip YOLO's box+label drawing — we draw our own classifier-colored
+            # box. result.plot(boxes=False, labels=False, conf=False) keeps the skeleton
+            # lines/dots but doesn't draw the green box or "person 0.89" label.
+            annotated_frame = result.plot(boxes=False, labels=False, conf=False)
 
             persons_in_frame = []
 
-            if result.keypoints is not None and result.boxes is not None and len(result.boxes) > 0:
+            if (result.keypoints is not None
+                    and result.boxes is not None
+                    and len(result.boxes) > 0):
+
                 boxes_xyxy = result.boxes.xyxy.cpu().numpy()
                 boxes_conf = result.boxes.conf.cpu().numpy()
                 kpts_xy    = result.keypoints.xy.cpu().numpy()
-                kpts_conf  = result.keypoints.conf.cpu().numpy() if result.keypoints.conf is not None else None
+                kpts_conf  = (result.keypoints.conf.cpu().numpy()
+                              if result.keypoints.conf is not None else None)
+
+                if result.boxes.id is not None:
+                    track_ids = result.boxes.id.int().cpu().tolist()
+                else:
+                    track_ids = [None] * len(boxes_xyxy)
 
                 for i in range(len(boxes_xyxy)):
                     box_conf = float(boxes_conf[i])
@@ -206,9 +333,11 @@ def detect_with_alerts(model, source, api_available=False, eh_available=False):
                     if kpts_conf is None:
                         continue
 
-                    coords  = boxes_xyxy[i].tolist()
+                    coords           = boxes_xyxy[i].tolist()
                     person_kpts_xy   = kpts_xy[i]
                     person_kpts_conf = kpts_conf[i]
+                    track_id_raw     = track_ids[i] if i < len(track_ids) else None
+                    track_id         = int(track_id_raw) if track_id_raw is not None else None
 
                     bbox_dict = {
                         "x1": int(coords[0]),
@@ -220,6 +349,35 @@ def detect_with_alerts(model, source, api_available=False, eh_available=False):
                     keypoints_data = extract_keypoints_data(person_kpts_xy, person_kpts_conf)
                     torso_angle    = compute_torso_angle(person_kpts_xy, person_kpts_conf)
 
+                    # ── TDP-89: classifier — visual only, no alerts ──────
+                    p_anomaly = None
+                    if track_id is not None:
+                        kp_arr = build_keypoints_array(person_kpts_xy, person_kpts_conf)
+                        _, p_anomaly = predictor.update(
+                            track_id=track_id,
+                            bbox_xyxy=coords,
+                            keypoints=kp_arr,
+                        )
+
+                    if p_anomaly is None:
+                        color = COLOR_WARMUP
+                        tag   = (f"WARMING UP  id={track_id}"
+                                 if track_id is not None else "NO TRACK")
+                        cls_label = "warming up"
+                    elif p_anomaly >= anomaly_threshold:
+                        color = COLOR_ANOMALY
+                        tag   = f"SUSPICIOUS {p_anomaly:.2f}  id={track_id}"
+                        cls_label = "anomaly"
+                    else:
+                        color = COLOR_NORMAL
+                        tag   = f"NORMAL  id={track_id}"
+                        cls_label = "normal"
+
+                    annotated_frame = draw_classifier_box(
+                        annotated_frame, coords, color, tag
+                    )
+                    # ─────────────────────────────────────────────────────
+
                     person_record = {
                         "session_id":  session_id,
                         "frame_index": frame_count,
@@ -230,6 +388,9 @@ def detect_with_alerts(model, source, api_available=False, eh_available=False):
                         "bbox":        bbox_dict,
                         "keypoints":   keypoints_data,
                         "torso_angle": round(torso_angle, 2) if torso_angle is not None else None,
+                        "track_id":         track_id,
+                        "classifier_label": cls_label,
+                        "p_anomaly":        round(p_anomaly, 4) if p_anomaly is not None else None,
                     }
                     persons_in_frame.append(person_record)
                     all_detections.append(person_record)
@@ -240,6 +401,7 @@ def detect_with_alerts(model, source, api_available=False, eh_available=False):
                         if eh_available:
                             publish_detection_event(person_record)
 
+                    # ── BEND alert (TDP-32) — the ONLY live alert path ───
                     if torso_angle is not None and torso_angle >= BEND_ANGLE_THRESHOLD:
                         if bend_start_time[i] is None:
                             bend_start_time[i] = now
@@ -255,6 +417,7 @@ def detect_with_alerts(model, source, api_available=False, eh_available=False):
                                 "timestamp":   timestamp,
                                 "camera_id":   "webcam-01",
                                 "person": {
+                                    "track_id":   track_id,
                                     "confidence": round(box_conf, 4),
                                     "bbox":       bbox_dict,
                                 },
@@ -263,29 +426,14 @@ def detect_with_alerts(model, source, api_available=False, eh_available=False):
                                 "torso_angle": round(torso_angle, 2),
                                 "keypoints":   keypoints_data,
                             }
-                            all_alerts.append(alert)
                             logger.warning(
                                 f"BEND ALERT — person {i} at {torso_angle:.1f}° "
                                 f"for {bend_duration:.1f}s (frame {frame_count})"
                             )
-
-                            annotated_frame = draw_alert_banner(
-                                annotated_frame,
-                                f"person bending {torso_angle:.0f}°"
+                            annotated_frame = fire_alert(
+                                annotated_frame, alert, all_alerts,
+                                api_available, eh_available,
                             )
-
-                            snapshot_path = SNAPSHOT_DIR / f"alert_{session_id}_{frame_count}.jpg"
-                            cv2.imwrite(str(snapshot_path), annotated_frame)
-                            logger.info(f"Snapshot saved: {snapshot_path}")
-
-                            alert_path = ALERT_DIR / f"alert_{alert['alert_id']}.json"
-                            with open(alert_path, "w") as f:
-                                json.dump(alert, f, indent=2)
-
-                            if api_available:
-                                send_alert(alert, snapshot_path)
-                            if eh_available:
-                                publish_alert_event(alert)
                     else:
                         bend_start_time[i] = None
 
@@ -299,11 +447,12 @@ def detect_with_alerts(model, source, api_available=False, eh_available=False):
                 frame_count,
                 len(persons_in_frame),
                 len(all_alerts),
-                fps_display
+                fps_display,
             )
+            annotated_frame = add_demo_metrics_overlay(annotated_frame)
 
             writer.write(annotated_frame)
-            cv2.imshow("Pose Detection — TDP-43 — press Q to stop", annotated_frame)
+            cv2.imshow("Theft Detection - TDP-89 - press Q to stop", annotated_frame)
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 logger.info("Stopped by user")
@@ -321,14 +470,15 @@ def detect_with_alerts(model, source, api_available=False, eh_available=False):
             close_publisher()
 
         session_log = {
-            "session_id":       session_id,
-            "source":           str(source),
-            "mode":             "pose",
-            "total_frames":     frame_count,
-            "total_detections": len(all_detections),
-            "total_alerts":     len(all_alerts),
-            "detections":       all_detections,
-            "alerts":           all_alerts,
+            "session_id":        session_id,
+            "source":            str(source),
+            "mode":              "pose+classifier-visual",
+            "anomaly_threshold": anomaly_threshold,
+            "total_frames":      frame_count,
+            "total_detections":  len(all_detections),
+            "total_alerts":      len(all_alerts),
+            "detections":        all_detections,
+            "alerts":            all_alerts,
         }
         log_path = LOG_DIR / f"session_{source_name}_{session_id}.json"
         with open(log_path, "w") as f:
@@ -342,14 +492,24 @@ def detect_with_alerts(model, source, api_available=False, eh_available=False):
 # ── Entry point ──────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Pose-based Theft Detection (TDP-43)")
+    parser = argparse.ArgumentParser(description="Live theft detection demo (TDP-89)")
     parser.add_argument("--source", default="1",
-                        help="Camera index (0,1,2) or path to video file")
+                        help="Camera index (0,1,2) or path to a video file")
+    parser.add_argument("--anomaly-threshold", type=float,
+                        default=DEFAULT_ANOMALY_THRESHOLD,
+                        help=("Visual threshold for the red bounding box. "
+                              "Default 0.65. Range 0..1. Does NOT trigger alerts."))
     args   = parser.parse_args()
     source = args.source
 
+    if not 0.0 <= args.anomaly_threshold <= 1.0:
+        parser.error("--anomaly-threshold must be between 0.0 and 1.0")
+
+    logger.info(f"Anomaly visual threshold set to {args.anomaly_threshold:.2f}")
+
     setup_directories()
-    model = load_model()
+    model     = load_yolo()
+    predictor = load_predictor()
 
     api_available = check_api_health()
     if not api_available:
@@ -360,9 +520,11 @@ def main():
         logger.warning("Event Hub offline — Phase 5 path disabled")
 
     if source.isdigit():
-        detect_with_alerts(model, int(source), api_available, eh_available)
+        detect_with_alerts(model, predictor, int(source),
+                           args.anomaly_threshold, api_available, eh_available)
     else:
-        detect_with_alerts(model, source, api_available, eh_available)
+        detect_with_alerts(model, predictor, source,
+                           args.anomaly_threshold, api_available, eh_available)
 
 
 if __name__ == "__main__":
