@@ -32,7 +32,12 @@ def send_alert(alert: dict, snapshot_path=None):
         "person":        alert["person"],
         "object":        alert.get("object"),
         "severity":      alert["severity"],
-        "snapshot_path": str(snapshot_path) if snapshot_path else None,
+        # TDP-89: normalize Windows backslashes to forward slashes so the
+        # Linux backend container can resolve the path. The volume mount in
+        # docker-compose.override.yml maps ai-model/outputs/snapshots/ from
+        # host to /app/ai-model/outputs/snapshots/ in the container, but the
+        # path string must use forward slashes for os.path.isfile to find it.
+        "snapshot_path": str(snapshot_path).replace("\\", "/") if snapshot_path else None,
         "alert_type":    alert.get("alert_type", "object_proximity"),
         "keypoints":     alert.get("keypoints"),
         "torso_angle":   alert.get("torso_angle"),

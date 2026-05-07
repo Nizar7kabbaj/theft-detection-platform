@@ -3,5 +3,9 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./backend/app:/app/app
+      # TDP-89: mount snapshots folder so the backend can read images the AI
+      # script writes from the host. Read-only — the backend never modifies
+      # forensic snapshots, only reads + forwards them to Telegram.
+      - ./ai-model/outputs/snapshots:/app/ai-model/outputs/snapshots:ro
     environment:
       - DEBUG=True
