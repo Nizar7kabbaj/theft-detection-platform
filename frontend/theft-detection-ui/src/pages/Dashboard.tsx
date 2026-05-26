@@ -132,7 +132,6 @@ const Dashboard: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-      {/* Stat cards */}
       <div style={{
         display:             'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -182,14 +181,12 @@ const Dashboard: React.FC = () => {
         />
       </div>
 
-      {/* Chart + Alert feed */}
       <div style={{
         display:             'grid',
         gridTemplateColumns: '1fr 1fr',
         gap:                 '16px',
       }}>
 
-        {/* Top detected objects chart */}
         <div style={{
           background:   'var(--bg-card)',
           border:       '1px solid var(--border)',
@@ -242,7 +239,6 @@ const Dashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Live alert feed */}
         <div style={{
           background:   'var(--bg-card)',
           border:       '1px solid var(--border)',

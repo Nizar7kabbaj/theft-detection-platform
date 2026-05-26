@@ -1,9 +1,3 @@
-"""
-alerts.py — Alert management endpoints
-Updated TDP-32: handle bend alerts (no object field)
-Updated TDP-35: send Telegram notification on new alert (background task)
-Updated TDP-36: send snapshot image (sendPhoto) when available, fallback to text
-"""
 import os
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from datetime import datetime
@@ -20,7 +14,6 @@ router = APIRouter()
 
 
 def _build_telegram_text(alert: AlertCreate) -> str:
-    """Build a human-readable Telegram message from an alert."""
     if alert.alert_type == "bending":
         what = "Person bending (possible concealment)"
     elif alert.object:
@@ -42,18 +35,12 @@ def _build_telegram_text(alert: AlertCreate) -> str:
 
 
 def _notify_telegram(alert: AlertCreate) -> None:
-    """
-    TDP-36: prefer sendPhoto when a snapshot file exists on disk,
-    otherwise fall back to sendMessage so we still get a text alert.
-    Runs inside BackgroundTasks — must never raise.
-    """
     text = _build_telegram_text(alert)
     snapshot = alert.snapshot_path
 
     if snapshot and os.path.isfile(snapshot):
         ok = send_telegram_photo(snapshot, caption=text)
         if not ok:
-            # photo failed (network, Telegram error) — still try text so the user is notified
             logger.warning("Photo send failed, falling back to text message")
             send_telegram_message(text)
     else:
@@ -64,7 +51,6 @@ def _notify_telegram(alert: AlertCreate) -> None:
 
 @router.post("/", response_model=dict)
 async def create_alert(alert: AlertCreate, background_tasks: BackgroundTasks):
-    """Save an alert from the AI model and notify Telegram in the background."""
     db = get_database()
     alert_doc = {
         "alert_id":      alert.alert_id,
@@ -87,7 +73,6 @@ async def create_alert(alert: AlertCreate, background_tasks: BackgroundTasks):
     label = alert.object.get("class_name") if alert.object else alert.alert_type
     logger.warning(f"Alert saved: {alert.severity} — {label}")
 
-    # TDP-36: send photo if available, fall back to text otherwise (non-blocking, fail-safe)
     background_tasks.add_task(_notify_telegram, alert)
 
     return {"id": str(result.inserted_id), "message": "Alert saved"}
@@ -99,7 +84,6 @@ async def get_alerts(
     skip:     int = Query(default=0),
     severity: str = Query(default=None)
 ):
-    """Get all alerts with optional severity filter."""
     db = get_database()
     query = {}
     if severity:
@@ -149,7 +133,6 @@ async def acknowledge_alert(alert_id: str):
 
 @router.delete("/{alert_id}", response_model=dict)
 async def delete_alert(alert_id: str):
-    """Delete an alert."""
     db = get_database()
     result = await db.alerts.delete_one({"_id": ObjectId(alert_id)})
     if result.deleted_count == 0:

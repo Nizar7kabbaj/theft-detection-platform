@@ -7,7 +7,6 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface Alert {
   id: string;
@@ -52,7 +51,6 @@ export interface Detection {
   bbox: { x1: number; y1: number; x2: number; y2: number };
 }
 
-// ── API calls ──────────────────────────────────────────────────────────────────
 
 export const alertsApi = {
   getAll: (severity?: string) =>

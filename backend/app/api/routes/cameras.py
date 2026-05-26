@@ -1,6 +1,3 @@
-"""
-cameras.py — Camera management endpoints
-"""
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
 from bson import ObjectId
@@ -29,7 +26,6 @@ async def create_camera(camera: CameraCreate):
 
 @router.get("/", response_model=list)
 async def get_cameras():
-    """Get all cameras."""
     db = get_database()
     cameras = []
     async for camera in db.cameras.find():
@@ -46,7 +42,6 @@ async def get_cameras():
 
 @router.get("/{camera_id}", response_model=dict)
 async def get_camera(camera_id: str):
-    """Get a specific camera by ID."""
     db = get_database()
     camera = await db.cameras.find_one({"_id": ObjectId(camera_id)})
     if not camera:
@@ -63,7 +58,6 @@ async def get_camera(camera_id: str):
 
 @router.delete("/{camera_id}", response_model=dict)
 async def delete_camera(camera_id: str):
-    """Delete a camera."""
     db = get_database()
     result = await db.cameras.delete_one({"_id": ObjectId(camera_id)})
     if result.deleted_count == 0:

@@ -1,13 +1,8 @@
-"""
-schemas.py — Pydantic models for request and response validation
-Updated TDP-32: added pose keypoints support
-"""
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
 
-# Camera schemas
 
 class CameraCreate(BaseModel):
     name:       str
@@ -25,7 +20,6 @@ class CameraResponse(BaseModel):
     created_at: datetime
 
 
-# Detection schemas
 
 class BoundingBox(BaseModel):
     x1: int
@@ -64,7 +58,6 @@ class DetectionResponse(BaseModel):
     keypoints:    Optional[List[Keypoint]] = None
 
 
-# Alert schemas
 
 class AlertCreate(BaseModel):
     alert_id:      str
@@ -94,7 +87,6 @@ class AlertResponse(BaseModel):
     alert_type:   Optional[str] = None
 
 
-# Stats schemas
 
 class StatsResponse(BaseModel):
     total_alerts:     int
@@ -106,7 +98,6 @@ class StatsResponse(BaseModel):
     top_objects:      List[dict]
 
 
-# Auth schemas
 
 class Token(BaseModel):
     access_token: str

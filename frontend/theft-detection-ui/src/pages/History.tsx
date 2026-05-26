@@ -48,7 +48,6 @@ const History: React.FC = () => {
             <span>Time</span>
           </div>
 
-          {/* Table rows */}
           {detections.length === 0 ? (
             <div style={{
               textAlign: 'center',

@@ -1,6 +1,5 @@
 # Model Evaluation — Pose-Based Shoplifting Classifier
 
-**Ticket:** TDP-88
 **Model:** `ai-model/models/shoplifting_classifier.pt` (Fold 1 deployed)
 **Evaluation set:** PoseLift Test split, Fold 1 (10 files, 52 windows)
 **Date:** 2026-05-06
@@ -35,8 +34,8 @@
 | **True Anomaly** | 2 (FN) | **26 (TP)** |
 
 The model predicts "anomaly" for 47 of 52 windows. It catches 26 of 28 true
-anomalies (93% recall) but produces 21 false positives. This is the right
-trade-off for the use case: a guard can dismiss a false alert in 2 seconds via
+anomalies (93% recall) and produces 21 false positives. That's the right
+trade-off for this use case: a guard dismisses a false alert in 2 seconds via
 Telegram; a missed theft is unrecoverable.
 
 ---
@@ -45,11 +44,11 @@ Telegram; a missed theft is unrecoverable.
 
 ![ROC Curve](outputs/evaluation/roc_curve.png)
 
-**AUC = 0.455.** This is below 0.5 — the probability *ranking* of windows is
-slightly worse than random, even though the binary decision at threshold 0.5
-achieves F1 = 0.69.
+**AUC = 0.455.** Below 0.5 — the probability *ranking* of windows is slightly
+worse than random, even though the binary decision at threshold 0.5 hits
+F1 = 0.69.
 
-This is a real and disclosed limitation:
+A real and disclosed limitation:
 
 - The classifier is well-calibrated for the binary alert use case (red box vs
   green box for the guard).
@@ -57,7 +56,7 @@ This is a real and disclosed limitation:
   suspicious clips" should not use raw probabilities from this model.
 - The cause is the small training set (104 train windows for Fold 1) combined
   with the recall-favoring class weighting. The model learned a useful binary
-  decision boundary but did not learn a smooth confidence surface.
+  decision boundary but never learned a smooth confidence surface.
 
 ---
 
@@ -75,10 +74,10 @@ single window of shape `(1, 30, 51)`:
 | Mean FPS | **2,993.6** |
 | Demo target (>15 FPS) | ✅ PASS |
 
-The classifier is ~200× faster than the 15 FPS demo target. The bottleneck of
-the live pipeline (TDP-89) will be YOLOv8-pose keypoint extraction, not this
-LSTM. Headroom exists for multi-person batching, larger windows, or a deeper
-model in future iterations without hurting frame rate.
+The classifier runs ~200× faster than the 15 FPS demo target. The bottleneck
+of the live pipeline (TDP-89) will be YOLOv8-pose keypoint extraction, not
+this LSTM. There's headroom for multi-person batching, larger windows, or a
+deeper model in future iterations without hurting frame rate.
 
 Raw output: `ai-model/outputs/evaluation/inference_benchmark.json`
 
@@ -87,12 +86,12 @@ Raw output: `ai-model/outputs/evaluation/inference_benchmark.json`
 ## Honest Limitations (for the client meeting)
 
 1. **Small evaluation set.** 52 windows from 10 files. CV variance (F1 std =
-   0.077) is high relative to the mean — single-fold numbers should not be
-   over-interpreted.
+   0.077) is high relative to the mean — don't over-interpret single-fold
+   numbers.
 
 2. **Recall-favoring by design.** Class weights were tuned to penalize missed
-   anomalies more than false alerts. Precision is correspondingly low (0.55).
-   This is the correct trade-off for human-in-the-loop Telegram alerting but
+   anomalies more than false alerts. Precision drops accordingly (0.55).
+   That's the correct trade-off for human-in-the-loop Telegram alerting but
    would not suit fully automated enforcement.
 
 3. **Probability ranking is unreliable** (AUC < 0.5). Use the binary

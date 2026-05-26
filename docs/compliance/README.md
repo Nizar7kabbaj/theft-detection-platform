@@ -5,9 +5,9 @@ for a hypothetical European retail deployment of TheftGuard. Three
 documents, written from the perspective of a hypothetical solution
 provider delivering the system to a controller (the deploying retailer).
 
-The author is a student; no commercial deployment exists. The framing is
-used to produce concrete, contractually-meaningful disclosures rather
-than abstract academic statements. Every technical claim is verifiable
+The author is a student; no commercial deployment exists. The framing
+produces concrete, contractually-meaningful disclosures rather than
+abstract academic statements. Every technical claim is verifiable
 against the source repository.
 
 ---
@@ -17,9 +17,9 @@ against the source repository.
 TheftGuard is a recall-tuned, human-in-the-loop, hybrid rule+ML
 behavioral alert system. It uses pose estimation (no faces, no identity)
 to flag potentially suspicious motion to a human guard, who decides
-whether to act. The system is suitable for a supervised pilot deployment
-matching its training viewpoint and customer base. It is **not** suitable
-for autonomous, cross-deployment, or evidence-grade use.
+whether to act. It suits a supervised pilot deployment matching its
+training viewpoint and customer base. It does **not** suit autonomous,
+cross-deployment, or evidence-grade use.
 
 A retailer evaluating TheftGuard for production deployment in France or
 the EU should plan to: conduct a Data Protection Impact Assessment
@@ -107,7 +107,7 @@ These three documents do not stand alone. They reference and depend on:
 | README.md (this file) | First draft, shippable | ~500 | 2026-05-07 |
 
 These are first-draft disclosures suitable for the client meeting and
-for inclusion in a portfolio. They are **not** a substitute for a real
+for inclusion in a portfolio. They do **not** substitute for a real
 DPIA, a real fairness audit, or qualified legal counsel — and they say
 so explicitly in their respective closing notes.
 
@@ -119,7 +119,7 @@ A genuinely production-ready compliance pack would also contain: a
 Data Processing Agreement template (Art. 28), a Standard Contractual
 Clauses module for non-EU sub-processors (Art. 46), a Records of
 Processing template (Art. 30), a Data Subject Access Request workflow,
-and a per-deployment DPIA input pack. None of these are in this folder.
+and a per-deployment DPIA input pack. None of these sit in this folder.
 They are roadmap items for Phase 7 (documentation finalization).
 
 Their absence is itself disclosed — see PRIVACY.md §9 and LIMITATIONS.md §9.

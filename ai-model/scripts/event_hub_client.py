@@ -1,11 +1,3 @@
-"""
-event_hub_client.py — TDP-43: Publisher wrapper for Azure Event Hub.
-
-Sends pose detection events and bend alerts to the pose-events Event Hub.
-All sends run in background threads to never block the 30 FPS detection loop.
-Failures are logged but never raised — Event Hub outage must not crash the AI.
-"""
-
 import os
 import json
 import threading
@@ -25,7 +17,6 @@ _producer = None
 
 
 def init_publisher() -> bool:
-    """Open the Event Hub producer connection. Call once at startup."""
     global _producer
 
     if not _connection_string:
@@ -43,7 +34,6 @@ def init_publisher() -> bool:
 
 
 def close_publisher() -> None:
-    """Close the producer connection cleanly. Call once at shutdown."""
     global _producer
     if _producer is None:
         return
@@ -57,7 +47,6 @@ def close_publisher() -> None:
 
 
 def _build_envelope(event_type: str, event_id: str, payload: dict) -> dict:
-    """Wrap a payload in the standard event envelope."""
     return {
         "event_type":     event_type,
         "schema_version": SCHEMA_VERSION,
@@ -71,7 +60,6 @@ def _build_envelope(event_type: str, event_id: str, payload: dict) -> dict:
 
 
 def _send_in_background(envelope: dict) -> None:
-    """Send one event in a background thread. Never raises."""
     if _producer is None:
         return
 
@@ -87,7 +75,6 @@ def _send_in_background(envelope: dict) -> None:
 
 
 def publish_detection_event(detection: dict) -> None:
-    """Publish a detection event to Event Hub (non-blocking)."""
     if _producer is None:
         return
 
@@ -103,7 +90,6 @@ def publish_detection_event(detection: dict) -> None:
 
 
 def publish_alert_event(alert: dict) -> None:
-    """Publish an alert event to Event Hub (non-blocking)."""
     if _producer is None:
         return
 

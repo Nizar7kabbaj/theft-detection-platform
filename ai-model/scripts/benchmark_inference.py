@@ -1,12 +1,3 @@
-"""
-TDP-88 — Inference FPS benchmark on local GPU.
-
-Measures forward-pass latency of the deployed shoplifting classifier
-on a single 30-frame window. Target: > 15 FPS on RTX 3070 for the demo.
-
-Usage:
-    python ai-model/scripts/benchmark_inference.py
-"""
 import time
 import json
 import torch
@@ -14,11 +5,9 @@ import torch.nn as nn
 import numpy as np
 from pathlib import Path
 
-# ── Paths ─────────────────────────────────────────────────────────────
 ROOT       = Path(__file__).resolve().parents[2]
 MODEL_PATH = ROOT / "ai-model" / "models" / "shoplifting_classifier.pt"
 
-# ── Model definition (must match TDP-87 ShoplifterLSTM exactly) ───────
 class ShoplifterLSTM(nn.Module):
     def __init__(self, input_size=51, hidden_size=64, num_layers=2,
                  num_classes=2, dropout=0.3):
@@ -42,7 +31,6 @@ def main():
     if device.type == "cuda":
         print(f"GPU:    {torch.cuda.get_device_name(0)}")
 
-    # ── Load checkpoint ───────────────────────────────────────────────
     ckpt = torch.load(MODEL_PATH, map_location=device, weights_only=True)
     cfg  = ckpt["model_config"]
     model = ShoplifterLSTM(**cfg).to(device)
@@ -51,11 +39,8 @@ def main():
     print(f"Model loaded from {MODEL_PATH}")
     print(f"Architecture: {cfg}")
 
-    # ── Build a dummy input matching real inference ───────────────────
-    # Shape: (batch=1, window=30, features=51)
     dummy = torch.randn(1, 30, 51, device=device)
 
-    # ── Warmup (CUDA kernels load lazily on first call) ───────────────
     print("\nWarmup (50 iterations)...")
     with torch.no_grad():
         for _ in range(50):
@@ -63,7 +48,6 @@ def main():
     if device.type == "cuda":
         torch.cuda.synchronize()
 
-    # ── Timed runs ────────────────────────────────────────────────────
     N = 1000
     print(f"Benchmarking {N} forward passes...")
     latencies_ms = []
@@ -94,7 +78,6 @@ def main():
     print(f"Mean FPS:       {fps_mean:.1f}")
     print(f"Demo target:    > 15 FPS  -->  {'PASS' if fps_mean > 15 else 'FAIL'}")
 
-    # ── Save results ──────────────────────────────────────────────────
     out = {
         "device":       str(device),
         "gpu":          torch.cuda.get_device_name(0) if device.type == "cuda" else "CPU",

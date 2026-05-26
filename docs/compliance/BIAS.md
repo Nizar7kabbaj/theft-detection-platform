@@ -16,8 +16,8 @@ a student; no commercial deployment exists.
 This is the document about **who the system fails on, and why**. Every
 claim is either measurable in the project's artifacts (the PoseLift
 dataset, the deployed model, the evaluation results) or named as an
-explicit, unmeasured limitation of the methodology. No bias is
-speculated; no fairness is claimed without evidence.
+explicit, unmeasured limitation of the methodology. We don't speculate
+about biases, and we don't claim fairness without evidence.
 
 A processor unwilling to name the populations its product is unfair to
 is a processor a controller should not deploy.
@@ -26,11 +26,11 @@ is a processor a controller should not deploy.
 
 ## 1. Dataset bias — PoseLift
 
-The model is trained on the PoseLift dataset (TeCSAR-UNCC, WACV 2025).
+The model trains on the PoseLift dataset (TeCSAR-UNCC, WACV 2025).
 PoseLift's strengths — pre-extracted keypoints, persistent track IDs,
-academic licensing — were the basis for selecting it (see
-`ai-model/DATASET.md`, ticket TDP-85). Its biases follow from how it
-was constructed, and we name them here.
+academic licensing — drove the selection (see `ai-model/DATASET.md`,
+ticket TDP-85). Its biases follow from how it was constructed, and we
+name them here.
 
 ### 1.1 Single-store, single-geography bias
 
@@ -69,12 +69,12 @@ items (apparel, electronics).
 
 **Mitigation:** none at the model level. The recall-tuning at the
 threshold level (§3) partially compensates by lowering the bar for
-*any* suspicious motion, but it cannot recover signatures that are
-absent from the training data.
+*any* suspicious motion, but it cannot recover signatures absent from
+the training data.
 
 ### 1.3 Sample size
 
-151 labeled instances, of which only 47 are in the labeled test split
+151 labeled instances, of which only 47 sit in the labeled test split
 (used as supervised training data via 5-fold CV — see
 `ai-model/DATASET.md`). This is **small** for a behavioral classifier.
 
@@ -84,7 +84,7 @@ deployed model with F1 anywhere in the [0.49, 0.65] range. The
 deployed model is the best fold (F1 = 0.693), which is a defensible
 choice for a demonstration but should not be confused with a stable
 estimate of the model's true performance. The honest expected F1 in
-production is closer to the cross-fold mean.
+production sits closer to the cross-fold mean.
 
 **Mitigation:** disclose the cross-fold variance alongside the deployed
 model's metrics (done — see `ai-model/EVALUATION.md` and
@@ -99,9 +99,9 @@ for unsupervised anomaly detection where labeled clips are clips that
 
 **Consequence:** the supervised training regime sees an inverted class
 balance compared to a real deployment, where the prior probability of a
-suspicious window in any given 2-second slice is *far* below 50%. The
-model's score distribution is calibrated to the training prior, not the
-deployment prior.
+suspicious window in any given 2-second slice falls *far* below 50%.
+The model's score distribution is calibrated to the training prior,
+not the deployment prior.
 
 **Real consequence at deployment:** the deployed precision (0.55) is
 likely to be *worse* on a real store feed than on the test set, because
@@ -158,17 +158,17 @@ for production.
 ## 3. Model bias — the operating point is a fairness choice
 
 The deployed model is recall-tuned: recall = 0.93, precision = 0.55
-(see `LIMITATIONS.md` §3). This trade is a privacy/fairness choice, not
-a neutral engineering choice.
+(see `LIMITATIONS.md` §3). This trade is a privacy/fairness choice,
+not a neutral engineering one.
 
 **The choice favors the retailer's interest** (catching theft) **at the
 cost of an inflated false-positive rate against customers**. Forty-five
 out of every 100 flagged customers are flagged in error.
 
 **Whose error is it?** The system has no facial recognition, no identity,
-no record of who was flagged. The error is absorbed by the *guard*, who
-spends ~2 seconds dismissing the dashboard alert; the customer, in the
-intended workflow, never knows they were flagged.
+no record of who was flagged. The guard absorbs the error, spending ~2
+seconds dismissing the dashboard alert; the customer, in the intended
+workflow, never knows they were flagged.
 
 **The risk this design accepts.** If the controller deviates from the
 intended workflow — if a guard treats a TheftGuard alert as probable
@@ -183,15 +183,15 @@ treats alerts as *prompts to look*, not as *evidence to act*. The
 provider's deliverable cannot enforce guard behavior; it can only
 document the assumption.
 
-A controller deploying this system without guard training accepting the
-human-in-the-loop premise is operating an autonomous behavioral
+A controller deploying this system without guard training that accepts
+the human-in-the-loop premise is operating an autonomous behavioral
 profiling system, with the corresponding GDPR Art. 22 obligations.
 
 ---
 
 ## 4. Specific failure modes worth naming
 
-The following customer populations are at elevated risk of being
+The customer populations below are at elevated risk of being
 mis-classified by the system. Each is named, the cause is located in
 the pipeline, and the response is stated.
 
@@ -224,8 +224,8 @@ suppressing alerts on detected wheelchair users.
 
 ### 4.3 Children
 
-Pose estimation models are trained predominantly on adult skeletons.
-Child proportions (larger head relative to body, shorter limbs) produce
+Pose estimation models train predominantly on adult skeletons. Child
+proportions (larger head relative to body, shorter limbs) produce
 lower-confidence keypoints and unusual joint angles relative to adult
 training data. The LSTM, in turn, has not seen child skeletons in
 PoseLift to a known degree (PoseLift does not disclose age).
@@ -247,13 +247,13 @@ Veils that cover the head can lower nose-keypoint confidence, which
 matters for the bend rule (which uses the nose for desk-camera variants).
 
 **Effect:** unknown direction. Possibly elevated false positives if the
-silhouette change is read as concealment posture; possibly elevated
+silhouette change reads as concealment posture; possibly elevated
 false negatives if the keypoints are too low-confidence to enter the
 LSTM at all.
 
 **Severity:** high if biased systematically. **Response:** named here as
 a specific category requiring per-deployment evaluation. The methodology
-to evaluate it (disaggregated fairness analysis) is in §2.
+to evaluate it (disaggregated fairness analysis) lives in §2.
 
 ### 4.5 Tall and short customers
 
@@ -276,15 +276,15 @@ model is unbiased. The response is structural:
 
 1. **Recall is high (0.93), precision is moderate (0.55)** by design.
    This means the model errs toward over-flagging, not under-flagging.
-   In a fairness frame, this is the *less* harmful direction: the cost
-   of over-flagging is absorbed by the guard, while under-flagging
-   would mean the system disproportionately misses theft by populations
+   In a fairness frame, this is the *less* harmful direction: the guard
+   absorbs the cost of over-flagging, while under-flagging would mean
+   the system disproportionately misses theft by populations
    under-represented in training (a fairness harm to the retailer) *and*
    gives a false sense of security.
-2. **Human-in-the-loop validation is mandatory.** Every alert is
-   reviewed by a guard; no alert produces an automated action. The
-   guard is the system's fairness backstop. This works only if the
-   guard is trained appropriately (see §3).
+2. **Human-in-the-loop validation is mandatory.** A guard reviews every
+   alert; no alert produces an automated action. The guard is the
+   system's fairness backstop. This works only if the guard is trained
+   appropriately (see §3).
 3. **The system is not facial recognition and has no memory.** A
    customer flagged once is not flagged-on-sight on subsequent visits.
    There is no demographic-level record. The error population on day N
@@ -371,12 +371,12 @@ Each unmitigated bias maps to a roadmap item. None are ready today.
 
 ## 9. Summary line
 
-TheftGuard is trained on a small, single-store, demographically
-opaque dataset. Its biases are named in this document. Its mitigations
-are structural (recall-tuned + human-in-the-loop + no persistent
-identity), not architectural. A controller deploying this system
-without per-deployment fairness evaluation and validated guard training
-is not deploying it as the provider intended.
+TheftGuard trains on a small, single-store, demographically opaque
+dataset. Its biases are named in this document. Its mitigations are
+structural (recall-tuned + human-in-the-loop + no persistent identity),
+not architectural. A controller deploying this system without
+per-deployment fairness evaluation and validated guard training is not
+deploying it as the provider intended.
 
 The provider's commitment is to disclosure, not to claims of fairness
 the evidence does not support.

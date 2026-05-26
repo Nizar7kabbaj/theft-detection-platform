@@ -28,7 +28,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
 
-      {/* Sidebar */}
       <aside style={{
         width:      open ? '240px' : '64px',
         background: 'var(--bg-secondary)',
@@ -42,7 +41,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         overflow:   'hidden',
       }}>
 
-        {/* Logo */}
         <div style={{
           padding:    '20px 16px',
           display:    'flex',
@@ -74,7 +72,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           )}
         </div>
 
-        {/* Live indicator */}
         {open && (
           <div style={{
             margin:     '12px 16px',
@@ -93,7 +90,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         )}
 
-        {/* Navigation */}
         <nav style={{ flex: 1, padding: '8px' }}>
           {navItems.map(({ path, label, icon: Icon }) => {
             const active = location.pathname === path;
@@ -126,7 +122,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           })}
         </nav>
 
-        {/* Toggle button */}
         <button
           onClick={() => setOpen(!open)}
           style={{
@@ -146,7 +141,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </button>
       </aside>
 
-      {/* Main content */}
       <main style={{
         marginLeft: open ? '240px' : '64px',
         flex:       1,
@@ -155,7 +149,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         background: 'var(--bg-primary)',
       }}>
 
-        {/* Top bar */}
         <header style={{
           padding:      '16px 24px',
           background:   'var(--bg-secondary)',
@@ -200,7 +193,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </header>
 
-        {/* Page content */}
         <div style={{ padding: '24px' }}>
           {children}
         </div>
