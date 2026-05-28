@@ -1,6 +1,7 @@
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import argparse
+import platform
 import json
 import math
 import time
@@ -217,7 +218,10 @@ def detect_with_alerts(model, predictor, source, anomaly_threshold,
 
     if is_webcam:
         logger.info("Opening webcam — press Q to stop...")
-        cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+        if platform.system() == "Windows":
+            cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+        else:
+            cap = cv2.VideoCapture(source, cv2.CAP_V4L2)
     else:
         video_path = Path(str(source))
         if not video_path.exists():
@@ -444,7 +448,8 @@ def detect_with_alerts(model, predictor, source, anomaly_threshold,
 
 def main():
     parser = argparse.ArgumentParser(description="Live theft detection demo")
-    parser.add_argument("--source", default="1",
+    default_source = "1" if platform.system() == "Windows" else "2"
+    parser.add_argument("--source", default=default_source,
                         help="Camera index (0,1,2) or path to a video file")
     parser.add_argument("--anomaly-threshold", type=float,
                         default=DEFAULT_ANOMALY_THRESHOLD,
