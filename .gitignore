@@ -5,51 +5,44 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 *.egg-info/
-
 .python-version
 
-backend/.env
 .env
+backend/.env
+ai-model/.env
 *.pem
 *.key
 secrets.json
-
-*.pt
-
-ai-model/outputs/
 
 node_modules/
 .next/
 dist/
 build/
-*.log
 
 .vscode/
 .idea/
 *.swp
-
+*.log
+.DS_Store
 Thumbs.db
 desktop.ini
-.DS_Store
-
-test_cam*.jpg
-test_cam*.png
-bus.jpg
-*.jpg
-*.png
-*.jpeg
-*.mp4
 
 ai-model/data/raw/
 ai-model/data/processed/
 *.pkl
 *.npy
 
+
+*.pt
 !ai-model/models/*.pt
 !ai-model/models/*.json
+
+*.jpg
+*.jpeg
+*.png
+*.mp4
 !ai-model/notebooks/*.png
 
-!ai-model/outputs/
 ai-model/outputs/*
 !ai-model/outputs/evaluation/
 !ai-model/outputs/evaluation/*.png
