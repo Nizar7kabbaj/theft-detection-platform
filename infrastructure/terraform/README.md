@@ -1,16 +1,13 @@
-# Terraform — Theft Detection Platform Infrastructure
+# Terraform
 
 Infrastructure-as-code for the Azure side of the real-time theft detection
-platform. This directory is the Terraform root. Each module and environment
-is built by its own Jira ticket; this README describes the layout and how the
-pieces fit together.
+platform. This directory is the Terraform root.
 
 ## Status
 
-Scaffold only. The directory tree, this README, and `.gitignore` exist.
-No `.tf` files are written yet each is authored by the ticket that owns it
-(TDP3-33 through TDP3-41). A directory holding only a `.gitkeep` is a
-placeholder waiting for its ticket.
+Scaffold and three modules in progress. Each module and environment is built
+by its own ticket. A directory holding only a `.gitkeep` is a placeholder
+waiting for the ticket that fills it.
 
 ## Layout
 
@@ -21,12 +18,12 @@ infrastructure/terraform/
 │   └── prod/     # prod root config
 ├── modules/
 │   ├── resource-group/   # resource group + naming convention
-│   ├── networking/       # VNet, subnets, NSGs, private endpoints
+│   ├── networking/       # VNet, subnets, NSGs, private DNS zones
 │   └── security/         # Key Vault, managed identities, RBAC
 ├── policies/
 │   ├── sentinel/   # Sentinel policy-as-code
 │   └── opa/        # Open Policy Agent / Conftest rules
-├── scripts/        # helper scripts: init, plan, destroy wrappers
+├── scripts/        # bootstrap and helper scripts
 ├── .gitignore
 └── README.md
 ```
@@ -48,7 +45,7 @@ different inputs. `dev` stays cheap; `prod` is sized for real use.
 - Region: France Central
 
 The resource group already exists and survived the OS migration. Terraform
-will manage resources inside it.
+manages resources inside it.
 
 ## Cost discipline
 
@@ -67,7 +64,7 @@ terraform apply -auto-approve
 ```
 
 Destroy whenever the stack sits idle for more than a day. Never provision a
-Premium tier of anything Basic, Consumption, and Serverless only.
+Premium tier of anything. Basic, Consumption, and Serverless only.
 
 ## What is safe to commit
 
