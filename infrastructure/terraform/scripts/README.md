@@ -64,8 +64,8 @@ Expect `TLS1_2`, `False`, `False`.
 ### Tearing it down
 
 The state backend is the one piece of infrastructure that does NOT
-get destroyed by `terraform destroy`. It's bootstrap infra. By
-definition it has to outlive the resources it tracks.
+get destroyed by `terraform destroy`. It's bootstrap infra — it has
+to outlive the resources it tracks.
 
 To delete it manually for true zero cost:
 
