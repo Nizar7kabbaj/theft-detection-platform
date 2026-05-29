@@ -76,3 +76,90 @@ az group delete -n rg-tfstate-theft --yes
 That destroys the storage account and all state history with it.
 Only do this if you're abandoning the project, or you've already
 exported state somewhere else.
+
+## tf.sh
+
+One script, every terraform command you actually run. The wrapper exists
+because typing `cd infrastructure/terraform/environments/dev && terraform plan`
+fifteen times a day gets old, and forgetting which subscription you're pointed
+at is how people accidentally apply to prod.
+
+### Usage
+
+```bash
+./tf.sh <env> <action> [terraform-args...]
+```
+
+`<env>` is a directory name under `environments/`. Right now: `dev` and `prod`.
+
+Actions:
+
+| Action | What it does |
+|---|---|
+| `init` | `terraform init` in the env directory |
+| `fmt` | `terraform fmt -recursive` |
+| `validate` | `terraform validate` |
+| `plan` | Saves the plan to a `tfplan` file in the env directory |
+| `apply` | Applies the saved `tfplan`. Refuses to run without one |
+| `destroy` | Makes you type the env name back, then destroys |
+| `output` | `terraform output` |
+| `console` | `terraform console` |
+
+Anything after the action is passed straight to terraform:
+
+```bash
+./tf.sh dev plan -var=enable_logs=true
+```
+
+### Wrappers
+
+Three one-liners next to `tf.sh` that just forward arguments:
+
+- `plan.sh dev` → `tf.sh dev plan`
+- `apply.sh dev` → `tf.sh dev apply`
+- `destroy.sh dev` → `tf.sh dev destroy`
+
+Pick whichever reads better in your shell history.
+
+### Plan-then-apply
+
+`apply` only works against a saved plan file. The two-step is the point:
+
+```bash
+./tf.sh dev plan      # writes tfplan
+# read the diff
+./tf.sh dev apply     # applies that exact tfplan, then deletes it
+```
+
+No surprises between "what I reviewed" and "what got applied". It's slightly
+more annoying than `terraform apply -auto-approve`. That's the trade. If
+the plan is more than 30 minutes old, apply asks before using it, because
+state can drift while you're at lunch.
+
+### Guardrails
+
+The script exits early if:
+
+- Azure CLI isn't installed
+- You're not logged in (`az login`)
+- The current subscription doesn't match `AZURE_SUBSCRIPTION_ID` in `.tf-env`
+- The environment directory doesn't exist
+
+`destroy` won't run unless the confirmation string matches the env name.
+Typing `dev` to destroy `prod` fails on purpose.
+
+### Local config
+
+The subscription check reads `.tf-env` at the repo root. It's gitignored.
+Copy the example, drop your subscription ID in:
+
+```bash
+cp .tf-env.example .tf-env
+# get your id:
+az account show --query id -o tsv
+# paste it into .tf-env
+```
+
+Without `.tf-env` the script still runs, just without the subscription
+guard, and prints a warning so you know. Fine for a one-off, not what
+you want as a habit.
