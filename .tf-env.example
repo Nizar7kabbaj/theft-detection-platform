@@ -1,0 +1,6 @@
+# Copy this file to .tf-env at the repo root and fill in real values.
+# .tf-env is gitignored — never commit it.
+
+# Azure subscription the helper scripts must be pointed at.
+# Get yours with: az account show --query id -o tsv
+AZURE_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000

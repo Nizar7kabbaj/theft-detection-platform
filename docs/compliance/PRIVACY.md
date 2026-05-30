@@ -11,7 +11,7 @@
 
 This document is written from the perspective of a hypothetical solution
 provider delivering TheftGuard to a European retail client. The author is
-a student; no commercial deployment exists. The framing is used to produce
+a student; no commercial deployment exists. The framing produces
 concrete, contractually-meaningful disclosures rather than abstract
 academic statements. All technical claims about the system's behavior are
 factual and verifiable in the codebase.
@@ -60,19 +60,19 @@ they operate. This requires the controller to perform a documented
 - **Balancing:** the controller's interest vs the data subject's reasonable
   expectation of privacy in a retail space.
 
-The provider's position: the system is designed to **support**, not
-replace, the LIA. Two design choices reduce the privacy cost relative to
+The provider's position: the system **supports** the LIA, it does not
+replace it. Two design choices reduce the privacy cost relative to
 traditional CCTV with human review:
 
 1. Raw video is never persisted. Only pose keypoints (a 51-dimensional
    abstraction) and on-alert snapshots leave the camera node.
 2. The classifier is recall-tuned (recall = 0.93, precision = 0.55) and
-   alerts are validated by a human guard before any action is taken. The
-   system does not produce automated decisions with legal or similarly
+   a human guard validates alerts before any action is taken. The system
+   does not produce automated decisions with legal or similarly
    significant effects (Art. 22).
 
-The LIA itself is the controller's responsibility and is not produced by
-the provider.
+The LIA itself is the controller's responsibility, not the provider's
+deliverable.
 
 ---
 
@@ -105,7 +105,7 @@ not workable in a retail CCTV context — or to an Art. 9(2) derogation.
 
 ## 4. Controller obligations the provider does not discharge
 
-The following are the **controller's** legal obligations and are not
+The items below are the **controller's** legal obligations and are not
 produced or covered by the provider's deliverable:
 
 1. **DPIA (Art. 35).** Systematic monitoring of a publicly accessible
@@ -128,10 +128,10 @@ produced or covered by the provider's deliverable:
    to the public require prefectoral authorization renewable every five
    years. The provider's system inherits whatever authorization the
    underlying camera infrastructure already holds.
-6. **Data subject rights (Arts. 15–22).** Access, rectification, erasure,
-   restriction, and objection requests are received and processed by the
-   controller. The provider supplies tooling to honor erasure requests
-   on demand (see §8).
+6. **Data subject rights (Arts. 15–22).** The controller receives and
+   processes access, rectification, erasure, restriction, and objection
+   requests. The provider supplies tooling to honor erasure requests on
+   demand (see §8).
 
 ---
 
@@ -156,9 +156,9 @@ a **non-EU sub-processor** with limited transparency on its data handling,
 and its Bot API messages — including the JPEG snapshot attached to each
 alert — pass through Telegram's infrastructure outside the EU.
 
-**This is disclosed as a compliance gap, not defended.** It is acceptable
-for a development demonstration; it would not be acceptable in production
-without one of the following:
+**This is disclosed as a compliance gap, not defended.** It works for a
+development demonstration; it would not work in production without one
+of the following:
 
 - A Standard Contractual Clauses arrangement with Telegram covering Art. 46
   international transfers (Telegram does not currently publish one).
@@ -168,7 +168,7 @@ without one of the following:
 
 The post-meeting roadmap (see `PROJECT_CONTEXT.md` Phase 5 deferred
 items, particularly Azure Service Bus + internal dashboard) replaces
-Telegram with an EU-resident notification path. This is the recommended
+Telegram with an EU-resident notification path. That is the recommended
 production configuration.
 
 ---

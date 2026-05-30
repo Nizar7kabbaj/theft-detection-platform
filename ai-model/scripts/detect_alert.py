@@ -1,31 +1,7 @@
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-"""
-detect_alert.py — Phase 4 / TDP-32 / TDP-43 / TDP-89
-
-Live webcam theft-detection demo.
-
-Detectors active:
-  - TDP-32 BEND DETECTOR (geometric)  — torso angle > 60° for 2+ sec
-                                        --> fires Telegram + snapshot + Event Hub
-  - TDP-89 LSTM CLASSIFIER (visual)   — colors the bounding box red/green
-                                        --> NO live alerts (see lesson #60)
-
-Why the split? The LSTM was trained on overhead retail CCTV (PoseLift). On a
-laptop desk camera the keypoint distribution is different — domain shift.
-The bend rule is camera-agnostic and reliable, so it owns the alert path.
-The LSTM's published metrics live in EVALUATION.md (F1=0.69, recall=0.93,
-2994 FPS) — that's the academic artifact, not the live signal.
-
-Output paths (created on startup):
-  ai-model/outputs/detections   recorded mp4 of the run
-  ai-model/outputs/snapshots    jpg per bend alert
-  ai-model/outputs/alerts       json per bend alert
-  ai-model/outputs/logs         session_*.json with all detections + alerts
-"""
-
 import argparse
+import platform
 import json
 import math
 import time
@@ -47,7 +23,7 @@ from event_hub_client import (
 from predictor import ShoplifterPredictor
 
 
-# ── Configuration ────────────────────────────────────────────────────────
+# Configuration
 
 KEYPOINT_NAMES = [
     "nose", "left_eye", "right_eye", "left_ear", "right_ear",
@@ -66,10 +42,6 @@ KEYPOINT_CONF_THRESHOLD  = 0.5
 BEND_ANGLE_THRESHOLD     = 60.0
 BEND_DURATION_THRESHOLD  = 2.0
 ALERT_COOLDOWN           = 3.0
-
-# TDP-89 — visual threshold only.
-# The LSTM colors the box red at p_anomaly >= threshold but does NOT trigger
-# Telegram / Mongo / Event Hub alerts. Only the bend rule fires real alerts.
 DEFAULT_ANOMALY_THRESHOLD = 0.65
 
 MODEL_PATH = Path("ai-model/models/shoplifting_classifier.pt")
@@ -79,10 +51,9 @@ DEMO_METRICS = {
     "FPS":    2994,
 }
 
-# BGR colors
-COLOR_NORMAL  = (60, 200, 60)    # green
-COLOR_ANOMALY = (40, 40, 220)    # red
-COLOR_WARMUP  = (160, 160, 160)  # gray
+COLOR_NORMAL  = (60, 200, 60)# green
+COLOR_ANOMALY = (40, 40, 220)# red
+COLOR_WARMUP  = (160, 160, 160)# gray
 
 OUTPUT_DIR   = Path("ai-model/outputs/detections")
 SNAPSHOT_DIR = Path("ai-model/outputs/snapshots")
@@ -90,7 +61,7 @@ LOG_DIR      = Path("ai-model/outputs/logs")
 ALERT_DIR    = Path("ai-model/outputs/alerts")
 
 
-# ── Setup ────────────────────────────────────────────────────────────────
+# Setup
 
 def setup_directories():
     for d in [OUTPUT_DIR, SNAPSHOT_DIR, LOG_DIR, ALERT_DIR]:
@@ -111,8 +82,6 @@ def load_predictor():
     logger.info(f"Predictor ready on {pred.device} (window={pred.window})")
     return pred
 
-
-# ── Pose helpers ─────────────────────────────────────────────────────────
 
 def extract_keypoints_data(kpts_xy, kpts_conf):
     data = []
@@ -151,7 +120,6 @@ def compute_torso_angle(kpts_xy, kpts_conf):
 
 
 def build_keypoints_array(kpts_xy_one, kpts_conf_one):
-    """Return ndarray (17, 3) of (x, y, conf) — what ShoplifterPredictor needs."""
     import numpy as np
     arr = np.zeros((17, 3), dtype=np.float32)
     arr[:, 0] = kpts_xy_one[:, 0]
@@ -160,7 +128,6 @@ def build_keypoints_array(kpts_xy_one, kpts_conf_one):
     return arr
 
 
-# ── Drawing helpers ──────────────────────────────────────────────────────
 
 def draw_alert_banner(frame, label):
     h, w = frame.shape[:2]
@@ -188,7 +155,6 @@ def add_status_overlay(frame, frame_count, person_count, alert_count, fps):
 
 
 def add_demo_metrics_overlay(frame):
-    """Bottom-right panel with the LSTM's published metrics for the demo."""
     h, w = frame.shape[:2]
     pad = 8
     lines = [
@@ -210,7 +176,6 @@ def add_demo_metrics_overlay(frame):
 
 
 def draw_classifier_box(frame, bbox, color, label_text):
-    """Replace whatever YOLO drew with our classifier-colored box + tag."""
     x1, y1, x2, y2 = (int(v) for v in bbox)
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
     (tw, th), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
@@ -221,10 +186,8 @@ def draw_classifier_box(frame, bbox, color, label_text):
     return frame
 
 
-# ── Alert dispatcher ─────────────────────────────────────────────────────
-
+# Alert
 def fire_alert(annotated_frame, alert, all_alerts, api_available, eh_available):
-    """Single place that does Telegram + snapshot + Event Hub + JSON log + banner."""
     all_alerts.append(alert)
 
     person_id = alert.get("person", {}).get("track_id", "?")
@@ -248,15 +211,17 @@ def fire_alert(annotated_frame, alert, all_alerts, api_available, eh_available):
     return annotated_frame
 
 
-# ── Main detection loop ──────────────────────────────────────────────────
-
+# Main detection
 def detect_with_alerts(model, predictor, source, anomaly_threshold,
                        api_available=False, eh_available=False):
     is_webcam = isinstance(source, int)
 
     if is_webcam:
         logger.info("Opening webcam — press Q to stop...")
-        cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+        if platform.system() == "Windows":
+            cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+        else:
+            cap = cv2.VideoCapture(source, cv2.CAP_V4L2)
     else:
         video_path = Path(str(source))
         if not video_path.exists():
@@ -300,13 +265,9 @@ def detect_with_alerts(model, predictor, source, anomaly_threshold,
             timestamp   = datetime.now().isoformat()
             now         = time.time()
 
-            # TDP-89: model.track() so we get track IDs (deque key for the LSTM).
             results = model.track(frame, persist=True, verbose=False)
             result  = results[0]
 
-            # TDP-89: skip YOLO's box+label drawing — we draw our own classifier-colored
-            # box. result.plot(boxes=False, labels=False, conf=False) keeps the skeleton
-            # lines/dots but doesn't draw the green box or "person 0.89" label.
             annotated_frame = result.plot(boxes=False, labels=False, conf=False)
 
             persons_in_frame = []
@@ -349,7 +310,6 @@ def detect_with_alerts(model, predictor, source, anomaly_threshold,
                     keypoints_data = extract_keypoints_data(person_kpts_xy, person_kpts_conf)
                     torso_angle    = compute_torso_angle(person_kpts_xy, person_kpts_conf)
 
-                    # ── TDP-89: classifier — visual only, no alerts ──────
                     p_anomaly = None
                     if track_id is not None:
                         kp_arr = build_keypoints_array(person_kpts_xy, person_kpts_conf)
@@ -376,8 +336,7 @@ def detect_with_alerts(model, predictor, source, anomaly_threshold,
                     annotated_frame = draw_classifier_box(
                         annotated_frame, coords, color, tag
                     )
-                    # ─────────────────────────────────────────────────────
-
+                    
                     person_record = {
                         "session_id":  session_id,
                         "frame_index": frame_count,
@@ -400,8 +359,7 @@ def detect_with_alerts(model, predictor, source, anomaly_threshold,
                             send_detection(person_record)
                         if eh_available:
                             publish_detection_event(person_record)
-
-                    # ── BEND alert (TDP-32) — the ONLY live alert path ───
+                            
                     if torso_angle is not None and torso_angle >= BEND_ANGLE_THRESHOLD:
                         if bend_start_time[i] is None:
                             bend_start_time[i] = now
@@ -488,12 +446,10 @@ def detect_with_alerts(model, predictor, source, anomaly_threshold,
         logger.success(f"Output video: {output_path}")
         logger.success(f"Session log:  {log_path}")
 
-
-# ── Entry point ──────────────────────────────────────────────────────────
-
 def main():
-    parser = argparse.ArgumentParser(description="Live theft detection demo (TDP-89)")
-    parser.add_argument("--source", default="1",
+    parser = argparse.ArgumentParser(description="Live theft detection demo")
+    default_source = "1" if platform.system() == "Windows" else "2"
+    parser.add_argument("--source", default=default_source,
                         help="Camera index (0,1,2) or path to a video file")
     parser.add_argument("--anomaly-threshold", type=float,
                         default=DEFAULT_ANOMALY_THRESHOLD,

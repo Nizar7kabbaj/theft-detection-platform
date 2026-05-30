@@ -42,8 +42,8 @@ whether to act. The system **never** acts autonomously.
 ## 2. Model performance — headline numbers
 
 Measured on the held-out test fold of PoseLift (10 labeled clips). The
-full evaluation report is in `ai-model/EVALUATION.md`; the metrics file
-is `ai-model/outputs/evaluation/metrics.json`.
+full evaluation report lives in `ai-model/EVALUATION.md`; the metrics
+file is `ai-model/outputs/evaluation/metrics.json`.
 
 | Metric | Value | What it means |
 |--------|-------|---------------|
@@ -70,8 +70,7 @@ precision (0.55). This is a design choice, not a defect.
 **Reasoning.** The cost asymmetry is wide and asymmetric:
 
 - A false negative (missed theft) is *unrecoverable* — the merchandise
-  leaves the store and there is no later signal that would have caught
-  it.
+  leaves the store and no later signal would have caught it.
 - A false positive (false alarm) costs a guard ~2 seconds to dismiss
   via the dashboard, with no consequence to the customer.
 
@@ -79,9 +78,8 @@ In this regime, the rational operating point is the one that minimizes
 false negatives subject to a tolerable false-positive rate, not the one
 that maximizes accuracy. With ~55% precision and recall-tuned alerting,
 a guard reviewing 20 alerts per shift would dismiss ~9 false positives
-to catch ~11 real ones. This is comparable to the workload of a guard
-reviewing standard CCTV without ML assistance and is the design
-intention.
+to catch ~11 real ones. That workload is comparable to a guard reviewing
+standard CCTV without ML assistance, and is the design intention.
 
 **A controller who wants a different operating point** can move the
 classification threshold without retraining; the threshold is a
@@ -94,7 +92,7 @@ lower recall is a one-line change.
 
 A reviewer comparing this number to a textbook will note that AUC < 0.5
 implies the model's *ranking* of windows is worse than random. This is
-true and it is disclosed without softening.
+true, and we disclose it without softening.
 
 **What it means in practice.** AUC measures the model's ability to rank
 all positive examples above all negative examples *in continuous score
@@ -107,7 +105,7 @@ useful even when the underlying score ranking is not.
 
 1. **Small calibrated test set.** 10 labeled clips × ~120 frames each
    produces a few hundred sliding windows. AUC is sensitive to ranking
-   in the long tail of low-confidence examples, and the long tail is
+   in the long tail of low-confidence examples, and that long tail is
    small here.
 2. **The model concentrates probability mass.** Across the test set,
    the model output sits in a narrow band around 0.96 — high-confidence
@@ -130,7 +128,7 @@ queue rather than a stream) would need to retrain for ranking quality.*
 
 ## 5. Domain shift — the live LSTM flicker
 
-The LSTM was trained on PoseLift, which was captured by **overhead retail
+The LSTM trained on PoseLift, which was captured by **overhead retail
 CCTV at 1920×1080, 15 FPS, in a single store**. The live demo runs on a
 **laptop desk webcam at desk level**. The two viewpoints produce
 substantively different skeletons for the same posture: shoulder-hip
@@ -140,10 +138,10 @@ ratios, joint visibility, and self-occlusion all change.
 output flickers between *normal* and *suspicious* on the **same posture**
 seconds apart. A person standing still, with no posture change, can
 flip green→red→green within a 5-second window. This is reproducible and
-is recorded in PROJECT_CONTEXT.md lesson #67.
+recorded in PROJECT_CONTEXT.md lesson #67.
 
-**Why this happens.** The LSTM has not been trained on desk-camera
-viewpoints. The keypoint distribution it sees at inference is
+**Why this happens.** The LSTM has not seen desk-camera viewpoints in
+training. The keypoint distribution it sees at inference is
 out-of-distribution relative to its training set. The model has no
 mechanism to detect this and abstain; it produces a confident output
 on each window regardless.
@@ -169,7 +167,7 @@ The system runs **two parallel detectors**:
 | Bend rule | Geometric / deterministic | **Yes** | Robust to camera viewpoint, interpretable, no training data required | Detects only the bend signature; misses other theft motions |
 | LSTM classifier | Learned / probabilistic | No (visual only) | Can in principle learn arbitrary suspicious motion patterns | Brittle to domain shift; not transferable across camera setups without retraining |
 
-A naive design would let the LSTM drive alerts, achieve high in-domain
+A naive design would let the LSTM drive alerts, hit high in-domain
 metrics on PoseLift, and fail silently on a real deployment with
 different cameras. A defensive design uses the rule for the
 **load-bearing** decision and the LSTM as a **visual signal** that
@@ -187,9 +185,8 @@ a current capability.
 
 The system is **not**:
 
-- **Autonomous.** Every alert is reviewed by a human before action.
-  There is no automated decision with legal effect (GDPR Art. 22 does
-  not apply).
+- **Autonomous.** A human reviews every alert before action. There is
+  no automated decision with legal effect (GDPR Art. 22 does not apply).
 - **Evidence-grade.** Snapshots are forensic *context* for a guard's
   judgment, not chain-of-custody evidence. A retailer pursuing a
   prosecution would rely on the underlying CCTV recording, not the
@@ -212,7 +209,7 @@ The system is **not**:
 
 ## 8. Operational limitations
 
-Even within the system's intended use, the following conditions degrade
+Even within the system's intended use, the conditions below degrade
 performance and are disclosed:
 
 | Condition | Effect | Mitigation |
@@ -221,7 +218,7 @@ performance and are disclosed:
 | Heavy occlusion (crowds) | ByteTrack ID switches; pose estimation drops keypoints. | Position cameras to minimize crowd overlap; accept reduced recall in peak hours. |
 | Camera angle mismatch | See §5. LSTM flickers; bend rule remains usable. | Use overhead camera angles matching PoseLift, or fine-tune the LSTM. |
 | Distance from camera | At >8m, keypoint confidence falls below useful threshold. | One camera per ~50 m² of floor space. |
-| Children | Pose estimation is trained predominantly on adults; child skeletons can produce lower-confidence keypoints. | Acknowledged; see `BIAS.md`. |
+| Children | Pose estimation trains predominantly on adults; child skeletons can produce lower-confidence keypoints. | Acknowledged; see `BIAS.md`. |
 | Mobility aids (wheelchairs, crutches) | Skeletons are partially occluded; bend rule can mis-fire. | Acknowledged; see `BIAS.md`. |
 | Single-camera deployment | No cross-camera tracking. A person leaves one camera's view and re-enters another with a new track ID. | By design — multi-camera tracking is out of scope. |
 
@@ -229,8 +226,8 @@ performance and are disclosed:
 
 ## 9. Roadmap — what would have to change
 
-Each limitation in this document maps to a roadmap item. None of these
-are ready today; all are credible next steps.
+Each limitation in this document maps to a roadmap item. None are ready
+today; all are credible next steps.
 
 | Limitation | What would lift it | Phase |
 |------------|--------------------|-------|
@@ -249,9 +246,9 @@ are ready today; all are credible next steps.
 
 TheftGuard is a recall-tuned, human-in-the-loop, hybrid rule+ML
 behavioral alert system with a small, single-store training corpus and
-known camera-domain sensitivity. It is suitable for a supervised pilot
-deployment that matches its training viewpoint. It is not suitable for
-unsupervised, cross-deployment, or evidence-grade use.
+known camera-domain sensitivity. It suits a supervised pilot deployment
+that matches its training viewpoint. It does not suit unsupervised,
+cross-deployment, or evidence-grade use.
 
 A controller who needs more than the above should plan for the roadmap
 work in §9 before deployment.

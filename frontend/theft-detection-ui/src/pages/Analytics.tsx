@@ -39,7 +39,6 @@ const Analytics: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-      {/* Summary numbers */}
       <div style={{
         display:             'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
@@ -63,10 +62,8 @@ const Analytics: React.FC = () => {
         ))}
       </div>
 
-      {/* Charts */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
 
-        {/* Bar chart */}
         <div style={cardStyle}>
           <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px' }}>
             Detections by Object Type
@@ -90,7 +87,6 @@ const Analytics: React.FC = () => {
           </ResponsiveContainer>
         </div>
 
-        {/* Pie chart */}
         <div style={cardStyle}>
           <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px' }}>
             Alert Severity Distribution

@@ -1,7 +1,3 @@
-"""
-api_client.py — Sends detection events and alerts to FastAPI backend
-Updated TDP-32: supports pose keypoints and bend alerts
-"""
 import requests
 import threading
 from loguru import logger
@@ -10,7 +6,6 @@ API_BASE_URL = "http://localhost:8000"
 
 
 def _post_in_background(url: str, payload: dict):
-    """Send HTTP POST in a background thread — never blocks detection."""
     try:
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code != 200:
@@ -22,7 +17,6 @@ def _post_in_background(url: str, payload: dict):
 
 
 def send_alert(alert: dict, snapshot_path=None):
-    """Send alert to backend in background thread."""
     payload = {
         "alert_id":      alert["alert_id"],
         "session_id":    alert["session_id"],
@@ -32,11 +26,6 @@ def send_alert(alert: dict, snapshot_path=None):
         "person":        alert["person"],
         "object":        alert.get("object"),
         "severity":      alert["severity"],
-        # TDP-89: normalize Windows backslashes to forward slashes so the
-        # Linux backend container can resolve the path. The volume mount in
-        # docker-compose.override.yml maps ai-model/outputs/snapshots/ from
-        # host to /app/ai-model/outputs/snapshots/ in the container, but the
-        # path string must use forward slashes for os.path.isfile to find it.
         "snapshot_path": str(snapshot_path).replace("\\", "/") if snapshot_path else None,
         "alert_type":    alert.get("alert_type", "object_proximity"),
         "keypoints":     alert.get("keypoints"),
@@ -52,7 +41,6 @@ def send_alert(alert: dict, snapshot_path=None):
 
 
 def send_detection(detection: dict):
-    """Send detection to backend in background thread."""
     payload = {
         "session_id":  detection["session_id"],
         "frame_index": detection["frame_index"],
@@ -72,7 +60,6 @@ def send_detection(detection: dict):
 
 
 def check_api_health() -> bool:
-    """Check if backend API is running."""
     try:
         response = requests.get(f"{API_BASE_URL}/health", timeout=3)
         if response.status_code == 200:

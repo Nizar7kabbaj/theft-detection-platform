@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars to override defaults. All four variables have
+# sensible defaults in variables.tf — this file exists only to document
+# the available knobs. terraform.tfvars itself is gitignored.
+
+environment = "dev"
+project     = "theft-detection"
+location    = "spaincentral"
+owner       = "nizar"

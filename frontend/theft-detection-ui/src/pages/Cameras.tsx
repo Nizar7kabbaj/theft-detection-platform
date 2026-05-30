@@ -96,7 +96,6 @@ const Cameras: React.FC = () => {
         </button>
       </div>
 
-      {/* Add camera form */}
       {showForm && (
         <div style={{
           background:   'var(--bg-card)',
@@ -195,7 +194,6 @@ const Cameras: React.FC = () => {
         </div>
       )}
 
-      {/* Camera grid */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
           Loading cameras...
@@ -232,7 +230,6 @@ const Cameras: React.FC = () => {
                 padding:      '20px',
               }}
             >
-              {/* Camera header */}
               <div style={{
                 display:        'flex',
                 alignItems:     'center',

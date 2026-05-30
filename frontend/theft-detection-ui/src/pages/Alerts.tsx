@@ -102,12 +102,10 @@ const Alerts: React.FC = () => {
         </button>
       </div>
 
-      {/* Alerts count */}
       <div style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--text-muted)' }}>
         {alerts.length} alert{alerts.length !== 1 ? 's' : ''} found
       </div>
 
-      {/* Alert list */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
           Loading alerts...
@@ -146,7 +144,6 @@ const Alerts: React.FC = () => {
                 opacity:      alert.acknowledged ? 0.6 : 1,
               }}
             >
-              {/* Severity indicator */}
               <div style={{
                 width:          '42px',
                 height:         '42px',
@@ -165,7 +162,6 @@ const Alerts: React.FC = () => {
                 {alert.severity}
               </div>
 
-              {/* Alert details */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>
                   Person near {alert.object_name}
@@ -186,7 +182,6 @@ const Alerts: React.FC = () => {
                 </div>
               </div>
 
-              {/* Actions */}
               <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                 {!alert.acknowledged && (
                   <button
