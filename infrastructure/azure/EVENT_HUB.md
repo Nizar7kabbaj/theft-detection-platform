@@ -16,9 +16,9 @@ The send-only connection string lives in `backend/.env` as
 
 ## Consumers
 
-- **TDP-43:** AI script publishes pose events to `pose-events`
-- **TDP-44:** backend consumes alerts from `pose-events`
-- **TDP-45+:** Databricks reads `pose-events` into Bronze layer
+- AI script publishes pose events to `pose-events` on every inferred frame.
+- Backend consumes alerts from `pose-events` and writes them to MongoDB.
+- Databricks reads `pose-events` into the Bronze layer (planned, post-meeting).
 
 ## Notes
 
@@ -30,14 +30,14 @@ The send-only connection string lives in `backend/.env` as
 
 ---
 
-## Cost Discipline (2026-05-12)
+## Cost discipline (2026-05-12)
 
 Destroyed the Event Hub namespace `theft-detection-eh-nk` on 2026-05-12 to stop
 idle costs ($0.36/day).
 
 - Reason: Phase 5 streaming work paused. Client demo done. No active use case
-  for a running Event Hub until Epic 6 Terraform tickets begin.
-- Re-provisioning: TDP-59 (Terraform module for Event Hub and Service Bus)
+  for a running Event Hub until the Terraform tickets in Epic 6 begin.
+- Re-provisioning: the planned Terraform module for Event Hub and Service Bus
   will recreate identical resources from code.
 - Total cost while running (2026-05-02 → 2026-05-12): ~$3.60.
 - Resource group `rg-theft-detection` kept (empty resource groups are free).

@@ -36,7 +36,7 @@
 The model predicts "anomaly" for 47 of 52 windows. It catches 26 of 28 true
 anomalies (93% recall) and produces 21 false positives. That's the right
 trade-off for this use case: a guard dismisses a false alert in 2 seconds via
-Telegram; a missed theft is unrecoverable.
+Telegram, and a missed theft is unrecoverable.
 
 ---
 
@@ -44,7 +44,7 @@ Telegram; a missed theft is unrecoverable.
 
 ![ROC Curve](outputs/evaluation/roc_curve.png)
 
-**AUC = 0.455.** Below 0.5 — the probability *ranking* of windows is slightly
+**AUC = 0.455.** Below 0.5. The probability *ranking* of windows is slightly
 worse than random, even though the binary decision at threshold 0.5 hits
 F1 = 0.69.
 
@@ -52,7 +52,7 @@ A real and disclosed limitation:
 
 - The classifier is well-calibrated for the binary alert use case (red box vs
   green box for the guard).
-- It is poorly calibrated for ranking — applications that need "top-N most
+- It is poorly calibrated for ranking. Applications that need "top-N most
   suspicious clips" should not use raw probabilities from this model.
 - The cause is the small training set (104 train windows for Fold 1) combined
   with the recall-favoring class weighting. The model learned a useful binary
@@ -75,9 +75,9 @@ single window of shape `(1, 30, 51)`:
 | Demo target (>15 FPS) | ✅ PASS |
 
 The classifier runs ~200× faster than the 15 FPS demo target. The bottleneck
-of the live pipeline (TDP-89) will be YOLOv8-pose keypoint extraction, not
-this LSTM. There's headroom for multi-person batching, larger windows, or a
-deeper model in future iterations without hurting frame rate.
+of the live pipeline is YOLOv8-pose keypoint extraction, not this LSTM.
+There's headroom for multi-person batching, larger windows, or a deeper model
+in future iterations without hurting frame rate.
 
 Raw output: `ai-model/outputs/evaluation/inference_benchmark.json`
 
@@ -86,7 +86,7 @@ Raw output: `ai-model/outputs/evaluation/inference_benchmark.json`
 ## Honest Limitations (for the client meeting)
 
 1. **Small evaluation set.** 52 windows from 10 files. CV variance (F1 std =
-   0.077) is high relative to the mean — don't over-interpret single-fold
+   0.077) is high relative to the mean. Don't over-interpret single-fold
    numbers.
 
 2. **Recall-favoring by design.** Class weights were tuned to penalize missed
@@ -104,21 +104,20 @@ Raw output: `ai-model/outputs/evaluation/inference_benchmark.json`
 5. **Confidence-thresholding experiment did not improve results.** A v2
    preprocessing variant masking keypoints with confidence < 0.3 zeroed 71% of
    keypoints and produced essentially the same F1 (0.559 ± 0.143 vs the
-   v1 baseline 0.569 ± 0.077). Data quality is the ceiling, not preprocessing
-   (lesson #54).
+   v1 baseline 0.569 ± 0.077). Data quality is the ceiling, not preprocessing.
 
 6. **Demo-grade ML.** PoseLift is designed for unsupervised anomaly detection.
    For this client demo we deliberately use the labeled test split as
-   supervised training data via 5-fold CV — communicable to a non-technical
-   audience. Post-meeting, the model returns to the unsupervised approach
-   that aligns with the dataset's intended use.
+   supervised training data via 5-fold CV, which is communicable to a
+   non-technical audience. Post-meeting, the model returns to the
+   unsupervised approach that aligns with the dataset's intended use.
 
 ---
 
 ## Reproducibility
 
-- Training notebook: `ai-model/notebooks/TDP-87_train_poselift.ipynb`
-- Evaluation cells appended in the same notebook (TDP-88 section)
+- Training notebook: `ai-model/notebooks/train_poselift.ipynb`
+- Evaluation cells appended in the same notebook (evaluation section)
 - Inference benchmark script: `ai-model/scripts/benchmark_inference.py`
 - All preprocessing constants frozen in
   `ai-model/models/shoplifting_classifier.meta.json`

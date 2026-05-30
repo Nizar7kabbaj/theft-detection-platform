@@ -90,10 +90,10 @@ controller weighing fairness obligations.
 
 These three documents do not stand alone. They reference and depend on:
 
-- **`ai-model/DATASET.md`** — PoseLift selection rationale and data structure (TDP-85).
-- **`ai-model/EVALUATION.md`** — full evaluation report with confusion matrix, ROC curve, inference benchmark (TDP-88).
+- **`ai-model/DATASET.md`** — PoseLift selection rationale and data structure.
+- **`ai-model/EVALUATION.md`** — full evaluation report with confusion matrix, ROC curve, inference benchmark.
 - **`ai-model/outputs/evaluation/metrics.json`** — raw metrics file.
-- **`PROJECT_CONTEXT.md`** — the project's complete state and lessons-learned log.
+- **Repo root `README.md`** — project overview, stack, run-it-locally instructions.
 
 ---
 
@@ -108,7 +108,7 @@ These three documents do not stand alone. They reference and depend on:
 
 These are first-draft disclosures suitable for the client meeting and
 for inclusion in a portfolio. They do **not** substitute for a real
-DPIA, a real fairness audit, or qualified legal counsel — and they say
+DPIA, a real fairness audit, or qualified legal counsel, and they say
 so explicitly in their respective closing notes.
 
 ---

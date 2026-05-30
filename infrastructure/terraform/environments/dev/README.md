@@ -4,9 +4,9 @@ Terraform root for the dev environment. Wires three modules — resource-group, 
 
 ## What it builds
 
-One resource group, one virtual network with two subnets and one private DNS zone, one Key Vault. All in spaincentral, all tagged `project = theft-detection`, `environment = dev`, `managed_by = terraform`.
+One resource group, one virtual network with two subnets and one private DNS zone, one Key Vault. Everything runs in spaincentral with the tags `project = theft-detection`, `environment = dev`, `managed_by = terraform`.
 
-```
+```text
 rg-theft-detection-dev
 ├── vnet-theft-detection-dev (10.20.0.0/16)
 │   ├── app subnet  (10.20.1.0/24, NSG, service endpoints: KeyVault + Storage)
@@ -29,12 +29,12 @@ Everything runs in spaincentral. The Azure for Students allowlist blocks Microso
 
 ## First run
 
-​```bash
+```bash
 ./infrastructure/terraform/scripts/tf.sh dev init
 ./infrastructure/terraform/scripts/tf.sh dev validate
 ./infrastructure/terraform/scripts/tf.sh dev plan
 ./infrastructure/terraform/scripts/tf.sh dev apply
-​```
+```
 
 The wrapper handles the subscription guard, the cd-into-env-directory step, and the saved-plan flow. `init` downloads providers, reaches the backend in spaincentral, and locks `dev.tfstate`.
 
@@ -65,8 +65,8 @@ Zero when destroyed. The vault ships with `purge_protection_enabled = false` and
 
 ## Teardown
 
-​```bash
+```bash
 ./infrastructure/terraform/scripts/tf.sh dev destroy
-​```
+```
 
 Type `dev` at the prompt to confirm. The state backend (rg-tfstate-theft / sttfstatetheft) survives — it was created out-of-band and is not managed by this stack.

@@ -19,7 +19,7 @@ factual and verifiable in the codebase.
 Throughout this document:
 
 - **The system** / **TheftGuard** — the technical artifact described in
-  `PROJECT_CONTEXT.md` and the source repository.
+  the source repository.
 - **The provider** — the entity that builds and supplies the system.
   Acts as a **processor** under GDPR Article 4(8).
 - **The controller** — the deploying retailer who installs cameras,
@@ -166,10 +166,9 @@ of the following:
   notification on the controller's existing security dashboard, an SMS
   gateway with EU residency, or an email gateway with EU residency.
 
-The post-meeting roadmap (see `PROJECT_CONTEXT.md` Phase 5 deferred
-items, particularly Azure Service Bus + internal dashboard) replaces
-Telegram with an EU-resident notification path. That is the recommended
-production configuration.
+The post-meeting roadmap replaces Telegram with an EU-resident
+notification path (Azure Service Bus + internal dashboard). That is the
+recommended production configuration.
 
 ---
 
@@ -242,8 +241,8 @@ A retailer evaluating TheftGuard for deployment in France should plan to:
 6. Configure retention values in line with their internal policy.
 7. Establish a process for receiving and answering data subject requests.
 
-The provider's role is to make each of these tractable, not to perform
-them on the controller's behalf.
+The provider's role is to make each step tractable. The provider does not
+perform them on the controller's behalf.
 
 ---
 

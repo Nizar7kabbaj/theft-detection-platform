@@ -1,5 +1,6 @@
 services:
   backend:
     runtime: runc
-  frontend:
-    runtime: runc
+  # frontend override re-added in Sprint 8 alongside the Next.js 15 service.
+  # frontend:
+  #   runtime: runc

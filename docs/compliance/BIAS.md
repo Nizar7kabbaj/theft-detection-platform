@@ -28,9 +28,8 @@ is a processor a controller should not deploy.
 
 The model trains on the PoseLift dataset (TeCSAR-UNCC, WACV 2025).
 PoseLift's strengths — pre-extracted keypoints, persistent track IDs,
-academic licensing — drove the selection (see `ai-model/DATASET.md`,
-ticket TDP-85). Its biases follow from how it was constructed, and we
-name them here.
+academic licensing — drove the selection (see `ai-model/DATASET.md`).
+Its biases follow from how it was constructed, and we name them here.
 
 ### 1.1 Single-store, single-geography bias
 
@@ -210,7 +209,7 @@ guard). **Response:** documented; expected; guard training compensates.
 Wheelchairs, walkers, and crutches partially occlude the lower-body
 keypoints YOLOv8-pose expects. The pose estimator produces low-confidence
 or missing hip/knee/ankle keypoints, which propagate into the LSTM as
-zero-vectors (see `PROJECT_CONTEXT.md` lesson #57).
+zero-vectors.
 
 **Effect:** unpredictable LSTM behavior; the bend rule may misfire on
 the seated posture of a wheelchair user.
