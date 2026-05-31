@@ -217,3 +217,52 @@ Slow on large repos, but the only way to catch silent corruption before a real r
 - `docs/01-linux-setup.md` — local dev environment, prerequisite for the rebuild phase
 - `docs/02-iac-foundation.md` — terraform structure, including the state backend that's independent of this backup
 - `docs/03-pre-commit.md` — terraform hook install and suppression rationale
+
+## Drill log
+
+### Drill — 2026-05-31
+
+First end-to-end exercise of `backup.sh` and the restore procedure on `Legion-5`. Scope: USB target only, simulated by pointing `USB_REPO` at a local scratch directory (`~/restic-test-repo`). Azure target deferred — the `stbackuptheft` storage account and container are not yet provisioned.
+
+**Measurements**
+
+| Phase | Target | Measured | Gap |
+|---|---|---|---|
+| Backup wall-clock | n/a (informational) | 3.29 s | — |
+| Restore wall-clock (Phase 1 of restore procedure) | ~10 min | 0.76 s | -9 min 59 s (well under) |
+| Full RTO (file restore + runtime rebuild) | 90 min | not measured | runtime rebuild phase untested |
+
+The file-restore portion is dramatically faster than the budget. The full 90-minute RTO target stays in place until a future drill measures the runtime rebuild phase (venv recreate, CUDA torch wheel install, Docker image pulls, container startup).
+
+**Snapshot details**
+
+- Repository ID: `d38d2cf7`
+- Snapshot ID: `b54cb865`
+- Files captured: 410
+- Directories captured: 247
+- Source size: 2.053 MiB raw, 1.714 MiB stored after dedup + compression
+- Tags: `host=Legion-5`, `ts=2026-05-31T19:03:21Z`, `target=usb`
+
+**Exclusion verification**
+
+| Pattern | Expected | Observed |
+|---|---|---|
+| `venv/` | absent from restore | absent ✓ |
+| `ai-model/models/*.pt` | absent from restore | absent ✓ |
+| `backend/.env` | present in restore | present ✓ |
+
+**Integrity check**
+
+`restic check` on the repository: `no errors were found`.
+
+**Gaps left open by this drill**
+
+- Azure Blob target is unexercised. The `stbackuptheft` storage account, `backups` container, and `Storage Blob Data Contributor` role assignment are still pending a one-time manual provision.
+- The runtime-rebuild phase of the restore procedure was not measured. Until it is, the 90-minute RTO is a budget, not a verified figure.
+- The drill ran on the same laptop that took the backup. Recovery onto a fresh Linux install (the real disaster scenario) involves the entirety of `docs/01-linux-setup.md` before any restic call. That end-to-end version is the next drill worth running.
+- No password-recovery rehearsal. The password manager copy of the repo password exists but has not been verified by performing a restore using only that copy.
+
+**Procedure refinements**
+
+- The `restic restore` output places the restored tree under `~/restore-drill/home/<user>/theft-detection-platform/`, not directly at `~/restore-drill/theft-detection-platform/`. The runbook's "Phase 2 — Promote to live" already accounts for this with `mv ~/restore/home/$USER/theft-detection-platform ~/`, but it's worth a note: the absolute-path preservation is by design, not a bug.
+- No procedure changes needed. Script, excludes, and restore steps work as written.
