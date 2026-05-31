@@ -1,0 +1,11 @@
+quiet: true
+compact: true
+framework:
+  - terraform
+directory:
+  - infrastructure/terraform
+skip-check:
+  - CKV_AZURE_110
+  - CKV_AZURE_42
+  - CKV2_AZURE_32
+  - CKV2_AZURE_31

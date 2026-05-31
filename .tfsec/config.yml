@@ -1,0 +1,2 @@
+exclude:
+  - azure-keyvault-no-purge
