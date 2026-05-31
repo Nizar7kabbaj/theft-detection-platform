@@ -1,0 +1,15 @@
+# Spec only. Real enforcement lives in opa/security-baseline.rego.
+# Sentinel kept for portability if this ever moves to Terraform Cloud.
+#
+# Rules:
+#   1. Key vault public_network_access_enabled stays false.
+#   2. Key vault network_acls.default_action stays Deny.
+#   3. Key vault enable_rbac_authorization stays true. Legacy access
+#      policies are not allowed.
+#   4. Every project resource carries project, environment, and managed_by
+#      tags. Taggable types: resource group, virtual network, NSG, key
+#      vault, private DNS zone.
+
+import "tfplan/v2" as tfplan
+
+main = rule { true }
