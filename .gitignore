@@ -10,6 +10,7 @@ __pycache__/
 .env
 backend/.env
 ai-model/.env
+
 *.pem
 *.key
 secrets.json
@@ -21,18 +22,19 @@ build/
 
 .vscode/
 .idea/
+
 *.swp
 *.log
+
 .DS_Store
 Thumbs.db
 desktop.ini
 
 ai-model/data/raw/
 ai-model/data/processed/
+
 *.pkl
 *.npy
-
-
 *.pt
 !ai-model/models/*.pt
 !ai-model/models/*.json
@@ -42,12 +44,23 @@ ai-model/data/processed/
 *.png
 *.mp4
 !ai-model/notebooks/*.png
-
 ai-model/outputs/*
 !ai-model/outputs/evaluation/
 !ai-model/outputs/evaluation/*.png
 !ai-model/outputs/evaluation/*.json
-
 .tf-env
-infrastructure/terraform/environments/*/tfplan
-infrastructure/terraform/environments/*/.terraform.lock.hcl.bak
+
+
+infrastructure/terraform/**/.terraform/
+infrastructure/terraform/**/.terraform.lock.hcl.bak
+infrastructure/terraform/**/tfplan
+infrastructure/terraform/**/tfplan.binary
+infrastructure/terraform/**/tfplan.json
+infrastructure/terraform/**/*.tfstate
+infrastructure/terraform/**/*.tfstate.backup
+infrastructure/terraform/**/crash.log
+infrastructure/terraform/**/crash.*.log
+infrastructure/terraform/environments/*/terraform.tfvars
+infrastructure/terraform/environments/*/*.auto.tfvars
+
+.pre-commit-cache/
