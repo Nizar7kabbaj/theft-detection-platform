@@ -1,9 +1,3 @@
-"""
-detect.py — Phase 1 theft detection script
-Runs YOLOv8 on an image, video file, or webcam.
-Saves annotated output and a JSON log of detections.
-"""
-
 import cv2
 import json
 import time
@@ -12,8 +6,6 @@ from pathlib import Path
 from datetime import datetime
 from ultralytics import YOLO
 from loguru import logger
-
-# ── Configuration ──────────────────────────────────────────────────────────────
 
 RELEVANT_CLASSES = {
     0:  "person",
@@ -35,7 +27,6 @@ CONFIDENCE_THRESHOLD = 0.5
 OUTPUT_DIR = Path("ai-model/outputs/detections")
 LOG_DIR    = Path("ai-model/outputs/logs")
 
-# ── Helper functions ────────────────────────────────────────────────────────────
 
 def setup_directories():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -132,7 +123,6 @@ def process_results(results, frame_index, timestamp):
     return detections, frame
 
 
-# ── Main detection functions ────────────────────────────────────────────────────
 
 def detect_on_image(model, image_path):
     logger.info(f"Running detection on image: {image_path}")
@@ -250,8 +240,6 @@ def detect_on_video(model, source):
     logger.success(f"Output video: {output_path}")
     logger.success(f"Log file:     {log_path}")
 
-
-# ── Entry point ─────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="Theft Detection — Phase 1")

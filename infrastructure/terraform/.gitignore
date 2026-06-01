@@ -1,0 +1,25 @@
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Local provider cache and plugins
+.terraform/
+.terraform.tfstate.lock.info
+
+crash.log
+crash.*.log
+
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# my contain sensitive diffs
+*.tfplan
+*.tfplan.*
+
+# CLI config
+.terraformrc
+terraform.rc
+
+# Provider dependency lock
+!.terraform.lock.hcl

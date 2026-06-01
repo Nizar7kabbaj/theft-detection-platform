@@ -1,6 +1,3 @@
-"""
-stats.py — Dashboard statistics endpoints
-"""
 from fastapi import APIRouter
 from datetime import datetime, timedelta
 from ...core.database import get_database
@@ -10,15 +7,12 @@ router = APIRouter()
 
 @router.get("/", response_model=dict)
 async def get_stats():
-    """Get dashboard statistics."""
     db = get_database()
 
-    # Today's date range
     today_start = datetime.utcnow().replace(
         hour=0, minute=0, second=0, microsecond=0
     )
 
-    # Run all counts in parallel
     total_alerts      = await db.alerts.count_documents({})
     total_detections  = await db.detections.count_documents({})
     total_cameras     = await db.cameras.count_documents({})
@@ -28,7 +22,6 @@ async def get_stats():
     high_severity     = await db.alerts.count_documents({"severity": "HIGH"})
     medium_severity   = await db.alerts.count_documents({"severity": "MEDIUM"})
 
-    # Top detected objects
     pipeline = [
         {"$group": {"_id": "$object.class_name", "count": {"$sum": 1}}},
         {"$sort": {"count": -1}},
@@ -54,7 +47,6 @@ async def get_stats():
 
 @router.get("/recent", response_model=list)
 async def get_recent_alerts():
-    """Get last 10 alerts for dashboard feed."""
     db = get_database()
     alerts = []
     cursor = db.alerts.find().sort("created_at", -1).limit(10)

@@ -1,198 +1,227 @@
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-"""
-detect_alert.py — Phase 1 Step 2 + API Integration
-Adds alert logic to detection:
-- Detects when a person is close to an object
-- Saves snapshot on alert
-- Logs alerts to separate JSON file
-- Sends alerts and detections to FastAPI backend
-"""
+import argparse
+import platform
+import json
+import math
+import time
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
 
 import cv2
-import json
-import time
-import argparse
-from pathlib import Path
-from datetime import datetime
-from ultralytics import YOLO
 from loguru import logger
+from ultralytics import YOLO
 
-from api_client import send_alert, send_detection, check_api_health
+from api_client import check_api_health, send_alert, send_detection
+from event_hub_client import (
+    close_publisher,
+    init_publisher,
+    publish_alert_event,
+    publish_detection_event,
+)
+from predictor import ShoplifterPredictor
 
-# ── Configuration ──────────────────────────────────────────────────────────────
 
-RELEVANT_CLASSES = {
-    0:  "person",
-    24: "backpack",
-    25: "umbrella",
-    26: "handbag",
-    28: "suitcase",
-    39: "bottle",
-    41: "cup",
-    63: "laptop",
-    67: "cell phone",
-    73: "book",
+# Configuration
+
+KEYPOINT_NAMES = [
+    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_hip", "right_hip",
+    "left_knee", "right_knee", "left_ankle", "right_ankle",
+]
+
+LEFT_SHOULDER  = 5
+RIGHT_SHOULDER = 6
+LEFT_HIP       = 11
+RIGHT_HIP      = 12
+
+CONFIDENCE_THRESHOLD     = 0.5
+KEYPOINT_CONF_THRESHOLD  = 0.5
+BEND_ANGLE_THRESHOLD     = 60.0
+BEND_DURATION_THRESHOLD  = 2.0
+ALERT_COOLDOWN           = 3.0
+DEFAULT_ANOMALY_THRESHOLD = 0.65
+
+MODEL_PATH = Path("ai-model/models/shoplifting_classifier.pt")
+DEMO_METRICS = {
+    "F1":     0.693,
+    "Recall": 0.929,
+    "FPS":    2994,
 }
 
-SUSPICIOUS_OBJECTS = {24, 25, 26, 28, 39, 63, 67}
-
-CONFIDENCE_THRESHOLD = 0.5
-OVERLAP_THRESHOLD    = 0.0
-ALERT_COOLDOWN       = 3.0
+COLOR_NORMAL  = (60, 200, 60)# green
+COLOR_ANOMALY = (40, 40, 220)# red
+COLOR_WARMUP  = (160, 160, 160)# gray
 
 OUTPUT_DIR   = Path("ai-model/outputs/detections")
 SNAPSHOT_DIR = Path("ai-model/outputs/snapshots")
 LOG_DIR      = Path("ai-model/outputs/logs")
 ALERT_DIR    = Path("ai-model/outputs/alerts")
 
-# ── Setup ──────────────────────────────────────────────────────────────────────
+
+# Setup
 
 def setup_directories():
     for d in [OUTPUT_DIR, SNAPSHOT_DIR, LOG_DIR, ALERT_DIR]:
         d.mkdir(parents=True, exist_ok=True)
 
 
-def load_model():
-    logger.info("Loading YOLOv8 model...")
-    model = YOLO("yolov8n.pt")
+def load_yolo():
+    logger.info("Loading YOLOv8-pose model...")
+    model = YOLO("yolov8n-pose.pt")
     model.to("cuda")
     logger.info(f"Model loaded on: {next(model.model.parameters()).device}")
     return model
 
-# ── Geometry helpers ───────────────────────────────────────────────────────────
 
-def get_box_area(box):
-    x1, y1, x2, y2 = box
-    return max(0, x2 - x1) * max(0, y2 - y1)
-
-
-def get_intersection_area(box_a, box_b):
-    ax1, ay1, ax2, ay2 = box_a
-    bx1, by1, bx2, by2 = box_b
-    ix1 = max(ax1, bx1)
-    iy1 = max(ay1, by1)
-    ix2 = min(ax2, bx2)
-    iy2 = min(ay2, by2)
-    if ix2 <= ix1 or iy2 <= iy1:
-        return 0.0
-    return (ix2 - ix1) * (iy2 - iy1)
+def load_predictor():
+    logger.info(f"Loading ShoplifterLSTM from {MODEL_PATH} ...")
+    pred = ShoplifterPredictor(str(MODEL_PATH))
+    logger.info(f"Predictor ready on {pred.device} (window={pred.window})")
+    return pred
 
 
-def get_iou(box_a, box_b):
-    intersection = get_intersection_area(box_a, box_b)
-    if intersection == 0:
-        return 0.0
-    area_a = get_box_area(box_a)
-    area_b = get_box_area(box_b)
-    union  = area_a + area_b - intersection
-    return intersection / union if union > 0 else 0.0
+def extract_keypoints_data(kpts_xy, kpts_conf):
+    data = []
+    for i in range(17):
+        x = float(kpts_xy[i][0])
+        y = float(kpts_xy[i][1])
+        c = float(kpts_conf[i])
+        data.append({
+            "name":       KEYPOINT_NAMES[i],
+            "x":          round(x, 2),
+            "y":          round(y, 2),
+            "confidence": round(c, 4),
+        })
+    return data
 
 
-def boxes_are_close(box_a, box_b, expand_px=60):
-    ax1, ay1, ax2, ay2 = box_a
-    expanded = (
-        ax1 - expand_px,
-        ay1 - expand_px,
-        ax2 + expand_px,
-        ay2 + expand_px
-    )
-    return get_intersection_area(expanded, box_b) > 0
+def compute_torso_angle(kpts_xy, kpts_conf):
+    NOSE = 0
+    needed = [NOSE, LEFT_SHOULDER, RIGHT_SHOULDER]
+    for i in needed:
+        if float(kpts_conf[i]) < KEYPOINT_CONF_THRESHOLD:
+            return None
 
-# ── Drawing helpers ────────────────────────────────────────────────────────────
+    nx = float(kpts_xy[NOSE][0])
+    ny = float(kpts_xy[NOSE][1])
+    sx = (float(kpts_xy[LEFT_SHOULDER][0]) + float(kpts_xy[RIGHT_SHOULDER][0])) / 2
+    sy = (float(kpts_xy[LEFT_SHOULDER][1]) + float(kpts_xy[RIGHT_SHOULDER][1])) / 2
 
-def draw_box(frame, box, label, confidence, color):
-    x1, y1, x2, y2 = map(int, box)
-    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-    text = f"{label} {confidence:.0%}"
-    (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
-    cv2.rectangle(frame, (x1, y1 - th - 8), (x1 + tw + 4, y1), color, -1)
-    cv2.putText(
-        frame, text,
-        (x1 + 2, y1 - 4),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.6, (255, 255, 255), 1, cv2.LINE_AA
-    )
-    return frame
+    dx = nx - sx
+    dy = sy - ny
+    if dx == 0 and dy == 0:
+        return None
+
+    angle_rad = math.atan2(abs(dx), abs(dy))
+    return math.degrees(angle_rad)
 
 
-def draw_alert_banner(frame, person_label, object_label):
+def build_keypoints_array(kpts_xy_one, kpts_conf_one):
+    import numpy as np
+    arr = np.zeros((17, 3), dtype=np.float32)
+    arr[:, 0] = kpts_xy_one[:, 0]
+    arr[:, 1] = kpts_xy_one[:, 1]
+    arr[:, 2] = kpts_conf_one
+    return arr
+
+
+
+def draw_alert_banner(frame, label):
     h, w = frame.shape[:2]
     overlay = frame.copy()
     cv2.rectangle(overlay, (0, h - 40), (w, h), (0, 0, 180), -1)
     cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
-    alert_text = f"ALERT: {person_label} near {object_label}"
-    cv2.putText(
-        frame, alert_text,
-        (10, h - 12),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.7, (255, 255, 255), 2, cv2.LINE_AA
-    )
+    cv2.putText(frame, f"ALERT: {label}", (10, h - 12),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
     return frame
 
 
-def add_status_overlay(frame, frame_count, detection_count, alert_count, fps):
+def add_status_overlay(frame, frame_count, person_count, alert_count, fps):
     overlay = frame.copy()
     cv2.rectangle(overlay, (0, 0), (frame.shape[1], 32), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
     status = (
         f"Frame: {frame_count}  |  "
-        f"Detections: {detection_count}  |  "
+        f"Persons: {person_count}  |  "
         f"Alerts: {alert_count}  |  "
         f"FPS: {fps:.1f}"
     )
-    cv2.putText(
-        frame, status,
-        (8, 20),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.55, (255, 255, 255), 1, cv2.LINE_AA
-    )
+    cv2.putText(frame, status, (8, 20), cv2.FONT_HERSHEY_SIMPLEX,
+                0.55, (255, 255, 255), 1, cv2.LINE_AA)
     return frame
 
-# ── Alert logic ────────────────────────────────────────────────────────────────
 
-def check_alerts(persons, objects, frame, frame_index, timestamp, session_id):
-    alerts = []
-    for person in persons:
-        for obj in objects:
-            if obj["class_id"] not in SUSPICIOUS_OBJECTS:
-                continue
-            is_close = boxes_are_close(
-                person["bbox_list"],
-                obj["bbox_list"],
-                expand_px=80
-            )
-            if is_close:
-                alert = {
-                    "alert_id":    f"{session_id}_{frame_index}_{obj['class_id']}",
-                    "session_id":  session_id,
-                    "frame_index": frame_index,
-                    "timestamp":   timestamp,
-                    "person": {
-                        "confidence": person["confidence"],
-                        "bbox":       person["bbox"],
-                    },
-                    "object": {
-                        "class_name": obj["class_name"],
-                        "confidence": obj["confidence"],
-                        "bbox":       obj["bbox"],
-                    },
-                    "severity": "HIGH" if obj["class_id"] in {63, 28} else "MEDIUM"
-                }
-                alerts.append(alert)
-    return alerts
+def add_demo_metrics_overlay(frame):
+    h, w = frame.shape[:2]
+    pad = 8
+    lines = [
+        "Model: Pose-LSTM (PoseLift)",
+        f"F1: {DEMO_METRICS['F1']:.2f}   Recall: {DEMO_METRICS['Recall']:.2f}",
+        f"Inference: {DEMO_METRICS['FPS']} FPS (RTX 3070)",
+    ]
+    box_w = 280
+    box_h = 18 * len(lines) + 2 * pad
+    x1 = w - box_w - 10
+    y1 = h - box_h - 10
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x1, y1), (x1 + box_w, y1 + box_h), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
+    for i, ln in enumerate(lines):
+        cv2.putText(frame, ln, (x1 + pad, y1 + pad + 14 + i * 18),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (230, 230, 230), 1, cv2.LINE_AA)
+    return frame
 
-# ── Main detection function ────────────────────────────────────────────────────
 
-def detect_with_alerts(model, source, api_available=False):
-    """Run detection with alert logic on webcam or video file."""
+def draw_classifier_box(frame, bbox, color, label_text):
+    x1, y1, x2, y2 = (int(v) for v in bbox)
+    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+    (tw, th), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+    ty1 = max(0, y1 - th - 8)
+    cv2.rectangle(frame, (x1, ty1), (x1 + tw + 8, y1), color, -1)
+    cv2.putText(frame, label_text, (x1 + 4, y1 - 5),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
+    return frame
 
+
+# Alert
+def fire_alert(annotated_frame, alert, all_alerts, api_available, eh_available):
+    all_alerts.append(alert)
+
+    person_id = alert.get("person", {}).get("track_id", "?")
+    annotated_frame = draw_alert_banner(
+        annotated_frame, f"{alert['alert_type']} (id={person_id})"
+    )
+
+    snapshot_path = SNAPSHOT_DIR / f"alert_{alert['alert_id']}.jpg"
+    cv2.imwrite(str(snapshot_path), annotated_frame)
+    logger.info(f"Snapshot saved: {snapshot_path}")
+
+    alert_path = ALERT_DIR / f"alert_{alert['alert_id']}.json"
+    with open(alert_path, "w") as f:
+        json.dump(alert, f, indent=2)
+
+    if api_available:
+        send_alert(alert, snapshot_path)
+    if eh_available:
+        publish_alert_event(alert)
+
+    return annotated_frame
+
+
+# Main detection
+def detect_with_alerts(model, predictor, source, anomaly_threshold,
+                       api_available=False, eh_available=False):
     is_webcam = isinstance(source, int)
 
     if is_webcam:
         logger.info("Opening webcam — press Q to stop...")
-        cap = cv2.VideoCapture(source)
+        if platform.system() == "Windows":
+            cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+        else:
+            cap = cv2.VideoCapture(source, cv2.CAP_V4L2)
     else:
         video_path = Path(str(source))
         if not video_path.exists():
@@ -211,18 +240,19 @@ def detect_with_alerts(model, source, api_available=False):
     session_id  = int(time.time())
     source_name = "webcam" if is_webcam else Path(str(source)).stem
 
-    output_path = OUTPUT_DIR / f"alert_{source_name}_{session_id}.mp4"
+    output_path = OUTPUT_DIR / f"pose_{source_name}_{session_id}.mp4"
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(str(output_path), fourcc, fps_source, (width, height))
 
-    all_detections  = []
-    all_alerts      = []
-    frame_count     = 0
-    fps_display     = 0.0
-    fps_timer       = time.time()
-    last_alert_time = 0.0
+    all_detections   = []
+    all_alerts       = []
+    frame_count      = 0
+    fps_display      = 0.0
+    fps_timer        = time.time()
+    last_alert_time  = 0.0
+    bend_start_time  = defaultdict(lambda: None)
 
-    logger.info("Detection running. Press Q in video window or Ctrl+C to stop.")
+    logger.info("Pose detection running. Press Q in video window to stop.")
 
     try:
         while True:
@@ -233,112 +263,137 @@ def detect_with_alerts(model, source, api_available=False):
 
             frame_count += 1
             timestamp   = datetime.now().isoformat()
+            now         = time.time()
 
-            results = model(frame, verbose=False)
+            results = model.track(frame, persist=True, verbose=False)
             result  = results[0]
 
-            persons         = []
-            objects         = []
-            annotated_frame = frame.copy()
+            annotated_frame = result.plot(boxes=False, labels=False, conf=False)
 
-            if result.boxes is not None and len(result.boxes) > 0:
-                for box in result.boxes:
-                    class_id   = int(box.cls[0])
-                    confidence = float(box.conf[0])
-                    coords     = box.xyxy[0].tolist()
+            persons_in_frame = []
 
-                    if class_id not in RELEVANT_CLASSES:
+            if (result.keypoints is not None
+                    and result.boxes is not None
+                    and len(result.boxes) > 0):
+
+                boxes_xyxy = result.boxes.xyxy.cpu().numpy()
+                boxes_conf = result.boxes.conf.cpu().numpy()
+                kpts_xy    = result.keypoints.xy.cpu().numpy()
+                kpts_conf  = (result.keypoints.conf.cpu().numpy()
+                              if result.keypoints.conf is not None else None)
+
+                if result.boxes.id is not None:
+                    track_ids = result.boxes.id.int().cpu().tolist()
+                else:
+                    track_ids = [None] * len(boxes_xyxy)
+
+                for i in range(len(boxes_xyxy)):
+                    box_conf = float(boxes_conf[i])
+                    if box_conf < CONFIDENCE_THRESHOLD:
                         continue
-                    if confidence < CONFIDENCE_THRESHOLD:
+                    if kpts_conf is None:
                         continue
 
-                    class_name = RELEVANT_CLASSES[class_id]
-                    bbox_dict  = {
+                    coords           = boxes_xyxy[i].tolist()
+                    person_kpts_xy   = kpts_xy[i]
+                    person_kpts_conf = kpts_conf[i]
+                    track_id_raw     = track_ids[i] if i < len(track_ids) else None
+                    track_id         = int(track_id_raw) if track_id_raw is not None else None
+
+                    bbox_dict = {
                         "x1": int(coords[0]),
                         "y1": int(coords[1]),
                         "x2": int(coords[2]),
                         "y2": int(coords[3]),
                     }
-                    bbox_list = [
-                        int(coords[0]),
-                        int(coords[1]),
-                        int(coords[2]),
-                        int(coords[3])
-                    ]
 
-                    detection = {
-                        "class_id":   class_id,
-                        "class_name": class_name,
-                        "confidence": round(confidence, 4),
-                        "bbox":       bbox_dict,
-                        "bbox_list":  bbox_list,
-                    }
+                    keypoints_data = extract_keypoints_data(person_kpts_xy, person_kpts_conf)
+                    torso_angle    = compute_torso_angle(person_kpts_xy, person_kpts_conf)
 
-                    if class_id == 0:
-                        persons.append(detection)
-                        color = (0, 0, 255)
+                    p_anomaly = None
+                    if track_id is not None:
+                        kp_arr = build_keypoints_array(person_kpts_xy, person_kpts_conf)
+                        _, p_anomaly = predictor.update(
+                            track_id=track_id,
+                            bbox_xyxy=coords,
+                            keypoints=kp_arr,
+                        )
+
+                    if p_anomaly is None:
+                        color = COLOR_WARMUP
+                        tag   = (f"WARMING UP  id={track_id}"
+                                 if track_id is not None else "NO TRACK")
+                        cls_label = "warming up"
+                    elif p_anomaly >= anomaly_threshold:
+                        color = COLOR_ANOMALY
+                        tag   = f"SUSPICIOUS {p_anomaly:.2f}  id={track_id}"
+                        cls_label = "anomaly"
                     else:
-                        objects.append(detection)
-                        color = (255, 100, 0)
+                        color = COLOR_NORMAL
+                        tag   = f"NORMAL  id={track_id}"
+                        cls_label = "normal"
 
-                    # Build detection record
-                    detection_record = {
+                    annotated_frame = draw_classifier_box(
+                        annotated_frame, coords, color, tag
+                    )
+                    
+                    person_record = {
                         "session_id":  session_id,
                         "frame_index": frame_count,
                         "timestamp":   timestamp,
                         "camera_id":   "webcam-01",
-                        "class_name":  detection["class_name"],
-                        "confidence":  detection["confidence"],
-                        "bbox":        detection["bbox"],
+                        "class_name":  "person",
+                        "confidence":  round(box_conf, 4),
+                        "bbox":        bbox_dict,
+                        "keypoints":   keypoints_data,
+                        "torso_angle": round(torso_angle, 2) if torso_angle is not None else None,
+                        "track_id":         track_id,
+                        "classifier_label": cls_label,
+                        "p_anomaly":        round(p_anomaly, 4) if p_anomaly is not None else None,
                     }
-                    all_detections.append(detection_record)
+                    persons_in_frame.append(person_record)
+                    all_detections.append(person_record)
 
-                    # Send every 10th detection to API to avoid overload
-                    if api_available and frame_count % 10 == 0:
-                        send_detection(detection_record)
-
-                    annotated_frame = draw_box(
-                        annotated_frame, coords, class_name, confidence, color
-                    )
-
-            now = time.time()
-            if persons and objects and (now - last_alert_time) > ALERT_COOLDOWN:
-                frame_alerts = check_alerts(
-                    persons, objects,
-                    annotated_frame, frame_count,
-                    timestamp, session_id
-                )
-
-                if frame_alerts:
-                    last_alert_time = now
-                    all_alerts.extend(frame_alerts)
-
-                    for alert in frame_alerts:
-                        logger.warning(
-                            f"ALERT [{alert['severity']}] — "
-                            f"Person near {alert['object']['class_name']} "
-                            f"at frame {frame_count}"
-                        )
-
-                        annotated_frame = draw_alert_banner(
-                            annotated_frame,
-                            "person",
-                            frame_alerts[0]["object"]["class_name"]
-                        )
-
-                        # Save snapshot
-                        snapshot_path = SNAPSHOT_DIR / f"alert_{session_id}_{frame_count}.jpg"
-                        cv2.imwrite(str(snapshot_path), annotated_frame)
-                        logger.info(f"Snapshot saved: {snapshot_path}")
-
-                        # Save alert JSON locally
-                        alert_path = ALERT_DIR / f"alert_{alert['alert_id']}.json"
-                        with open(alert_path, "w") as f:
-                            json.dump(alert, f, indent=2)
-
-                        # Send alert to backend API
+                    if frame_count % 10 == 0:
                         if api_available:
-                            send_alert(alert, snapshot_path)
+                            send_detection(person_record)
+                        if eh_available:
+                            publish_detection_event(person_record)
+                            
+                    if torso_angle is not None and torso_angle >= BEND_ANGLE_THRESHOLD:
+                        if bend_start_time[i] is None:
+                            bend_start_time[i] = now
+                        bend_duration = now - bend_start_time[i]
+
+                        if (bend_duration >= BEND_DURATION_THRESHOLD
+                                and (now - last_alert_time) > ALERT_COOLDOWN):
+                            last_alert_time = now
+                            alert = {
+                                "alert_id":    f"{session_id}_{frame_count}_{i}_bend",
+                                "session_id":  session_id,
+                                "frame_index": frame_count,
+                                "timestamp":   timestamp,
+                                "camera_id":   "webcam-01",
+                                "person": {
+                                    "track_id":   track_id,
+                                    "confidence": round(box_conf, 4),
+                                    "bbox":       bbox_dict,
+                                },
+                                "alert_type":  "bending",
+                                "severity":    "MEDIUM",
+                                "torso_angle": round(torso_angle, 2),
+                                "keypoints":   keypoints_data,
+                            }
+                            logger.warning(
+                                f"BEND ALERT — person {i} at {torso_angle:.1f}° "
+                                f"for {bend_duration:.1f}s (frame {frame_count})"
+                            )
+                            annotated_frame = fire_alert(
+                                annotated_frame, alert, all_alerts,
+                                api_available, eh_available,
+                            )
+                    else:
+                        bend_start_time[i] = None
 
             if frame_count % 10 == 0:
                 elapsed     = time.time() - fps_timer
@@ -348,13 +403,14 @@ def detect_with_alerts(model, source, api_available=False):
             annotated_frame = add_status_overlay(
                 annotated_frame,
                 frame_count,
-                len(all_detections),
+                len(persons_in_frame),
                 len(all_alerts),
-                fps_display
+                fps_display,
             )
+            annotated_frame = add_demo_metrics_overlay(annotated_frame)
 
             writer.write(annotated_frame)
-            cv2.imshow("Theft Detection — press Q to stop", annotated_frame)
+            cv2.imshow("Theft Detection - press Q to stop", annotated_frame)
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 logger.info("Stopped by user")
@@ -368,48 +424,63 @@ def detect_with_alerts(model, source, api_available=False):
         writer.release()
         cv2.destroyAllWindows()
 
+        if eh_available:
+            close_publisher()
+
         session_log = {
-            "session_id":       session_id,
-            "source":           str(source),
-            "total_frames":     frame_count,
-            "total_detections": len(all_detections),
-            "total_alerts":     len(all_alerts),
-            "detections":       all_detections,
-            "alerts":           all_alerts,
+            "session_id":        session_id,
+            "source":            str(source),
+            "mode":              "pose+classifier-visual",
+            "anomaly_threshold": anomaly_threshold,
+            "total_frames":      frame_count,
+            "total_detections":  len(all_detections),
+            "total_alerts":      len(all_alerts),
+            "detections":        all_detections,
+            "alerts":            all_alerts,
         }
         log_path = LOG_DIR / f"session_{source_name}_{session_id}.json"
         with open(log_path, "w") as f:
             json.dump(session_log, f, indent=2)
 
-        logger.success(f"Session done — {frame_count} frames, {len(all_alerts)} alerts")
-        logger.success(f"Output video:  {output_path}")
-        logger.success(f"Session log:   {log_path}")
-        logger.success(f"Snapshots in:  {SNAPSHOT_DIR}")
-
-# ── Entry point ────────────────────────────────────────────────────────────────
+        logger.success(f"Session done — {frame_count} frames, {len(all_alerts)} bend alerts")
+        logger.success(f"Output video: {output_path}")
+        logger.success(f"Session log:  {log_path}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Theft Detection with Alerts")
-    parser.add_argument(
-        "--source",
-        default="1",
-        help="Camera index (0,1,2) or path to video file"
-    )
+    parser = argparse.ArgumentParser(description="Live theft detection demo")
+    default_source = "1" if platform.system() == "Windows" else "2"
+    parser.add_argument("--source", default=default_source,
+                        help="Camera index (0,1,2) or path to a video file")
+    parser.add_argument("--anomaly-threshold", type=float,
+                        default=DEFAULT_ANOMALY_THRESHOLD,
+                        help=("Visual threshold for the red bounding box. "
+                              "Default 0.65. Range 0..1. Does NOT trigger alerts."))
     args   = parser.parse_args()
     source = args.source
 
-    setup_directories()
-    model = load_model()
+    if not 0.0 <= args.anomaly_threshold <= 1.0:
+        parser.error("--anomaly-threshold must be between 0.0 and 1.0")
 
-    # Check if backend API is running
+    logger.info(f"Anomaly visual threshold set to {args.anomaly_threshold:.2f}")
+
+    setup_directories()
+    model     = load_yolo()
+    predictor = load_predictor()
+
     api_available = check_api_health()
     if not api_available:
-        logger.warning("Running in offline mode — data saved locally only")
+        logger.warning("Backend API offline — Phase 4 path disabled")
+
+    eh_available = init_publisher()
+    if not eh_available:
+        logger.warning("Event Hub offline — Phase 5 path disabled")
 
     if source.isdigit():
-        detect_with_alerts(model, int(source), api_available)
+        detect_with_alerts(model, predictor, int(source),
+                           args.anomaly_threshold, api_available, eh_available)
     else:
-        detect_with_alerts(model, source, api_available)
+        detect_with_alerts(model, predictor, source,
+                           args.anomaly_threshold, api_available, eh_available)
 
 
 if __name__ == "__main__":

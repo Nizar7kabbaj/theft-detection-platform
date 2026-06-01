@@ -1,8 +1,3 @@
-"""
-api_client.py — Sends detection events and alerts to FastAPI backend
-Uses background threads so API calls never block the detection loop
-"""
-
 import requests
 import threading
 from loguru import logger
@@ -11,11 +6,10 @@ API_BASE_URL = "http://localhost:8000"
 
 
 def _post_in_background(url: str, payload: dict):
-    """Send HTTP POST in a background thread — never blocks detection."""
     try:
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code != 200:
-            logger.error(f"API error {response.status_code}: {url}")
+            logger.error(f"API error {response.status_code}: {url} — {response.text[:200]}")
     except requests.exceptions.ConnectionError:
         logger.warning("API not reachable")
     except Exception as e:
@@ -23,7 +17,6 @@ def _post_in_background(url: str, payload: dict):
 
 
 def send_alert(alert: dict, snapshot_path=None):
-    """Send alert to backend in background thread."""
     payload = {
         "alert_id":      alert["alert_id"],
         "session_id":    alert["session_id"],
@@ -31,9 +24,12 @@ def send_alert(alert: dict, snapshot_path=None):
         "timestamp":     alert["timestamp"],
         "camera_id":     alert.get("camera_id", "webcam-01"),
         "person":        alert["person"],
-        "object":        alert["object"],
+        "object":        alert.get("object"),
         "severity":      alert["severity"],
-        "snapshot_path": str(snapshot_path) if snapshot_path else None,
+        "snapshot_path": str(snapshot_path).replace("\\", "/") if snapshot_path else None,
+        "alert_type":    alert.get("alert_type", "object_proximity"),
+        "keypoints":     alert.get("keypoints"),
+        "torso_angle":   alert.get("torso_angle"),
     }
     thread = threading.Thread(
         target=_post_in_background,
@@ -45,7 +41,6 @@ def send_alert(alert: dict, snapshot_path=None):
 
 
 def send_detection(detection: dict):
-    """Send detection to backend in background thread."""
     payload = {
         "session_id":  detection["session_id"],
         "frame_index": detection["frame_index"],
@@ -54,6 +49,7 @@ def send_detection(detection: dict):
         "class_name":  detection["class_name"],
         "confidence":  detection["confidence"],
         "bbox":        detection["bbox"],
+        "keypoints":   detection.get("keypoints"),
     }
     thread = threading.Thread(
         target=_post_in_background,
@@ -64,7 +60,6 @@ def send_detection(detection: dict):
 
 
 def check_api_health() -> bool:
-    """Check if backend API is running."""
     try:
         response = requests.get(f"{API_BASE_URL}/health", timeout=3)
         if response.status_code == 200:

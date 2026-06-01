@@ -1,0 +1,44 @@
+{
+  "model_config": {
+    "input_size": 51,
+    "hidden_size": 64,
+    "num_layers": 2,
+    "dropout": 0.3,
+    "num_classes": 2
+  },
+  "preprocessing": {
+    "window": 30,
+    "stride": 15,
+    "num_keypoints": 17,
+    "feat_per_keypoint": 3,
+    "normalization": "bbox_center_relative",
+    "kp_conf_threshold": null,
+    "nan_policy": "zero"
+  },
+  "training": {
+    "dataset": "PoseLift Test split (47 files, supervised demo mode)",
+    "fold": 1,
+    "fold_test_files": [
+      "1_245.pkl",
+      "2_270.pkl",
+      "2_316.pkl",
+      "3_248.pkl",
+      "3_260.pkl",
+      "3_262.pkl",
+      "3_265.pkl",
+      "4_301.pkl",
+      "4_319.pkl",
+      "5_298.pkl"
+    ],
+    "cv_mean_f1": 0.5692028779192798,
+    "cv_std_f1": 0.0767125087853943,
+    "deploy_test_f1": 0.6933333333333334,
+    "deploy_test_precision": 0.5531914893617021,
+    "deploy_test_recall": 0.9285714285714286,
+    "deploy_test_accuracy": 0.5576923076923077
+  },
+  "labels": {
+    "0": "normal",
+    "1": "anomaly"
+  }
+}

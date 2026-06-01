@@ -1,33 +1,66 @@
-# Virtual environment
 venv/
-
-# Model weights (too large for Git)
-*.pt
-
-# Output files (generated, not source code)
-ai-model/outputs/
-
-# Python cache
 __pycache__/
 *.pyc
 *.pyo
-
-# Environment variables
-backend/.env
-.env
-
-# pyenv
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
 .python-version
 
-# Windows
+.env
+backend/.env
+ai-model/.env
+
+*.pem
+*.key
+secrets.json
+
+node_modules/
+.next/
+dist/
+build/
+
+.vscode/
+.idea/
+
+*.swp
+*.log
+
+.DS_Store
 Thumbs.db
 desktop.ini
 
-# Test images
-test_cam*.jpg
-test_cam*.png
-bus.jpg
+ai-model/data/raw/
+ai-model/data/processed/
+
+*.pkl
+*.npy
+*.pt
+!ai-model/models/*.pt
+!ai-model/models/*.json
+
 *.jpg
-*.png
 *.jpeg
+*.png
 *.mp4
+!ai-model/notebooks/*.png
+ai-model/outputs/*
+!ai-model/outputs/evaluation/
+!ai-model/outputs/evaluation/*.png
+!ai-model/outputs/evaluation/*.json
+.tf-env
+
+
+infrastructure/terraform/**/.terraform/
+infrastructure/terraform/**/.terraform.lock.hcl.bak
+infrastructure/terraform/**/tfplan
+infrastructure/terraform/**/tfplan.binary
+infrastructure/terraform/**/tfplan.json
+infrastructure/terraform/**/*.tfstate
+infrastructure/terraform/**/*.tfstate.backup
+infrastructure/terraform/**/crash.log
+infrastructure/terraform/**/crash.*.log
+infrastructure/terraform/environments/*/terraform.tfvars
+infrastructure/terraform/environments/*/*.auto.tfvars
+
+.pre-commit-cache/

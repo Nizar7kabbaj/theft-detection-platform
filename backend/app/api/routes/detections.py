@@ -1,6 +1,3 @@
-"""
-detections.py — Detection event endpoints
-"""
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
 from bson import ObjectId
@@ -13,7 +10,6 @@ router = APIRouter()
 
 @router.post("/", response_model=dict)
 async def create_detection(detection: DetectionCreate):
-    """Save a detection event from the AI model."""
     db = get_database()
     detection_doc = {
         "session_id":  detection.session_id,
@@ -23,6 +19,7 @@ async def create_detection(detection: DetectionCreate):
         "class_name":  detection.class_name,
         "confidence":  detection.confidence,
         "bbox":        detection.bbox.dict(),
+        "keypoints":   [kp.dict() for kp in detection.keypoints] if detection.keypoints else None,
         "created_at":  datetime.utcnow(),
     }
     result = await db.detections.insert_one(detection_doc)
@@ -34,7 +31,6 @@ async def get_detections(
     limit: int = Query(default=50, le=200),
     skip:  int = Query(default=0)
 ):
-    """Get detection history with pagination."""
     db = get_database()
     detections = []
     cursor = db.detections.find().sort("created_at", -1).skip(skip).limit(limit)
@@ -48,13 +44,13 @@ async def get_detections(
             "class_name":  det["class_name"],
             "confidence":  det["confidence"],
             "bbox":        det["bbox"],
+            "keypoints":   det.get("keypoints"),
         })
     return detections
 
 
 @router.get("/session/{session_id}", response_model=list)
 async def get_detections_by_session(session_id: int):
-    """Get all detections from a specific session."""
     db = get_database()
     detections = []
     async for det in db.detections.find({"session_id": session_id}):
@@ -67,13 +63,13 @@ async def get_detections_by_session(session_id: int):
             "class_name":  det["class_name"],
             "confidence":  det["confidence"],
             "bbox":        det["bbox"],
+            "keypoints":   det.get("keypoints"),
         })
     return detections
 
 
 @router.delete("/{detection_id}", response_model=dict)
 async def delete_detection(detection_id: str):
-    """Delete a detection event."""
     db = get_database()
     result = await db.detections.delete_one({"_id": ObjectId(detection_id)})
     if result.deleted_count == 0:

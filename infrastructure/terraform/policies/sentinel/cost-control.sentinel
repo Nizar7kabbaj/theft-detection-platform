@@ -1,0 +1,13 @@
+# Spec only. Real enforcement lives in opa/cost-control.rego.
+# Sentinel kept for portability if this ever moves to Terraform Cloud.
+#
+# Rules:
+#   1. No azurerm_management_lock resources. Locks block terraform destroy.
+#   2. Key vault purge_protection_enabled stays false. True keeps the name
+#      reserved through soft-delete retention even after destroy.
+#   3. Key vault sku_name = premium is allowed only when the environment
+#      tag is prod. Dev uses standard.
+
+import "tfplan/v2" as tfplan
+
+main = rule { true }
