@@ -9,15 +9,17 @@ services:
       - ./backend/.env
     restart: unless-stopped
 
-  frontend:
-    build:
-      context: ./frontend/theft-detection-ui
-      args:
-        REACT_APP_API_URL: http://localhost:8000
-    image: theft-frontend:dev
-    container_name: theft-frontend
-    ports:
-      - "8080:80"
-    depends_on:
-      - backend
-    restart: unless-stopped
+# frontend service: planned Next.js 15 rebuild. Block kept as reference
+  # for port mapping and depends_on wiring.
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     args:
+  #       NEXT_PUBLIC_API_URL: http://localhost:8000
+  #   image: theft-frontend:dev
+  #   container_name: theft-frontend
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+  #   restart: unless-stopped

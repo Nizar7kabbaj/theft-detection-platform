@@ -16,7 +16,6 @@
     "nan_policy": "zero"
   },
   "training": {
-    "ticket": "TDP-87",
     "dataset": "PoseLift Test split (47 files, supervised demo mode)",
     "fold": 1,
     "fold_test_files": [

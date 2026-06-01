@@ -1,0 +1,12 @@
+# Spec only. Real enforcement lives in opa/naming-conventions.rego.
+# Sentinel kept for portability if this ever moves to Terraform Cloud.
+#
+# Rules:
+#   1. Project resources use spaincentral.
+#   2. Key vault names stay at 24 characters or fewer.
+#   3. Resource names start with the type prefix: rg-, vnet-, nsg-, kv-,
+#      link-.
+
+import "tfplan/v2" as tfplan
+
+main = rule { true }

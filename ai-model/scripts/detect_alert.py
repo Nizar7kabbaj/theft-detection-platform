@@ -410,7 +410,7 @@ def detect_with_alerts(model, predictor, source, anomaly_threshold,
             annotated_frame = add_demo_metrics_overlay(annotated_frame)
 
             writer.write(annotated_frame)
-            cv2.imshow("Theft Detection - TDP-89 - press Q to stop", annotated_frame)
+            cv2.imshow("Theft Detection - press Q to stop", annotated_frame)
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 logger.info("Stopped by user")
