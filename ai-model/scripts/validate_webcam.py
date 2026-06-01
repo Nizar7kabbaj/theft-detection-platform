@@ -9,7 +9,7 @@ import cv2
 REQUEST_W, REQUEST_H, REQUEST_FPS = 1920, 1080, 30
 BURST_FRAMES = 150  # ~5s at 30FPS
 SAVE_FRAME_AT = 75
-OUTPUT_DIR = Path("ai-model/outputs/tdp3-30-validation")
+OUTPUT_DIR = Path("ai-model/outputs/webcam-validation")
 C922_DEVICE = "/dev/video2"
 
 
