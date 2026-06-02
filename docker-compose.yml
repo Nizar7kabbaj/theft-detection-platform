@@ -7,6 +7,37 @@ services:
       - "8000:8000"
     env_file:
       - ./backend/.env
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7.0
+    container_name: theft-mongo
+    command: ["mongod", "--config", "/etc/mongo/mongod.conf"]
+    user: "999:999"
+    group_add:
+      - "972"
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./infrastructure/mongodb/mongod.conf:/etc/mongo/mongod.conf:ro
+      - /etc/mongod-tls/mongod.pem:/etc/mongo/tls/mongod.pem:ro
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --tls
+        - --tlsAllowInvalidCertificates
+        - --quiet
+        - --eval
+        - "db.adminCommand('ping').ok"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
     restart: unless-stopped
 
 # frontend service: planned Next.js 15 rebuild. Block kept as reference
@@ -23,3 +54,6 @@ services:
   #   depends_on:
   #     - backend
   #   restart: unless-stopped
+
+volumes:
+  mongo_data:
