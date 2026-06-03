@@ -40,8 +40,26 @@ services:
       start_period: 40s
     restart: unless-stopped
 
-# frontend service: planned Next.js 15 rebuild. Block kept as reference
-  # for port mapping and depends_on wiring.
+  redis:
+      image: redis:7.2-alpine
+      container_name: theft-redis
+      user: "999:999"
+      group_add:
+        - "971"
+      command: ["redis-server", "/etc/redis/redis.conf"]
+      ports:
+        - "127.0.0.1:6379:6379"
+      volumes:
+        - redis_data:/data
+        - ./infrastructure/redis/redis.conf:/etc/redis/redis.conf:ro
+      healthcheck:
+        test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis.conf)\" ping | grep -q PONG"]
+        interval: 30s
+        timeout: 10s
+        retries: 5
+        start_period: 10s
+      restart: unless-stopped
+# frontend: planned Next.js 15
   # frontend:
   #   build:
   #     context: ./frontend
@@ -57,3 +75,4 @@ services:
 
 volumes:
   mongo_data:
+  redis_data:

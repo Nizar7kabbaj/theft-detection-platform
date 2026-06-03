@@ -64,3 +64,4 @@ infrastructure/terraform/environments/*/terraform.tfvars
 infrastructure/terraform/environments/*/*.auto.tfvars
 
 .pre-commit-cache/
+infrastructure/redis/redis.conf

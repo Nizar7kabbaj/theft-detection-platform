@@ -1,0 +1,19 @@
+# Network
+bind 0.0.0.0
+port 6379
+protected-mode yes
+
+# Security
+requirepass __REDIS_PASSWORD_PLACEHOLDER__
+
+# Persistence
+appendonly yes
+appendfsync everysec
+save ""
+
+# Logging
+loglevel notice
+logfile ""
+
+# Misc
+databases 16
