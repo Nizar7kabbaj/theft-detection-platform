@@ -1,0 +1,43 @@
+# Scrape configuration template. The live prometheus.yml is gitignored
+# and owned by root:prom-conf at mode 640. Copy this file to
+# prometheus.yml before bringing the stack up.
+#
+# Targets resolve via the docker-compose network. Each service name
+# is a DNS hostname inside the prometheus container.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: local
+    project: theft-detection-platform
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - 127.0.0.1:9090
+
+  - job_name: node
+    static_configs:
+      - targets:
+          - node-exporter:9100
+
+  - job_name: mongodb
+    static_configs:
+      - targets:
+          - mongodb-exporter:9216
+
+  - job_name: redis
+    static_configs:
+      - targets:
+          - redis-exporter:9121
+
+  # Backend FastAPI /metrics. Enable once the backend exposes
+  # prometheus_client metrics on /metrics.
+  #
+  # - job_name: backend
+  #   metrics_path: /metrics
+  #   static_configs:
+  #     - targets:
+  #         - backend:8000
