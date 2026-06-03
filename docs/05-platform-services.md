@@ -298,3 +298,114 @@ The `user: "999:999"` directive is missing from the compose service, or GID 971 
 #### Healthcheck unhealthy but logs look fine
 
 The compose healthcheck reads `requirepass` from the mounted config file and authenticates. If the file isn't readable from inside the container (back to the perms issue above) the healthcheck silently fails. Run `docker exec theft-redis cat /etc/redis/redis.conf | head -1` to check readability from the container's perspective.
+
+## Local Prometheus
+
+Metrics scraping for the dev stack. Server runs in Docker on `127.0.0.1:9090`, scrapes itself plus three exporters every 15 seconds, keeps 30 days of history.
+
+### Why Docker
+
+Prometheus's Ubuntu apt package is the v2 line, currently 2.55, EOL since December 2024. The maintained line is v3.x and Ubuntu doesn't ship it. Docker gets us the upstream binary directly.
+
+The exporter ecosystem ships only as Docker images. Mixing host-installed Prometheus with containerised exporters means juggling two networking models, which is the kind of complexity worth avoiding when nothing forces it on us.
+
+Version pinning matters for reproducibility. The pin is `prom/prometheus:v3.12.0`, current stable at install time. Re-pin to the next LTS when one is declared. The 3.5 LTS expires July 31 2026 and the next isn't named yet.
+
+### What runs
+
+Five containers handle observability:
+
+- `theft-prometheus`: the server. Scrapes, stores, queries.
+- `theft-node-exporter`: host metrics. CPU, memory, disk, network, processes.
+- `theft-mongodb-exporter`: Mongo metrics via the `theft_monitor` user.
+- `theft-redis-exporter`: Redis metrics using the existing local password.
+- The backend's `/metrics` endpoint exists as a stubbed scrape target in `prometheus.yml.example`, commented out until the backend instrumentation change lands.
+
+Every port is published on `127.0.0.1` only.
+
+### Why no auth
+
+Same argument as Redis no-TLS. Prometheus has no native auth (the options are `web.yml` with bcrypt hashes or a reverse proxy with basic auth). On a loopback-published port, the marginal security bar is small: any local-process attacker who reaches `127.0.0.1:9090` can also read `/proc/<pid>/environ` and the env files compose loaded. The cost of cert and hash management doesn't earn its keep at this scope.
+
+The asymmetry with Mongo (which runs TLS + auth even on loopback) is deliberate. Mongo holds project data. Prometheus holds operational metrics.
+
+Azure-side Prometheus will run behind real auth when that ticket lands.
+
+### Permissions model
+
+Mirrors the Redis and Mongo pattern.
+
+- Host group `prom-conf`, GID 1971.
+- `infrastructure/prometheus/prometheus.yml` lives at mode 640, owner root, group prom-conf.
+- Container starts as user `nobody` (UID 65534), picks up `prom-conf` (GID 1971) as a supplementary group via compose `group_add`.
+
+That membership lets the container read the config without giving it broader host access. Live config is gitignored. Template at `infrastructure/prometheus/prometheus.yml.example` is world-readable and committed.
+
+### Scrape configuration
+
+Global scrape interval: 15 seconds. Default value, fine for the stack's size.
+
+Retention: 30 days, set via `--storage.tsdb.retention.time=30d`. Longer than the 15-day default because cross-week comparisons matter for performance work and PFE-report numbers.
+
+Five jobs: `prometheus` (self-scrape), `node` (host), `mongodb`, `redis`, `backend` (stubbed). Targets resolve via docker-compose DNS, so each service name is a hostname inside the prometheus container.
+
+Disk budget rule of thumb: at 15s scrape across four exporters, expect roughly 50 MB/day on the TSDB. 30 days fits comfortably in the named volume.
+
+### The Mongo monitoring user
+
+A dedicated user with the `clusterMonitor` role, not the admin account.
+
+User: `theft_monitor`, role: `clusterMonitor` on the `admin` database.
+
+`clusterMonitor` is a Mongo built-in role that grants read access to monitoring commands (`serverStatus`, `connPoolStats`, `replSetGetStatus`, `dbStats`) and read-only access to internal monitoring collections. It cannot read application data, cannot write anything, cannot change configuration.
+
+Principle of least privilege. The exporter only needs metrics access. If the monitoring user's password leaks, the blast radius is "someone can read aggregate stats," not "someone has full database control."
+
+Password lives only in `backend/.env` (gitignored, mode 600) and the password manager. Hash-verified on the way in to confirm no corruption between the openssl generation and the .env append.
+
+### Operating the service
+Start everything
+docker compose up -d
+Just the observability stack
+docker compose up -d prometheus node-exporter mongodb-exporter redis-exporter
+Stop
+docker compose stop prometheus node-exporter mongodb-exporter redis-exporter
+Status + recent logs
+docker compose ps
+docker compose logs --tail=50 prometheus
+
+### Smoke test
+Server health
+curl -s http://127.0.0.1:9090/-/healthy
+Targets, all four should report state="up"
+curl -s http://127.0.0.1:9090/api/v1/targets
+| python3 -c "import sys, json; t = json.load(sys.stdin)['data']['activeTargets']; [print(f"{x['labels']['job']:15} {x['health']}") for x in t]"
+
+Expected: `Prometheus Server is Healthy.` from the first call, and `up` against every job from the second.
+
+### Troubleshooting
+
+#### Target stuck in "down" state
+
+Check the target's `lastError` field in `/api/v1/targets` output. Common causes:
+
+- mongodb exporter shows "auth failed": the `theft_monitor` user password in `.env` doesn't match what Mongo expects. Verify by re-authenticating with mongosh using the value from `.env`. Rotate if needed.
+- redis exporter shows "WRONGPASS": same kind of mismatch on the Redis side. Check that `REDIS_PASSWORD_LOCAL` in `.env` matches the password embedded in `REDIS_URL_LOCAL`.
+- node exporter shows "connection refused": the node-exporter container isn't running. `docker compose ps node-exporter` confirms.
+
+#### Permission denied reading prometheus.yml
+
+Container can't read the bind-mounted config. Two checks:
+
+- File ownership: `stat -c '%a %U:%G' infrastructure/prometheus/prometheus.yml` should return `640 root:prom-conf`.
+- Container's group_add: `docker inspect theft-prometheus --format '{{.HostConfig.GroupAdd}}'` should include `1971`.
+
+If both look correct, recreate the container: `docker compose up -d --force-recreate prometheus`.
+
+#### TSDB growing faster than expected
+
+`du -sh /var/lib/docker/volumes/theft-detection-platform_prometheus_data` shows on-disk size. If it grows past expectations, the usual culprit is a high-cardinality label in a scrape config. Anything that emits unique IDs as labels explodes the series count fast.
+
+#### Port 9090 already in use
+
+Another local process has the port. `sudo lsof -iTCP:9090` identifies it. Either kill the conflict or remap to a different loopback port in compose (`127.0.0.1:9091:9090` works).

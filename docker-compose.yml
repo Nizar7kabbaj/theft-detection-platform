@@ -59,7 +59,8 @@ services:
         retries: 5
         start_period: 10s
       restart: unless-stopped
-# frontend: planned Next.js 15
+
+  # frontend: planned Next.js 15
   # frontend:
   #   build:
   #     context: ./frontend
@@ -73,6 +74,86 @@ services:
   #     - backend
   #   restart: unless-stopped
 
+  prometheus:
+      image: prom/prometheus:v3.12.0
+      container_name: theft-prometheus
+      user: "65534:65534"
+      group_add:
+        - "1971"
+      command:
+        - "--config.file=/etc/prometheus/prometheus.yml"
+        - "--storage.tsdb.path=/prometheus"
+        - "--storage.tsdb.retention.time=30d"
+        - "--web.console.libraries=/etc/prometheus/console_libraries"
+        - "--web.console.templates=/etc/prometheus/consoles"
+        - "--web.listen-address=:9090"
+      ports:
+        - "127.0.0.1:9090:9090"
+      volumes:
+        - prometheus_data:/prometheus
+        - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      healthcheck:
+        test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"]
+        interval: 30s
+        timeout: 5s
+        retries: 5
+        start_period: 10s
+      depends_on:
+        - node-exporter
+        - mongodb-exporter
+        - redis-exporter
+      restart: unless-stopped
+
+  node-exporter:
+      image: prom/node-exporter:v1.8.2
+      container_name: theft-node-exporter
+      command:
+        - "--path.procfs=/host/proc"
+        - "--path.rootfs=/rootfs"
+        - "--path.sysfs=/host/sys"
+        - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+      ports:
+        - "127.0.0.1:9100:9100"
+      volumes:
+        - /proc:/host/proc:ro
+        - /sys:/host/sys:ro
+        - /:/rootfs:ro,rslave
+      healthcheck:
+        test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9100/metrics"]
+        interval: 30s
+        timeout: 5s
+        retries: 3
+        start_period: 5s
+      restart: unless-stopped
+
+  mongodb-exporter:
+      image: percona/mongodb_exporter:0.40
+      container_name: theft-mongodb-exporter
+      command:
+        - "--mongodb.uri=mongodb://${MONGO_EXPORTER_USERNAME}:${MONGO_EXPORTER_PASSWORD}@theft-mongo:27017/admin?tls=true&tlsInsecure=true"
+        - "--collect-all"
+        - "--compatible-mode"
+      ports:
+        - "127.0.0.1:9216:9216"
+      depends_on:
+        mongo:
+          condition: service_healthy
+      restart: unless-stopped
+
+  redis-exporter:
+      image: oliver006/redis_exporter:v1.65.0
+      container_name: theft-redis-exporter
+      environment:
+        REDIS_ADDR: "redis://theft-redis:6379"
+        REDIS_PASSWORD: "${REDIS_PASSWORD_LOCAL}"
+      ports:
+        - "127.0.0.1:9121:9121"
+      depends_on:
+        redis:
+          condition: service_healthy
+      restart: unless-stopped
+
 volumes:
   mongo_data:
   redis_data:
+  prometheus_data:

@@ -65,3 +65,4 @@ infrastructure/terraform/environments/*/*.auto.tfvars
 
 .pre-commit-cache/
 infrastructure/redis/redis.conf
+infrastructure/prometheus/prometheus.yml
