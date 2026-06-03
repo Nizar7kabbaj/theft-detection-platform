@@ -224,3 +224,77 @@ db.smoke_test.deleteMany({ test: "roundtrip" })
 
 A successful round-trip prints an `ObjectId`, the inserted document, and a
 deletion count of 1.
+
+## Local Redis
+
+### Why Docker, not host apt
+
+The Redis apt repo serves Ubuntu 26.04, and Redis 7 has none of the libc-adjacent kernel issues that forced MongoDB into Docker. A host install would have worked. We picked Docker anyway because the next ticket in this epic puts Redis in `docker-compose.yml`, so installing on host now would mean tearing it down and redoing the same work in Docker an hour later.
+
+Pinned to `redis:7.2-alpine`. The 7.2.x line is the last under plain 3-Clause BSD. From 7.4.0 onward Redis dual-licenses under RSALv2/SSPLv1, which is fine for a research project but matters for any future industrial partnership. Pinning to `7.2` (not the floating `7-alpine` tag) keeps the line BSD across image rebuilds.
+
+### Why no TLS
+
+MongoDB runs with TLS even on loopback. Redis doesn't.
+
+The argument for TLS on a loopback port is defense in depth: a local-process compromise can't sniff plaintext. The argument against is that the same local process can usually read `/proc/<pid>/environ` or similar, which means TLS doesn't actually raise the bar much against the only attacker who could reach `127.0.0.1` in the first place. The cost is real: cert lifecycle, a dedicated `redis-cert` group, client-side TLS args in every consumer.
+
+Mongo has TLS because Atlas mandates it in production and we wanted local dev to mirror that. Azure Cache for Redis offers TLS too, and we'll wire it on in the Terraform module ticket. Local dev runs `requirepass` over loopback only, which is the standard Redis pattern for a single-machine setup.
+
+### Permissions model
+
+The Redis config file holds the `requirepass` value as plaintext. It can't live in the repo. Same problem as the Mongo TLS cert, solved the same way:
+
+- Live config: `infrastructure/redis/redis.conf`, owner `root`, group `redis-conf` (GID 971), mode 640
+- Template: `infrastructure/redis/redis.conf.example`, world-readable, placeholder where the password belongs
+- Gitignore covers the live file; the template is committed
+- Container runs as UID 999 (the redis user inside the alpine image) and joins GID 971 via `group_add`
+
+The container needs `user: "999:999"` set explicitly. Without it, the alpine entrypoint starts as root and drops to redis via `gosu`, which resets supplementary groups and silently discards the `group_add: ["971"]`. With `user:` set, the container starts as 999 directly and the group_add survives.
+
+### Config summary
+
+```conf
+bind 0.0.0.0          # inside container only, loopback enforced by compose port map
+port 6379
+protected-mode yes
+requirepass <40-char alphanumeric, in password manager>
+appendonly yes        # AOF on
+appendfsync everysec  # good durability/performance balance, Redis default
+save ""               # RDB off, AOF is the only persistence path
+```
+
+### Smoke test
+
+```bash
+docker exec -i theft-redis redis-cli -a "$REDIS_PASSWORD" --no-auth-warning <<'EOF'
+PING
+SET smoke:test "roundtrip"
+GET smoke:test
+DEL smoke:test
+EOF
+```
+
+Healthy output: `PONG`, `OK`, `roundtrip`, `1`.
+
+### Known startup warning
+
+```
+WARNING Memory overcommit must be enabled! ... add 'vm.overcommit_memory = 1' to /etc/sysctl.conf
+```
+
+This affects Redis's background save fork behavior under memory pressure. Not blocking on a 16 GB laptop with our workload, but for prod-parity it should be set on the eventual deployment host. Should be a deliberate host change, not a side-effect of installing Redis.
+
+### Troubleshooting
+
+#### Container restarts with "Fatal error, can't open config file ... Permission denied"
+
+The `user: "999:999"` directive is missing from the compose service, or GID 971 doesn't exist on the host, or the config file isn't group-owned by `redis-conf`. Check in that order.
+
+#### redis-cli returns NOAUTH or WRONGPASS
+
+`$REDIS_PASSWORD` in your shell doesn't match what's in `redis.conf`. Either the shell variable expired (new terminal session — re-source from Bitwarden) or someone edited `redis.conf` without updating Bitwarden + `.env`.
+
+#### Healthcheck unhealthy but logs look fine
+
+The compose healthcheck reads `requirepass` from the mounted config file and authenticates. If the file isn't readable from inside the container (back to the perms issue above) the healthcheck silently fails. Run `docker exec theft-redis cat /etc/redis/redis.conf | head -1` to check readability from the container's perspective.
