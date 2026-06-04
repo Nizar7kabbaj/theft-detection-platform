@@ -336,7 +336,7 @@ def detect_with_alerts(model, predictor, source, anomaly_threshold,
                     annotated_frame = draw_classifier_box(
                         annotated_frame, coords, color, tag
                     )
-                    
+
                     person_record = {
                         "session_id":  session_id,
                         "frame_index": frame_count,
@@ -359,7 +359,7 @@ def detect_with_alerts(model, predictor, source, anomaly_threshold,
                             send_detection(person_record)
                         if eh_available:
                             publish_detection_event(person_record)
-                            
+
                     if torso_angle is not None and torso_angle >= BEND_ANGLE_THRESHOLD:
                         if bend_start_time[i] is None:
                             bend_start_time[i] = now
