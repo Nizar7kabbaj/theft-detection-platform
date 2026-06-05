@@ -1,8 +1,6 @@
 # Platform Services
 
-This document covers the local platform services that the backend depends on
-during development. Today that means MongoDB. Future entries will cover Redis,
-the metrics stack, and any other services the application talks to.
+The backend depends on four local services during development: MongoDB, Redis, Prometheus, and Grafana. Each runs in Docker on the dev laptop, published on loopback only. This doc covers what runs, why, and how to operate each one.
 
 ## Local MongoDB
 
@@ -17,9 +15,8 @@ The original plan was a host-installed MongoDB Community 7 from the official
 apt repository. Two real problems blocked that path on this machine:
 
 1. The official repo doesn't publish packages for Ubuntu 26.04 (resolute).
-   MongoDB's currently-supported codenames stop at noble (24.04). The standard
-   fallback of pointing 26.04 at the noble suite is explicitly warned against
-   by upstream.
+   MongoDB's currently-supported codenames stop at noble (24.04). Upstream
+   warns against the standard fallback of pointing 26.04 at the noble suite.
 
 2. MongoDB 8.x has a hard refusal to start on Linux kernel 6.19 and newer, due
    to an upstream incompatibility between the kernel's restartable-sequences
@@ -70,14 +67,13 @@ permissions:  640
 expiry:       2031
 ```
 
-The same file serves as both the server certificate and the CA file. MongoDB
+The same file is both the server certificate and the CA file. MongoDB
 7.0 requires a CA file when `requireTLS` is set, and a self-signed cert is its
 own CA. Clients trust it by pointing `--tlsCAFile` at the same path.
 
-For clients outside the container, the public cert was copied to a
-host-readable location in the developer's home directory. The private key
-stays in `/etc/mongod-tls/`, reachable only to root and members of
-`mongo-cert`.
+The public cert lives at a host-readable location in the developer's home
+directory for clients running outside the container. The private key stays in
+`/etc/mongod-tls/`, reachable only to root and members of `mongo-cert`.
 
 ### Authentication
 
@@ -94,7 +90,7 @@ theft_app (in theft_detection_db)
   purpose: application connection from the backend
 ```
 
-The admin user was created via the localhost exception, the one-time mongod
+The localhost exception created the admin user — the one-time mongod
 allowance that lets the first connection from `127.0.0.1` create a user when
 zero users exist. That exception closes after the first user is created.
 
@@ -154,17 +150,17 @@ defined now means the wiring is ready when that change lands.
 ### Atlas fallback
 
 The Atlas cluster stays provisioned and reachable through the `MONGODB_URL`
-connection string. The dev loop runs against local Docker. Production-parity
+connection string. The dev loop runs against local Docker. Prod-parity
 testing runs against Atlas by pointing the backend at `MONGODB_URL` directly.
 
-## Troubleshooting
+### Troubleshooting
 
-### Container crashes with "kernel 6.19+ incompatible"
+#### Container crashes with "kernel 6.19+ incompatible"
 
 The image tag is `mongo:8` or later. Pin to `mongo:7.0` in
 `docker-compose.yml`. The TCMalloc fix isn't in any 8.x release yet.
 
-### Container crashes with "TLS without chain of trust no longer supported"
+#### Container crashes with "TLS without chain of trust no longer supported"
 
 `mongod.conf` is missing the `CAFile` line under `net.tls`. Add:
 
@@ -174,7 +170,7 @@ CAFile: /etc/mongo/tls/mongod.pem
 
 Same path as `certificateKeyFile`. The self-signed cert serves as its own CA.
 
-### Container starts but clients can't connect
+#### Container starts but clients can't connect
 
 ```bash
 docker compose ps mongo
@@ -197,14 +193,14 @@ sudo ls -la /etc/mongod-tls/
 Files should be mode 640 owned `root:mongo-cert`. Directory should be mode
 750.
 
-### Atlas connection works, local connection doesn't
+#### Atlas connection works, local connection doesn't
 
 Usually the local URL has an unencoded special character in the password.
 Connection strings need `@`, `/`, `:`, and `#` URL-encoded (`%40`, `%2F`,
 `%3A`, `%23`). Atlas-generated passwords contain those often. Regenerate the
 local password as alphanumeric-only to avoid this.
 
-### Smoke test
+#### Smoke test
 
 ```bash
 docker exec -i theft-mongo mongosh \
@@ -229,7 +225,7 @@ deletion count of 1.
 
 ### Why Docker, not host apt
 
-The Redis apt repo serves Ubuntu 26.04, and Redis 7 has none of the libc-adjacent kernel issues that forced MongoDB into Docker. A host install would have worked. We picked Docker anyway because the next ticket in this epic puts Redis in `docker-compose.yml`, so installing on host now would mean tearing it down and redoing the same work in Docker an hour later.
+The Redis apt repo serves Ubuntu 26.04, and Redis 7 has none of the libc-adjacent kernel issues that forced MongoDB into Docker. A host install would have worked. Docker won out anyway because the next ticket in this epic puts Redis in `docker-compose.yml`, so installing on host now would mean tearing it down and redoing the same work in Docker an hour later.
 
 Pinned to `redis:7.2-alpine`. The 7.2.x line is the last under plain 3-Clause BSD. From 7.4.0 onward Redis dual-licenses under RSALv2/SSPLv1, which is fine for a research project but matters for any future industrial partnership. Pinning to `7.2` (not the floating `7-alpine` tag) keeps the line BSD across image rebuilds.
 
@@ -239,7 +235,7 @@ MongoDB runs with TLS even on loopback. Redis doesn't.
 
 The argument for TLS on a loopback port is defense in depth: a local-process compromise can't sniff plaintext. The argument against is that the same local process can usually read `/proc/<pid>/environ` or similar, which means TLS doesn't actually raise the bar much against the only attacker who could reach `127.0.0.1` in the first place. The cost is real: cert lifecycle, a dedicated `redis-cert` group, client-side TLS args in every consumer.
 
-Mongo has TLS because Atlas mandates it in production and we wanted local dev to mirror that. Azure Cache for Redis offers TLS too, and we'll wire it on in the Terraform module ticket. Local dev runs `requirepass` over loopback only, which is the standard Redis pattern for a single-machine setup.
+Mongo has TLS because Atlas mandates it in production and local dev should mirror that. Azure Cache for Redis offers TLS too, and the Terraform module ticket wires it on. Local dev runs `requirepass` over loopback only, which is the standard Redis pattern for a single-machine setup.
 
 ### Permissions model
 
@@ -283,7 +279,7 @@ Healthy output: `PONG`, `OK`, `roundtrip`, `1`.
 WARNING Memory overcommit must be enabled! ... add 'vm.overcommit_memory = 1' to /etc/sysctl.conf
 ```
 
-This affects Redis's background save fork behavior under memory pressure. Not blocking on a 16 GB laptop with our workload, but for prod-parity it should be set on the eventual deployment host. Should be a deliberate host change, not a side-effect of installing Redis.
+This affects Redis's background save fork behavior under memory pressure. Not blocking on a 16 GB laptop with this workload, but for prod-parity it should be set on the eventual deployment host. Should be a deliberate host change, not a side-effect of installing Redis.
 
 ### Troubleshooting
 
@@ -293,7 +289,7 @@ The `user: "999:999"` directive is missing from the compose service, or GID 971 
 
 #### redis-cli returns NOAUTH or WRONGPASS
 
-`$REDIS_PASSWORD` in your shell doesn't match what's in `redis.conf`. Either the shell variable expired (new terminal session — re-source from Bitwarden) or someone edited `redis.conf` without updating Bitwarden + `.env`.
+`$REDIS_PASSWORD` in the shell doesn't match what's in `redis.conf`. Either the shell variable expired (new terminal session — re-source from Bitwarden) or someone edited `redis.conf` without updating Bitwarden + `.env`.
 
 #### Healthcheck unhealthy but logs look fine
 
@@ -305,9 +301,9 @@ Metrics scraping for the dev stack. Server runs in Docker on `127.0.0.1:9090`, s
 
 ### Why Docker
 
-Prometheus's Ubuntu apt package is the v2 line, currently 2.55, EOL since December 2024. The maintained line is v3.x and Ubuntu doesn't ship it. Docker gets us the upstream binary directly.
+Prometheus's Ubuntu apt package is the v2 line, currently 2.55, EOL since December 2024. The maintained line is v3.x and Ubuntu doesn't ship it. Docker gives the upstream binary directly.
 
-The exporter ecosystem ships only as Docker images. Mixing host-installed Prometheus with containerised exporters means juggling two networking models, which is the kind of complexity worth avoiding when nothing forces it on us.
+The exporter ecosystem ships only as Docker images. Mixing host-installed Prometheus with containerised exporters means juggling two networking models, which is the kind of complexity worth avoiding when nothing forces it.
 
 Version pinning matters for reproducibility. The pin is `prom/prometheus:v3.12.0`, current stable at install time. Re-pin to the next LTS when one is declared. The 3.5 LTS expires July 31 2026 and the next isn't named yet.
 
@@ -329,7 +325,7 @@ Same argument as Redis no-TLS. Prometheus has no native auth (the options are `w
 
 The asymmetry with Mongo (which runs TLS + auth even on loopback) is deliberate. Mongo holds project data. Prometheus holds operational metrics.
 
-Azure-side Prometheus will run behind real auth when that ticket lands.
+Azure-side Prometheus runs behind auth when that ticket lands.
 
 ### Permissions model
 
@@ -364,22 +360,32 @@ Principle of least privilege. The exporter only needs metrics access. If the mon
 Password lives only in `backend/.env` (gitignored, mode 600) and the password manager. Hash-verified on the way in to confirm no corruption between the openssl generation and the .env append.
 
 ### Operating the service
-Start everything
+
+```bash
+# Start everything
 docker compose up -d
-Just the observability stack
+
+# Just the observability stack
 docker compose up -d prometheus node-exporter mongodb-exporter redis-exporter
-Stop
+
+# Stop
 docker compose stop prometheus node-exporter mongodb-exporter redis-exporter
-Status + recent logs
+
+# Status + recent logs
 docker compose ps
 docker compose logs --tail=50 prometheus
+```
 
 ### Smoke test
-Server health
+
+```bash
+# Server health
 curl -s http://127.0.0.1:9090/-/healthy
-Targets, all four should report state="up"
-curl -s http://127.0.0.1:9090/api/v1/targets
-| python3 -c "import sys, json; t = json.load(sys.stdin)['data']['activeTargets']; [print(f"{x['labels']['job']:15} {x['health']}") for x in t]"
+
+# Targets, all four should report state="up"
+curl -s http://127.0.0.1:9090/api/v1/targets \
+  | python3 -c "import sys, json; [print(f\"{x['labels']['job']:15} {x['health']}\") for x in json.load(sys.stdin)['data']['activeTargets']]"
+```
 
 Expected: `Prometheus Server is Healthy.` from the first call, and `up` against every job from the second.
 
@@ -409,3 +415,141 @@ If both look correct, recreate the container: `docker compose up -d --force-recr
 #### Port 9090 already in use
 
 Another local process has the port. `sudo lsof -iTCP:9090` identifies it. Either kill the conflict or remap to a different loopback port in compose (`127.0.0.1:9091:9090` works).
+
+## Local Grafana
+
+Visualisation layer for the local Prometheus instance. Server runs in Docker on `127.0.0.1:3000`, reads its datasource config from a provisioning YAML at boot, stores its own state in a named volume.
+
+### Why Docker
+
+Same reasoning as Prometheus. Grafana's Ubuntu apt package lags upstream by several point releases. The Docker image tracks current stable directly. Pinning to `grafana/grafana:12.4.4` gives the same fixed version everywhere and re-pinning later is one line in `docker-compose.yml`.
+
+Grafana retired its formal LTS line around v9. The current model is rolling stable releases with roughly nine months of patch backports. Re-pin when the next minor lands or when a security fix forces it, whichever comes first.
+
+### What runs
+
+One container: `theft-grafana`. Port 3000 published on the loopback only. Its sqlite database, plugin install directory, dashboard versions, and user state all live in the `grafana_data` named volume, so `docker compose down` doesn't wipe the install.
+
+On first boot Grafana auto-installs four Grafana Labs drilldown plugins (pyroscope, traces, metrics, loki). They land in the named volume and persist across restarts. First-boot takes around two minutes for the plugin downloads, subsequent boots are under ten seconds.
+
+### TLS off, admin password on
+
+Same loopback reasoning as Prometheus. The browser talks to Grafana over plain HTTP on `127.0.0.1`, and any local process that reaches that port can also read the env files compose loaded. A self-signed cert on loopback buys nothing.
+
+The admin password is a different question. Grafana ships with `admin/admin` as the default, which is worse than no auth: tools fingerprint that combo on sight. A 32-byte random admin password is set on first boot via the `GF_SECURITY_ADMIN_PASSWORD` env var, generated with `openssl rand -base64 32`, stored only in `backend/.env` and the password manager, hash-verified end-to-end.
+
+### Permissions model
+
+Same shape as Mongo, Redis, and Prometheus.
+
+- Host group `grafana-conf`, GID 1972.
+- `infrastructure/grafana/provisioning/datasources/prometheus.yml` lives at mode 640, owner root, group grafana-conf.
+- Container starts as user `grafana` (UID 472), picks up `grafana-conf` (GID 1972) as a supplementary group via compose `group_add`.
+
+The provisioning directory is bind-mounted read-only into the container at `/etc/grafana/provisioning`. Even if Grafana is compromised, the YAML on the host can't be written from inside the container. Live config is gitignored. Template at `infrastructure/grafana/provisioning/datasources/prometheus.yml.example` is world-readable and committed.
+
+### Provisioning
+
+Datasources, dashboards, and alerts can all be declared as YAML files dropped into the provisioning directory. Grafana reads them on every boot and applies them. Anything declared this way is `readOnly` in the UI: the only way to change it is to edit the file on disk.
+
+Today's setup provisions one datasource. The Prometheus instance, marked default, pointing at the docker-internal hostname `theft-prometheus:9090`. Dashboards and alerts land in later tickets via the same mechanism.
+
+The `editable: false` flag in the YAML maps to `readOnly: true` on the datasource API. This is intentional. All datasource changes go through git, never through the UI.
+
+### How the admin password reaches the container
+
+The compose service references `${GF_SECURITY_ADMIN_PASSWORD}` in its `environment:` block. Compose substitutes the value at startup from `backend/.env`, found via the `.env` symlink at the repo root. The variable lands in the container's environment only because the service explicitly asks for it, not because the whole env file was sourced.
+
+Other variables in `backend/.env` are not visible to the Grafana container.
+
+### Operating the service
+
+```bash
+# Start everything
+docker compose up -d
+
+# Just Grafana
+docker compose up -d grafana
+
+# Stop
+docker compose stop grafana
+
+# Status + recent logs
+docker compose ps grafana
+docker compose logs --tail=50 grafana
+```
+
+### Smoke test
+
+```bash
+# Server health
+curl -sf http://127.0.0.1:3000/api/health | python3 -m json.tool
+```
+
+```bash
+# Datasource list (uses admin password from .env, value never on screen)
+GF_PASS=$(grep '^GF_SECURITY_ADMIN_PASSWORD=' backend/.env | cut -d= -f2-)
+curl -sf -u "admin:${GF_PASS}" http://127.0.0.1:3000/api/datasources | python3 -m json.tool
+unset GF_PASS
+```
+
+```bash
+# Datasource end-to-end health (Grafana actually reaches Prometheus)
+GF_PASS=$(grep '^GF_SECURITY_ADMIN_PASSWORD=' backend/.env | cut -d= -f2-)
+curl -sf -u "admin:${GF_PASS}" http://127.0.0.1:3000/api/datasources/uid/prometheus-local/health | python3 -m json.tool
+unset GF_PASS
+```
+
+Expected: `database: ok` from the first call, one entry with `uid: prometheus-local` and `readOnly: true` from the second, `status: OK` from the third.
+
+### Browser check
+
+Open `http://127.0.0.1:3000`. Login as `admin` with the password from the password manager. No "change your password" prompt should appear, because the env-var path skips the first-login rotation flow. Left sidebar > Explore > query box (Code mode) > `up` > Run query. Four series should return, each with value `1`.
+
+### Troubleshooting
+
+#### Login fails with "invalid username or password"
+
+The password in `backend/.env` and the password manager have drifted. Recover by hashing both and comparing.
+
+```bash
+# Hash of the value currently in .env
+grep '^GF_SECURITY_ADMIN_PASSWORD=' backend/.env | cut -d= -f2- | tr -d '\n' | sha256sum
+```
+
+Compare against the hash stored in the password manager entry's notes field. If they don't match, the password manager is authoritative: copy the correct value back into `.env` and recreate the container with `docker compose up -d --force-recreate grafana`.
+
+#### Datasource health check returns "no such host"
+
+Grafana can't resolve `theft-prometheus` on the docker network. Two checks:
+
+- Both containers on the same network: `docker network inspect theft-detection-platform_default` should list both `theft-grafana` and `theft-prometheus` in the Containers section.
+- Prometheus actually running: `docker compose ps prometheus` should show `(healthy)`.
+
+If Prometheus is down, start it first; Grafana's healthcheck will recover on its own within a minute.
+
+#### Healthcheck stuck in "starting" after two minutes
+
+First boot pulls four drilldown plugins which can take longer than the `start_period`. Watch the logs:
+
+```bash
+docker compose logs --tail=20 grafana | grep -i plugin
+```
+
+If plugins are still installing, wait it out. If you see no plugin activity and the boot looks idle, check the volume: `docker volume inspect theft-detection-platform_grafana_data` should show a mountpoint with files in it. An empty volume after first boot means Grafana failed to write its sqlite db, usually a permissions issue on the volume.
+
+#### Provisioned datasource not appearing in the UI
+
+Grafana logs the provisioning pass on startup. Look for the file by name:
+
+```bash
+docker compose logs grafana | grep -i provision
+```
+
+If the file is mentioned but ignored, the YAML structure is wrong. Common cause: `apiVersion` missing or set to something other than `1`. Compare against `prometheus.yml.example` byte-for-byte.
+
+If the file isn't mentioned at all, the bind-mount didn't land. Check `docker inspect theft-grafana --format '{{range .Mounts}}{{println .Source " -> " .Destination}}{{end}}'` and confirm the provisioning path is mapped to `/etc/grafana/provisioning`.
+
+#### Port 3000 already in use
+
+A frontend dev server (Next.js, Vite, CRA) defaults to 3000. `sudo lsof -iTCP:3000` identifies the conflict. Either stop the other process or remap Grafana to a different loopback port in compose (`127.0.0.1:3001:3000` works, and update the password manager entry's URL field to match).

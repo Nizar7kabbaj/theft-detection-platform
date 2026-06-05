@@ -57,7 +57,7 @@ From an environment directory after a successful plan:
 
 ## Suppressed checks
 
-- key vault purge protection and soft delete recoverability conflict with the zero-cost-on-destroy rule
+- key vault purge protection and soft delete recoverability would keep the vault billing for 7 to 90 days after destroy, blocking a clean teardown
 - private endpoint on the key vault is future work, out of scope here
 - subnet-to-NSG association is a checkov false positive across module boundaries; the real association is in `modules/networking/main.tf`
 

@@ -153,7 +153,38 @@ services:
           condition: service_healthy
       restart: unless-stopped
 
+  grafana:
+      image: grafana/grafana:12.4.4
+      container_name: theft-grafana
+      user: "472:472"
+      group_add:
+        - "1972"
+      environment:
+        GF_SECURITY_ADMIN_USER: "admin"
+        GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD}"
+        GF_USERS_ALLOW_SIGN_UP: "false"
+        GF_AUTH_ANONYMOUS_ENABLED: "false"
+        GF_ANALYTICS_REPORTING_ENABLED: "false"
+        GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+        GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      ports:
+        - "127.0.0.1:3000:3000"
+      volumes:
+        - grafana_data:/var/lib/grafana
+        - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      healthcheck:
+        test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/health || exit 1"]
+        interval: 30s
+        timeout: 5s
+        retries: 5
+        start_period: 30s
+      depends_on:
+        prometheus:
+          condition: service_healthy
+      restart: unless-stopped
+
 volumes:
   mongo_data:
   redis_data:
   prometheus_data:
+  grafana_data:

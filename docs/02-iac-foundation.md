@@ -1,6 +1,6 @@
 # Terraform Foundation
 
-This doc covers the infrastructure-as-code layout for the theft-detection-platform: where the Terraform code lives, what each module owns, how state persists across `terraform destroy`, how authentication works, and the design rule that keeps the whole stack at zero cost when idle.
+This doc covers the infrastructure-as-code layout for the theft-detection-platform: where the Terraform code lives, what each module owns, how state persists across `terraform destroy`, how authentication works, and how teardown stays clean.
 
 ## Repo layout
 
@@ -40,7 +40,7 @@ Module defaults set `francecentral` as the location, but every environment root 
 A few module-side rules worth knowing:
 
 - The Key Vault name is computed: `kv-theft-<env>-<random_string>`. The random suffix solves the global-uniqueness requirement without forcing a manual rename per environment.
-- `purge_protection_enabled = false` on the vault. This is non-negotiable. Purge protection means the vault sticks around for 7 to 90 days after destroy, which violates the zero-cost-on-destroy rule (see below). The four checkov suppressions around purge protection trace back to this.
+- `purge_protection_enabled = false` on the vault. Purge protection means the vault sticks around for 7 to 90 days after destroy, still billing. Off lets it delete fully. The four checkov suppressions around purge protection trace back to this.
 - NSG-to-subnet associations live in `modules/networking/main.tf` alongside the subnet definitions. The `checkov` CKV2_AZURE_31 finding is a false positive — checkov can't trace the association across module boundaries.
 
 ## Environments
@@ -69,7 +69,7 @@ The backend is an Azure Storage Account that lives outside the project resource 
 - Container: `tfstate`
 - One blob per environment: `dev.tfstate`, `prod.tfstate`
 
-The state backend survives `terraform destroy`. The project resource groups (`rg-theft-dev-*`, future `rg-theft-prod-*`) destroy to zero. The state storage account does not. This is intentional — losing state means losing the ability to reconcile the next apply with what's actually on Azure. Manual teardown only, never through `terraform destroy`.
+The state backend survives `terraform destroy`. The project resource groups (`rg-theft-dev-*`, future `rg-theft-prod-*`) tear down on destroy. The state storage account does not. Losing state means losing the ability to reconcile the next apply with what's actually on Azure. Manual teardown only, never through `terraform destroy`.
 
 State has no latency requirement, so it doesn't need to share a region with the project resources.
 
@@ -131,19 +131,17 @@ Three Sentinel files mirror the same rules as portable specs. Sentinel is HashiC
 
 Full rationale and the OPA vs Sentinel split lives in `policies/README.md`.
 
-## Zero-cost-on-destroy
+## Teardown
 
-This is the first-class design constraint that shapes every other decision in the foundation. When `terraform destroy` runs against an environment, the Azure for Students subscription must charge zero dollars per day until the next apply.
+`terraform destroy` against a non-prod env removes every resource the env created. Several config choices keep that destroy clean:
 
-Practical consequences:
-
-- Key Vault `purge_protection_enabled = false`. Purge protection forces a 7-to-90-day retention window during which the vault still incurs charges, which violates the rule.
+- Key Vault `purge_protection_enabled = false`. Purge protection forces a 7-to-90-day retention window during which the vault still bills before it actually deletes.
 - `soft_delete_retention_days = 7` in `dev`. Minimum allowed by the provider.
 - No `azurerm_management_lock` anywhere. Locks would block `terraform destroy`.
-- The state storage account is the only resource the project deliberately leaves running. It charges fractions of a cent per month for the state blobs.
-- Empty resource groups are free. The project resource group can stay around after destroy without cost.
+- The state storage account is the only resource deliberately left running. It bills fractions of a cent per month for the state blobs.
+- Empty resource groups bill nothing. The project resource group can stay around after destroy.
 
-The dev environment proves the rule end-to-end: 12 resources apply in `spaincentral`, then destroy to zero, then `az group show` returns `ResourceGroupNotFound`. The round-trip charges nothing.
+The dev environment exercises the round-trip end-to-end: 12 resources apply in `spaincentral`, then destroy, then `az group show` returns `ResourceGroupNotFound`.
 
 ## Other docs in this folder
 

@@ -101,7 +101,7 @@ docker run --rm hello-world
 
 ### NVIDIA runtime as the default
 
-The AI container needs GPU passthrough. The NVIDIA container toolkit adds a `nvidia` runtime to Docker, and we set it as the default so the AI service runs without a per-call `--runtime nvidia` flag.
+The AI container needs GPU passthrough. The NVIDIA container toolkit adds a `nvidia` runtime to Docker, set as the default so the AI service runs without a per-call `--runtime nvidia` flag.
 
 ```bash
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
