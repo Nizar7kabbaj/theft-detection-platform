@@ -67,3 +67,4 @@ infrastructure/terraform/environments/*/*.auto.tfvars
 infrastructure/redis/redis.conf
 infrastructure/prometheus/prometheus.yml
 infrastructure/grafana/provisioning/datasources/prometheus.yml
+infrastructure/grafana/provisioning/datasources/loki.yml

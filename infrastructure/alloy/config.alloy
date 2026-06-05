@@ -1,0 +1,44 @@
+// discover all running docker containers via the docker socket
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+// rewrite the discovered labels into clean loki labels
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+// read logs from docker
+loki.source.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.containers.output
+  forward_to       = [loki.write.local.receiver]
+  refresh_interval = "5s"
+  labels           = {
+    job = "docker",
+  }
+}
+
+// ship logs to loki
+loki.write "local" {
+  endpoint {
+    url = "http://theft-loki:3100/loki/api/v1/push"
+  }
+}
