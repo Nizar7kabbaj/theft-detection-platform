@@ -553,3 +553,149 @@ If the file isn't mentioned at all, the bind-mount didn't land. Check `docker in
 #### Port 3000 already in use
 
 A frontend dev server (Next.js, Vite, CRA) defaults to 3000. `sudo lsof -iTCP:3000` identifies the conflict. Either stop the other process or remap Grafana to a different loopback port in compose (`127.0.0.1:3001:3000` works, and update the password manager entry's URL field to match).
+
+## Local Loki
+
+Log aggregation backend paired with Alloy as the shipper. Loki runs on `127.0.0.1:3100`, stores chunks and indices in a named volume, retains seven days of logs. Alloy tails Docker container logs via the daemon socket and forwards them.
+
+### Why Loki
+
+Prometheus solves metrics. Logs are the other half of the same problem. `docker logs <name>` only shows one container at a time, the buffer rotates, and nothing persists across a recreate. A log aggregator removes those constraints: every container ships to one place, retention is enforced server-side, queries cross sources.
+
+Loki was picked because it speaks the same operational model as Prometheus (label-based storage, time-windowed queries, Grafana as the front end) and runs in a single binary. The alternatives — Elasticsearch, Splunk, Datadog — all add either heavy infrastructure (Elasticsearch's JVM and cluster overhead) or external SaaS dependencies. Loki on filesystem storage fits the laptop footprint.
+
+### Why Alloy and not Promtail
+
+Promtail was the original Loki agent. Grafana Labs deprecated it in February 2025 and end-of-lifed it on March 2, 2026. No more security patches, no more bug fixes. The migration target is Alloy, Grafana Labs' OpenTelemetry-based collector that absorbed Promtail's feature set.
+
+Picking Alloy here means the agent stays maintained, the config syntax is the one Grafana Labs will keep developing, and adding traces or profiles later doesn't require swapping the agent — Alloy already speaks OTLP.
+
+### What runs
+
+Two containers. `theft-loki` on port 3100, loopback only, with `loki_data` named volume mounted at `/loki` for chunks, index, compactor working directory. `theft-alloy` with its config at `/etc/alloy/config.alloy` and three bind mounts: the Docker socket read-only, `/var/lib/docker/containers` read-only for log file access, and an `alloy_data` named volume for its own write-ahead log buffer.
+
+Alloy exposes a debug UI on `127.0.0.1:12345` showing component health and pipeline state. Useful when a forwarding rule misbehaves.
+
+### Permissions model
+
+Loki follows the named-volume pattern. The official image runs as UID 10001 and Docker chowns the volume mountpoint to match on first start. No host-side chown needed.
+
+Alloy is the exception: it runs as root inside the container. Reading the Docker socket and tailing `/var/lib/docker/containers/` both need root because those paths are owned by root on the host. The mitigations: the Alloy port is loopback only, the socket is mounted read-only, and the containers directory is mounted read-only. Alloy can read everything Docker exposes but cannot write to the socket or kill containers.
+
+### Loki configuration
+
+`infrastructure/loki/loki-config.yml` is bind-mounted read-only into the container at `/etc/loki/loki-config.yml`. The config is committed, contains no secrets, and uses the TSDB index store with schema v13 — the current recommendation for fresh deployments.
+
+Retention is `168h` (seven days). The compactor enforces it: without `retention_enabled: true` and `delete_request_store: filesystem`, retention is declared but never applied and chunks accumulate forever.
+
+`analytics.reporting_enabled: false` matches the same posture used for Grafana. No usage data leaves the host.
+
+### Alloy configuration
+
+`infrastructure/alloy/config.alloy` uses River syntax — Alloy's component-based config language. Four components wire into a pipeline:
+
+1. `discovery.docker "containers"` polls the Docker socket every 5s for the running container list.
+2. `discovery.relabel "containers"` cleans the raw Docker metadata into Loki labels: container name (slash stripped), compose service name, log stream (stdout vs stderr).
+3. `loki.source.docker "containers"` reads log lines from the discovered targets.
+4. `loki.write "local"` ships lines to `http://theft-loki:3100/loki/api/v1/push`.
+
+New containers get picked up automatically on the next discovery refresh. Removed containers stop being scraped without explicit cleanup.
+
+### Loki datasource in Grafana
+
+A second provisioning file at `infrastructure/grafana/provisioning/datasources/loki.yml` registers Loki as a non-default datasource with `uid: loki-local`. Same permissions model as the Prometheus one: mode 640, owner root, group grafana-conf, gitignored, template committed as `loki.yml.example`. Grafana reads provisioning files only at startup, so a `docker compose restart grafana` is required after the file lands.
+
+### Operating the service
+
+```bash
+# Start everything
+docker compose up -d
+
+# Just Loki and Alloy
+docker compose up -d loki alloy
+
+# Stop
+docker compose stop alloy loki
+
+# Status + recent logs
+docker compose ps loki alloy
+docker compose logs --tail=50 loki
+docker compose logs --tail=50 alloy
+```
+
+### Smoke test
+
+```bash
+# Loki ready
+curl -sf http://127.0.0.1:3100/ready
+```
+
+```bash
+# Labels Loki has indexed (proves Alloy is shipping)
+curl -sf http://127.0.0.1:3100/loki/api/v1/labels | python3 -m json.tool
+```
+
+```bash
+# Real log lines from mongo over the last five minutes
+curl -sf -G 'http://127.0.0.1:3100/loki/api/v1/query_range' \
+  --data-urlencode 'query={container="theft-mongo"}' \
+  --data-urlencode 'limit=5' \
+  --data-urlencode "start=$(date -d '5 minutes ago' +%s)000000000" \
+  --data-urlencode "end=$(date +%s)000000000" \
+  | python3 -m json.tool | head -40
+```
+
+Expected: `ready` from the first call, a `data` array containing at minimum `container`, `service`, `stream`, `job` from the second, a `result` array with mongo log lines from the third.
+
+### Browser check
+
+Open `http://127.0.0.1:3000`. Login as admin. Left sidebar > Connections > Data sources. Two entries should appear: Prometheus (default) and Loki. Left sidebar > Explore. Switch the datasource selector from Prometheus to Loki. Query `{container="theft-mongo"}` over the last 15 minutes. Log lines render with a histogram of log volume at the top. Try `{job="docker"}` to pull from every container at once.
+
+### Troubleshooting
+
+#### Loki datasource missing from the UI after the file is in place
+
+Grafana provisioning runs once at startup. If `loki.yml` lands after Grafana is already up, the file is ignored until the next boot. Restart Grafana:
+
+```bash
+docker compose restart grafana
+docker logs theft-grafana 2>&1 | grep -i 'inserting datasource'
+```
+
+The log line `inserting datasource from configuration name=Loki uid=loki-local` confirms the file was picked up.
+
+#### Alloy starts but no labels appear in Loki
+
+Alloy can be running and still not shipping if discovery fails. Check the Alloy debug UI at `http://127.0.0.1:12345` — the `discovery.docker` component should show targets equal to the running container count. Zero targets means the Docker socket bind mount is missing or wrong. Verify:
+
+```bash
+docker inspect theft-alloy --format '{{range .Mounts}}{{println .Source " -> " .Destination}}{{end}}'
+```
+
+The socket should map `/var/run/docker.sock -> /var/run/docker.sock` and the containers directory should map `/var/lib/docker/containers -> /var/lib/docker/containers`. Both must be read-only.
+
+#### LogQL query returns nothing even though Alloy is shipping
+
+Either the time range is wrong or the label value is. Loki rejects queries against samples older than the retention window. Pull the actual label values Loki sees:
+
+```bash
+curl -sf 'http://127.0.0.1:3100/loki/api/v1/label/container/values' | python3 -m json.tool
+```
+
+Compare against the container name in the query. The leading slash from raw Docker metadata is stripped by the relabel rule, so the value is `theft-mongo`, not `/theft-mongo`.
+
+#### Loki container restart loop with "permission denied" on /loki
+
+The named volume lost its UID 10001 ownership, usually after a manual chown attempt. Easiest fix: stop Loki, remove the volume, recreate.
+
+```bash
+docker compose stop loki
+docker volume rm theft-detection-platform_loki_data
+docker compose up -d loki
+```
+
+Historical logs are lost. For a real outage this is the wrong fix; for a dev environment it's the cheap one.
+
+#### Port 3100 already in use
+
+Another Loki, a Tempo distributor sharing the port, or rarely a misconfigured frontend. `sudo lsof -iTCP:3100` identifies the conflict. Remap in compose if Loki must coexist with something on the same port.
