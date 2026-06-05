@@ -222,7 +222,7 @@ Slow on large repos, but the only way to catch silent corruption before a real r
 
 ### Drill — 2026-05-31
 
-First end-to-end exercise of `backup.sh` and the restore procedure on `Legion-5`. Scope: USB target only, simulated by pointing `USB_REPO` at a local scratch directory (`~/restic-test-repo`). Azure target deferred — the `stbackuptheft` storage account and container are not yet provisioned.
+First end-to-end exercise of `backup.sh` and the restore procedure on the dev laptop. Scope: USB target only, simulated by pointing `USB_REPO` at a local scratch directory (`~/restic-test-repo`). Azure target deferred — the `stbackuptheft` storage account and container are not yet provisioned.
 
 **Measurements**
 
