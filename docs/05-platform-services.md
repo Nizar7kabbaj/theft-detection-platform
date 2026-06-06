@@ -699,3 +699,139 @@ Historical logs are lost. For a real outage this is the wrong fix; for a dev env
 #### Port 3100 already in use
 
 Another Loki, a Tempo distributor sharing the port, or rarely a misconfigured frontend. `sudo lsof -iTCP:3100` identifies the conflict. Remap in compose if Loki must coexist with something on the same port.
+
+## Local OpenTelemetry
+
+Backend instrumentation that emits three signals: traces, metrics, structured JSON logs. Traces ride OTLP-HTTP to Alloy and on to Tempo. Metrics get scraped by Prometheus from a dedicated port on the backend. Logs ride the same Alloy Docker-socket pipeline already shipping every other container's output to Loki. All three signals carry the same `trace_id`, which is the whole reason for adding them at the same time.
+
+### Why three signals
+
+Each signal answers a different question. Metrics surface that something is wrong (latency climbed, error rate spiked) but not which request was affected. Logs record what happened during one request once the relevant lines are grouped. Traces connect the request to the work it caused, every database query, every internal call, with timing on each step.
+
+The OTel SDK does the wiring: span context propagates through the FastAPI request lifecycle, pymongo instrumentation creates child spans for every Mongo operation, and the logging instrumentation injects `trace_id` and `span_id` into every log record. The JSON line on stdout already carries the trace identity by the time Alloy reads it.
+
+### The three lanes
+
+```
+backend ──[OTLP HTTP traces]────────────► alloy:4318 ─► tempo:3200
+backend ──[stdout JSON via socket tail]─► alloy ──────► loki:3100
+backend ◄─[Prometheus pulls /metrics:9464]─────────── prometheus:9090
+```
+
+Two lanes go through Alloy. Alloy is already there for logs and already speaks OTLP, so adding the `otelcol.receiver.otlp` + `processor.batch` + `exporter.otlphttp` blocks costs one container less than running a dedicated collector.
+
+The metrics lane is the exception: Prometheus pulls from `backend:9464` directly. Direct scrape matches the existing pattern for `node-exporter`, `mongodb-exporter`, `redis-exporter`, and keeps the metrics pipeline boring.
+
+### Why correlation works
+
+Three datasource settings turn three independent streams into a click-through graph.
+
+Loki's `derivedFields` runs a regex against every log line returned by a query, pulls the `trace_id` value out of the JSON, and renders it as a clickable button pointing at the Tempo datasource. Click the field, jump to the trace.
+
+Tempo's `tracesToLogsV2` does the reverse hop: in a trace view, a "Logs for this span" button issues a Loki query of the form `{service="theft-backend"} |= "$${__span.traceId}"` and returns every log line that mentions the trace.
+
+Prometheus's `exemplarTraceIdDestinations` handles the metrics-to-trace hop. The OTel SDK attaches an exemplar (a sample observation paired with the `trace_id` that produced it) to histogram metrics, and Grafana renders those as clickable dots over the graph that open the trace in Tempo.
+
+The three settings live in the provisioning YAML for each datasource. None of them require a code change to add or remove.
+
+### Surviving the split
+
+`backend/app/observability.py` exposes a single function:
+
+```python
+setup_observability(app, service_name="theft-backend")
+```
+
+It sets the OTel resource attributes (`service.name`, `service.version`, `deployment.environment`), wires `FastAPIInstrumentor`, `PymongoInstrumentor`, the Prometheus exporter, and the JSON logging handler. The `service_name` parameter is the whole reason this module exists in its current shape: the upcoming microservices split breaks the backend into three services (HTTP, gRPC AI inference, alert worker). Each one imports the same module with its own name, and the module graduates into a shared internal package at split time. Tempo's `metrics_generator` is already configured with `service-graphs` and `span-metrics`, so the Grafana service map will auto-render the call graph after the split without further config.
+
+### What runs
+
+`theft-tempo` on `127.0.0.1:3200` (HTTP query), `4317` (OTLP gRPC), `4318` (OTLP HTTP), all loopback only. Named volume `tempo_data` at `/var/tempo` for blocks + WAL. Bind-mounted `infrastructure/tempo/tempo.yml`, read-only, owner root, group tempo-conf (GID 1973), mode 640. Compactor retention 168h matching Loki.
+
+The backend service grows an environment block:
+
+```
+OTEL_SERVICE_NAME=theft-backend
+OTEL_EXPORTER_OTLP_ENDPOINT=http://theft-alloy:4318
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+OTEL_TRACES_EXPORTER=otlp
+OTEL_METRICS_EXPORTER=prometheus
+OTEL_LOGS_EXPORTER=none
+OTEL_PYTHON_LOG_CORRELATION=true
+PROMETHEUS_EXPORTER_PORT=9464
+```
+
+`OTEL_LOGS_EXPORTER=none` is set deliberately. Logs ship as JSON via stdout, not via OTLP. Setting it to anything else creates a second log path competing with the Alloy socket-tail one and breaks the correlation story.
+
+### Operating the service
+
+```bash
+# Start everything
+docker compose up -d
+
+# Just Tempo
+docker compose up -d tempo
+
+# Recreate backend after .env edits
+docker compose up -d --force-recreate backend
+
+# Status + recent logs
+docker compose ps tempo backend
+docker compose logs --tail=50 tempo
+```
+
+### Smoke test
+
+```bash
+# Tempo ready
+curl -sf http://127.0.0.1:3200/ready
+```
+
+```bash
+# Generate a trace by hitting the backend
+curl -sf http://127.0.0.1:8000/api/stats/ > /dev/null
+```
+
+```bash
+# Search for traces from theft-backend in the last 15 minutes
+curl -sf -G 'http://127.0.0.1:3200/api/search' \
+  --data-urlencode 'tags=service.name=theft-backend' \
+  --data-urlencode 'limit=5' \
+  --data-urlencode "start=$(date -d '15 minutes ago' +%s)" \
+  --data-urlencode "end=$(date +%s)" \
+  | python3 -m json.tool | head -40
+```
+
+Expected: `ready` from the first call, a `traces` array with at least one entry from the third, each carrying `rootServiceName: theft-backend` and a non-empty `spanSet` containing the FastAPI server span plus its pymongo children.
+
+### Browser check
+
+Open `http://127.0.0.1:3000` and go to Explore. With Loki selected, query `{service="theft-backend"}` over the last 15 minutes. Each JSON log line carries a `trace_id` field rendered as a clickable button. Click it. Tempo opens the trace with the FastAPI SERVER span at the root and pymongo CLIENT spans below. Click "Logs for this span" inside the Tempo panel: Grafana switches back to Loki with the same trace id pre-filled in the query bar.
+
+### Troubleshooting
+
+#### Tempo target shows up=0 in Prometheus
+
+Tempo's own metrics scrape lives on `tempo:3200/metrics`. If the target is down, Tempo itself is not ready. `docker compose logs tempo` usually shows a config parse error or a permissions issue on `/var/tempo`. The named volume should be owned by 10001:10001 inside the container, which Docker handles on first create, so a manual chown attempt is the usual cause of breakage. Stop Tempo, remove `tempo_data`, restart:
+
+```bash
+docker compose stop tempo
+docker volume rm theft-detection-platform_tempo_data
+docker compose up -d tempo
+```
+
+Historical traces are lost. For a dev environment this is the cheap fix.
+
+#### Traces visible in Tempo but log lines carry no trace_id
+
+The logging instrumentation didn't load. Two common causes: `OTEL_PYTHON_LOG_CORRELATION` is unset (it defaults to false in some SDK versions), or the stdlib logger was reconfigured after `setup_observability` ran. Check the backend startup logs:
+
+```bash
+docker compose logs backend | grep -i 'logginginstrumentor'
+```
+
+If the line is missing, the env var is the first thing to verify.
+
+#### No exemplars on Prometheus graphs
+
+Exemplars require both the SDK side (OTel histogram exporters attach them by default) and the Prometheus side (`--enable-feature=exemplar-storage`, which the Prometheus container already runs with). If the dots don't appear, the metric in question is likely a counter or a gauge. Exemplars only attach to histograms in the current spec. Switch the query to a histogram metric like `http_server_duration_seconds_bucket`.

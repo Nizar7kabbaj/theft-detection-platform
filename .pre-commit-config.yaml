@@ -4,9 +4,9 @@ repos:
     hooks:
       - id: check-yaml
       - id: trailing-whitespace
-        exclude: ^infrastructure/mongodb/mongod\.conf$
+        exclude: ^infrastructure/(mongodb/mongod\.conf|tempo/tempo\.yml)$
       - id: end-of-file-fixer
-        exclude: ^infrastructure/mongodb/mongod\.conf$
+        exclude: ^infrastructure/(mongodb/mongod\.conf|tempo/tempo\.yml)$
       - id: check-merge-conflict
 
   - repo: https://github.com/gitleaks/gitleaks
@@ -48,3 +48,9 @@ repos:
         stages: [manual]
         pass_filenames: true
         files: \.json$
+
+  - repo: https://github.com/pypa/pip-audit
+    rev: v2.10.0
+    hooks:
+      - id: pip-audit
+        args: ["--requirement", "backend/requirements.txt"]
