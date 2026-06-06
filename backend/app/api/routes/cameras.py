@@ -1,16 +1,17 @@
+import logging
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
 from bson import ObjectId
-from loguru import logger
 from ...core.database import get_database
 from ...models.schemas import CameraCreate, CameraResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
 @router.post("/", response_model=dict)
 async def create_camera(camera: CameraCreate):
-    """Add a new camera to the system."""
     db = get_database()
     camera_doc = {
         "name":       camera.name,
@@ -20,7 +21,7 @@ async def create_camera(camera: CameraCreate):
         "created_at": datetime.utcnow(),
     }
     result = await db.cameras.insert_one(camera_doc)
-    logger.info(f"Camera created: {camera.name}")
+    logger.info("camera created", extra={"camera_name": camera.name})
     return {"id": str(result.inserted_id), "message": "Camera created successfully"}
 
 

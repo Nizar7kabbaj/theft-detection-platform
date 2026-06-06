@@ -1,16 +1,35 @@
 services:
   backend:
-    build: ./backend
-    image: theft-backend:dev
-    container_name: theft-backend
-    ports:
-      - "8000:8000"
-    env_file:
-      - ./backend/.env
-    depends_on:
-      mongo:
-        condition: service_healthy
-    restart: unless-stopped
+      build: ./backend
+      image: theft-backend:dev
+      container_name: theft-backend
+      ports:
+        - "8000:8000"
+      env_file:
+        - ./backend/.env
+      environment:
+        OTEL_SERVICE_NAME: "theft-backend"
+        OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0"
+        OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
+        OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+        OTEL_TRACES_EXPORTER: "otlp"
+        OTEL_METRICS_EXPORTER: "prometheus"
+        OTEL_LOGS_EXPORTER: "none"
+        OTEL_PYTHON_LOG_CORRELATION: "true"
+        OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
+        PROMETHEUS_EXPORTER_PORT: "9464"
+      depends_on:
+        mongo:
+          condition: service_healthy
+        alloy:
+          condition: service_started
+      healthcheck:
+        test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)\""]
+        interval: 30s
+        timeout: 5s
+        retries: 5
+        start_period: 15s
+      restart: unless-stopped
 
   mongo:
     image: mongo:7.0
@@ -181,6 +200,10 @@ services:
       depends_on:
         prometheus:
           condition: service_healthy
+        loki:
+          condition: service_healthy
+        tempo:
+          condition: service_healthy
       restart: unless-stopped
 
   loki:
@@ -222,6 +245,27 @@ services:
           condition: service_healthy
       restart: unless-stopped
 
+  tempo:
+      image: grafana/tempo:2.6.1
+      container_name: theft-tempo
+      user: "10001:10001"
+      group_add:
+        - "1973"
+      command: ["-config.file=/etc/tempo/tempo.yml"]
+      ports:
+        - "127.0.0.1:3200:3200"
+        - "127.0.0.1:4317:4317"
+        - "127.0.0.1:4318:4318"
+      volumes:
+        - tempo_data:/var/tempo
+        - ./infrastructure/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      healthcheck:
+        test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3200/ready || exit 1"]
+        interval: 30s
+        timeout: 5s
+        retries: 5
+        start_period: 30s
+      restart: unless-stopped
 
 volumes:
   mongo_data:
@@ -230,3 +274,4 @@ volumes:
   grafana_data:
   loki_data:
   alloy_data:
+  tempo_data:

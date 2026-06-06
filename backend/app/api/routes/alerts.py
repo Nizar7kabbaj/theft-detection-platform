@@ -1,14 +1,16 @@
+import logging
 import os
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from datetime import datetime
 from bson import ObjectId
-from loguru import logger
 from ...core.database import get_database
 from ...models.schemas import AlertCreate
 from ...services.telegram_service import (
     send_message as send_telegram_message,
     send_photo   as send_telegram_photo,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -41,11 +43,11 @@ def _notify_telegram(alert: AlertCreate) -> None:
     if snapshot and os.path.isfile(snapshot):
         ok = send_telegram_photo(snapshot, caption=text)
         if not ok:
-            logger.warning("Photo send failed, falling back to text message")
+            logger.warning("photo send failed, falling back to text")
             send_telegram_message(text)
     else:
         if snapshot:
-            logger.warning(f"Snapshot path set but file missing: {snapshot} — sending text only")
+            logger.warning("snapshot file missing, sending text only", extra={"snapshot": snapshot})
         send_telegram_message(text)
 
 
@@ -71,7 +73,7 @@ async def create_alert(alert: AlertCreate, background_tasks: BackgroundTasks):
     result = await db.alerts.insert_one(alert_doc)
 
     label = alert.object.get("class_name") if alert.object else alert.alert_type
-    logger.warning(f"Alert saved: {alert.severity} — {label}")
+    logger.warning("alert saved", extra={"severity": alert.severity, "label": label})
 
     background_tasks.add_task(_notify_telegram, alert)
 
@@ -120,7 +122,6 @@ async def get_alerts(
 
 @router.patch("/{alert_id}/acknowledge", response_model=dict)
 async def acknowledge_alert(alert_id: str):
-    """Mark an alert as acknowledged."""
     db = get_database()
     result = await db.alerts.update_one(
         {"_id": ObjectId(alert_id)},

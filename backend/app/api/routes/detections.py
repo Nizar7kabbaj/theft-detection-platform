@@ -1,9 +1,11 @@
+import logging
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
 from bson import ObjectId
-from loguru import logger
 from ...core.database import get_database
 from ...models.schemas import DetectionCreate
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

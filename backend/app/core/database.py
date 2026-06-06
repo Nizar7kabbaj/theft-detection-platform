@@ -1,22 +1,32 @@
+import logging
 from motor.motor_asyncio import AsyncIOMotorClient
-from loguru import logger
 from .config import settings
+
+logger = logging.getLogger(__name__)
 
 client: AsyncIOMotorClient = None
 
 
+def _resolve_mongodb_url() -> str:
+    mode = (settings.MONGODB_MODE or "local").lower()
+    if mode == "atlas":
+        return settings.MONGODB_URL
+    return settings.MONGODB_URL_LOCAL
+
+
 async def connect_to_mongodb():
     global client
-    logger.info("Connecting to MongoDB Atlas...")
-    client = AsyncIOMotorClient(settings.MONGODB_URL)
-    logger.success("Connected to MongoDB Atlas successfully")
+    mode = (settings.MONGODB_MODE or "local").lower()
+    logger.info("connecting to mongodb", extra={"mode": mode})
+    client = AsyncIOMotorClient(_resolve_mongodb_url())
+    logger.info("connected to mongodb", extra={"mode": mode})
 
 
 async def close_mongodb_connection():
     global client
     if client:
         client.close()
-        logger.info("MongoDB connection closed")
+        logger.info("mongodb connection closed")
 
 
 def get_database():

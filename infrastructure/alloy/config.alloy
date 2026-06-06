@@ -1,10 +1,8 @@
-// discover all running docker containers via the docker socket
 discovery.docker "containers" {
   host             = "unix:///var/run/docker.sock"
   refresh_interval = "5s"
 }
 
-// rewrite the discovered labels into clean loki labels
 discovery.relabel "containers" {
   targets = discovery.docker.containers.targets
 
@@ -25,7 +23,6 @@ discovery.relabel "containers" {
   }
 }
 
-// read logs from docker
 loki.source.docker "containers" {
   host             = "unix:///var/run/docker.sock"
   targets          = discovery.relabel.containers.output
@@ -36,9 +33,35 @@ loki.source.docker "containers" {
   }
 }
 
-// ship logs to loki
 loki.write "local" {
   endpoint {
     url = "http://theft-loki:3100/loki/api/v1/push"
+  }
+}
+
+otelcol.receiver.otlp "default" {
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlphttp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlphttp "tempo" {
+  client {
+    endpoint = "http://theft-tempo:4318"
+    tls {
+      insecure = true
+    }
   }
 }
