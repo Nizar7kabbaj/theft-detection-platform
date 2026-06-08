@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, status
 
+from app.core.idempotency import IdempotencyState, idempotency
 from app.dependencies import get_camera_usecase
 from app.schemas.camera import CameraCreate, CameraResponse
 from app.usecases.camera_usecase import CameraUseCase
@@ -11,8 +12,13 @@ router = APIRouter(prefix="/cameras", tags=["cameras"])
 async def create_camera(
     payload: CameraCreate,
     usecase: CameraUseCase = Depends(get_camera_usecase),
-) -> CameraResponse:
-    return await usecase.create(payload)
+    idem: IdempotencyState = Depends(idempotency),
+) -> CameraResponse | dict:
+    if idem.is_hit:
+        return idem.cached_response
+    result = await usecase.create(payload)
+    await idem.store(result.model_dump(mode="json", by_alias=True))
+    return result
 
 
 @router.get("", response_model=list[CameraResponse])

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query, status
 
+from app.core.idempotency import IdempotencyState, idempotency
 from app.dependencies import get_detection_usecase
 from app.schemas.detection import DetectionCreate, DetectionResponse
 from app.usecases.detection_usecase import DetectionUseCase
@@ -11,8 +12,13 @@ router = APIRouter(prefix="/detections", tags=["detections"])
 async def create_detection(
     payload: DetectionCreate,
     usecase: DetectionUseCase = Depends(get_detection_usecase),
-) -> DetectionResponse:
-    return await usecase.create(payload)
+    idem: IdempotencyState = Depends(idempotency),
+) -> DetectionResponse | dict:
+    if idem.is_hit:
+        return idem.cached_response
+    result = await usecase.create(payload)
+    await idem.store(result.model_dump(mode="json", by_alias=True))
+    return result
 
 
 @router.get("", response_model=list[DetectionResponse])
