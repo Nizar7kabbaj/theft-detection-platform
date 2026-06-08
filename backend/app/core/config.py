@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings
 from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -7,6 +8,9 @@ class Settings(BaseSettings):
     MONGODB_URL_LOCAL: str
     MONGODB_MODE:      str = "local"
     DATABASE_NAME:     str = "theft_detection_db"
+    REDIS_URL:         str = ""
+    REDIS_URL_LOCAL:   str
+    REDIS_MODE:        str = "local"
     API_HOST:          str = "0.0.0.0"
     API_PORT:          int = 8000
     DEBUG:             bool = True
@@ -18,8 +22,7 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str | None = None
     TELEGRAM_CHAT_ID:   str | None = None
 
-    class Config:
-        env_file = "backend/.env"
+    model_config = SettingsConfigDict(env_file="backend/.env")
 
 
 settings = Settings()
