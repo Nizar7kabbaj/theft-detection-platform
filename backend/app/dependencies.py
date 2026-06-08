@@ -1,7 +1,9 @@
 from fastapi import Depends
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from redis.asyncio import Redis
 
 from app.core.database import get_database
+from app.core.redis import get_redis
 from app.repositories.alert_repository import AlertRepository
 from app.repositories.camera_repository import CameraRepository
 from app.repositories.detection_repository import DetectionRepository
@@ -42,8 +44,9 @@ def get_stats_repo(
 
 def get_camera_usecase(
     repo: CameraRepository = Depends(get_camera_repo),
+    redis: Redis = Depends(get_redis),
 ) -> CameraUseCase:
-    return CameraUseCase(repo)
+    return CameraUseCase(repo, redis)
 
 
 def get_detection_usecase(
