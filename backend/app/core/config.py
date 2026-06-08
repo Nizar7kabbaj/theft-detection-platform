@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     MONGODB_URL_LOCAL: str
     MONGODB_MODE:      str = "local"
     DATABASE_NAME:     str = "theft_detection_db"
+    REDIS_URL:         str = ""
+    REDIS_URL_LOCAL:   str
+    REDIS_MODE:        str = "local"
     API_HOST:          str = "0.0.0.0"
     API_PORT:          int = 8000
     DEBUG:             bool = True

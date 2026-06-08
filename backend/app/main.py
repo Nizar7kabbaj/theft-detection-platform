@@ -12,6 +12,7 @@ from .core.database import (
     get_database,
 )
 from .core.errors import AppError, ConflictError, NotFoundError, ValidationError
+from .core.redis import close_redis, open_redis
 from .observability import setup_observability
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,10 @@ async def lifespan(app: FastAPI):
     logger.info("backend starting")
     await connect_to_mongodb()
     await _create_indexes()
+    app.state.redis = await open_redis()
     logger.info("backend ready")
     yield
+    await close_redis(app.state.redis)
     await close_mongodb_connection()
     logger.info("backend stopped")
 
