@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -51,16 +53,14 @@ def _build_telegram_text(payload: AlertCreate) -> str:
         what = f"person near {payload.object.get('class_name', 'object')}"
     else:
         what = payload.alert_type or "suspicious activity"
-
     angle_line = ""
     if payload.torso_angle is not None:
-        angle_line = f"\n📐 torso angle: <b>{payload.torso_angle:.1f}°</b>"
-
+        angle_line = f"\ntorso angle: <b>{payload.torso_angle:.1f}°</b>"
     return (
-        f"🚨 <b>theft-detection alert, {payload.severity}</b>\n"
-        f"📌 {what}\n"
-        f"📷 camera: <code>{payload.camera_id}</code>\n"
-        f"🕒 {payload.timestamp}"
+        f"<b>theft-detection alert, {payload.severity}</b>\n"
+        f"{what}\n"
+        f"camera: <code>{payload.camera_id}</code>\n"
+        f"time: {payload.timestamp}"
         f"{angle_line}"
     )
 

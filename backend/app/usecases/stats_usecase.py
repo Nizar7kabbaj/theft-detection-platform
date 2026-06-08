@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 
 from app.repositories.stats_repository import StatsRepository

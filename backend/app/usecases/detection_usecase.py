@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
+from __future__ import annotations
 
+from datetime import datetime, timezone
 from app.core.errors import NotFoundError
 from app.repositories.detection_repository import DetectionRepository
 from app.schemas.detection import DetectionCreate, DetectionResponse

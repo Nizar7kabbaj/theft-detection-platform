@@ -1,7 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
-
 from pymongo.errors import DuplicateKeyError
-
 from app.core.errors import ConflictError, NotFoundError
 from app.repositories.camera_repository import CameraRepository
 from app.schemas.camera import CameraCreate, CameraResponse
