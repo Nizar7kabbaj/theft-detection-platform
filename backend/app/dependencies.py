@@ -57,8 +57,9 @@ def get_detection_usecase(
 
 def get_alert_usecase(
     repo: AlertRepository = Depends(get_alert_repo),
+    redis: Redis = Depends(get_redis),
 ) -> AlertUseCase:
-    return AlertUseCase(repo)
+    return AlertUseCase(repo, redis)
 
 
 def get_stats_usecase(

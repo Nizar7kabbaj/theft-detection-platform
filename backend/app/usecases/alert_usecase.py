@@ -7,7 +7,9 @@ from typing import Any
 
 from opentelemetry import context as otel_context
 from opentelemetry import trace
+from redis.asyncio import Redis
 
+from app.core.cache import get_or_set, invalidate_prefix, make_list_key
 from app.core.errors import NotFoundError
 from app.repositories.alert_repository import AlertRepository
 from app.schemas.alert import AlertCreate, AlertResponse
@@ -80,9 +82,6 @@ async def _notify(payload: AlertCreate) -> None:
 
 
 def _spawn_notify(payload: AlertCreate) -> None:
-    """fire and forget the telegram notify under the current otel context.
-    the task ref is held in a module set so the gc cannot drop it mid-flight.
-    """
     ctx = otel_context.get_current()
 
     async def runner() -> None:
@@ -100,8 +99,12 @@ def _spawn_notify(payload: AlertCreate) -> None:
 
 
 class AlertUseCase:
-    def __init__(self, repo: AlertRepository) -> None:
+    LIST_PREFIX = "cache:alerts:list:"
+    TTL = 30
+
+    def __init__(self, repo: AlertRepository, redis: Redis) -> None:
         self._repo = repo
+        self._redis = redis
 
     async def create(self, payload: AlertCreate) -> AlertResponse:
         doc = payload.model_dump()
@@ -109,21 +112,31 @@ class AlertUseCase:
         doc["acknowledged"] = False
         created = await self._repo.create(doc)
         _spawn_notify(payload)
+        await invalidate_prefix(self._redis, self.LIST_PREFIX)
         return _to_response(created)
 
     async def list(
         self, severity: str | None = None, limit: int = 50, skip: int = 0
     ) -> list[AlertResponse]:
-        docs = await self._repo.list_filtered(severity=severity, limit=limit, skip=skip)
-        return [_to_response(d) for d in docs]
+        params = {"severity": severity, "limit": limit, "skip": skip}
+        key = make_list_key("alerts", params)
+
+        async def loader() -> list[dict]:
+            docs = await self._repo.list_filtered(severity=severity, limit=limit, skip=skip)
+            return [_to_response(d).model_dump(mode="json") for d in docs]
+
+        cached = await get_or_set(self._redis, key, self.TTL, loader)
+        return [AlertResponse.model_validate(item) for item in cached]
 
     async def acknowledge(self, alert_id: str) -> AlertResponse:
         updated = await self._repo.acknowledge(alert_id)
         if updated is None:
             raise NotFoundError(f"alert {alert_id} not found")
+        await invalidate_prefix(self._redis, self.LIST_PREFIX)
         return _to_response(updated)
 
     async def delete(self, alert_id: str) -> None:
         deleted = await self._repo.delete(alert_id)
         if not deleted:
             raise NotFoundError(f"alert {alert_id} not found")
+        await invalidate_prefix(self._redis, self.LIST_PREFIX)

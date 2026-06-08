@@ -1,8 +1,15 @@
+import hashlib
 import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from redis.asyncio import Redis
+
+
+def make_list_key(resource: str, params: dict[str, Any]) -> str:
+    payload = json.dumps(params, sort_keys=True, separators=(",", ":"), default=str)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"cache:{resource}:list:{digest}"
 
 
 async def get_or_set(
