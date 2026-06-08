@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings
 from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -18,8 +19,7 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str | None = None
     TELEGRAM_CHAT_ID:   str | None = None
 
-    class Config:
-        env_file = "backend/.env"
+    model_config = SettingsConfigDict(env_file="backend/.env")
 
 
 settings = Settings()
