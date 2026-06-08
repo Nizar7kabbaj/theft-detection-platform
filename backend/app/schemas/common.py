@@ -16,7 +16,6 @@ class Keypoint(BaseModel):
 
 
 class MongoModel(BaseModel):
-    """response model base, mongo _id becomes a string id"""
 
     model_config = ConfigDict(populate_by_name=True)
 
