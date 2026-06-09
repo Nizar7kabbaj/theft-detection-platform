@@ -50,8 +50,6 @@ The detection logic is hybrid by intent. One human-readable rule catches the eas
 
 Around that core sits a full engineering build: a hardened Linux host, Terraform-managed Azure infrastructure, container orchestration, an MLOps pipeline, a security stack, observability, big-data analytics, and explainability tooling.
 
-The work is planned across 14 three-week sprints. Two are done. Twelve remain.
-
 ---
 
 ## Tech stack
