@@ -18,3 +18,6 @@ opentelemetry-instrumentation-logging==0.50b0
 opentelemetry-exporter-otlp-proto-http==1.29.0
 opentelemetry-exporter-prometheus==0.50b0
 python-json-logger==3.2.1
+
+grpcio==1.71.2
+grpcio-tools==1.71.2
