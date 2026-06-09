@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package theftdetection.v1;
+
+import "google/protobuf/timestamp.proto";
+import "common.proto";
+
+message Frame {
+  bytes payload = 1;
+  int64 session_id = 2;
+  int32 frame_index = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message Detection {
+  Bbox bbox = 1;
+  repeated Keypoint keypoints = 2;
+  float score = 3;
+  string alert_type = 4;
+}
+
+service InferenceService {
+  rpc Analyze(Frame) returns (Detection);
+  rpc AnalyzeStream(stream Frame) returns (stream Detection);
+}
