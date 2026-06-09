@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package theftdetection.v1;
+
+message Bbox {
+  float x1 = 1;
+  float y1 = 2;
+  float x2 = 3;
+  float y2 = 4;
+}
+
+message Keypoint {
+  float x = 1;
+  float y = 2;
+  float confidence = 3;
+}
