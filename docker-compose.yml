@@ -31,6 +31,45 @@ services:
         start_period: 15s
       restart: unless-stopped
 
+  ai:
+      build: ./ai-service
+      image: theft-ai:dev
+      container_name: theft-ai
+      user: "1000:1000"
+      ports:
+        - "127.0.0.1:50051:50051"
+      environment:
+        OTEL_SERVICE_NAME: "theft-ai"
+        OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-ai"
+        OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
+        OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+        OTEL_TRACES_EXPORTER: "otlp"
+        OTEL_METRICS_EXPORTER: "prometheus"
+        OTEL_LOGS_EXPORTER: "none"
+        OTEL_PYTHON_LOG_CORRELATION: "true"
+        OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
+        PROMETHEUS_EXPORTER_PORT: "9464"
+      volumes:
+        - ./ai-model:/app/ai-model:ro
+      depends_on:
+        alloy:
+          condition: service_started
+      healthcheck:
+        test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+        interval: 30s
+        timeout: 5s
+        retries: 5
+        start_period: 60s
+      deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: 1
+                capabilities: [gpu]
+      profiles: ["ai"]
+      restart: unless-stopped
+
   mongo:
     image: mongo:7.0
     container_name: theft-mongo
