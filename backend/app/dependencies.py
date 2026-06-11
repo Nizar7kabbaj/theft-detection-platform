@@ -1,4 +1,4 @@
-from fastapi import Depends
+from fastapi import Depends, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from redis.asyncio import Redis
 
@@ -8,6 +8,7 @@ from app.repositories.alert_repository import AlertRepository
 from app.repositories.camera_repository import CameraRepository
 from app.repositories.detection_repository import DetectionRepository
 from app.repositories.stats_repository import StatsRepository
+from app.services.inference_service import InferenceClient
 from app.usecases.alert_usecase import AlertUseCase
 from app.usecases.camera_usecase import CameraUseCase
 from app.usecases.detection_usecase import DetectionUseCase
@@ -40,6 +41,10 @@ def get_stats_repo(
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> StatsRepository:
     return StatsRepository(db)
+
+
+def get_inference_client(request: Request) -> InferenceClient:
+    return InferenceClient(request.app.state.inference_stub)
 
 
 def get_camera_usecase(

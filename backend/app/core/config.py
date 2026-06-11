@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     ALERTS_DIR:        str = "ai-model/outputs/alerts"
     TELEGRAM_BOT_TOKEN: str | None = None
     TELEGRAM_CHAT_ID:   str | None = None
+    INFERENCE_TARGET:   str = "ai:50051"
 
     model_config = SettingsConfigDict(env_file="backend/.env")
 

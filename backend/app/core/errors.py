@@ -15,3 +15,7 @@ class ValidationError(AppError):
 
 class ConflictError(AppError):
     """write would violate a uniqueness or state constraint."""
+
+
+class InferenceUnavailable(AppError):
+    """upstream inference service unreachable or timed out."""

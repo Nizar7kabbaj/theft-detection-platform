@@ -2,14 +2,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Bbox(BaseModel):
-    x1: int
-    y1: int
-    x2: int
-    y2: int
+    x1: float
+    y1: float
+    x2: float
+    y2: float
 
 
 class Keypoint(BaseModel):
-    name: str
+    name: str | None = None
     x: float
     y: float
     confidence: float = Field(ge=0.0, le=1.0)
