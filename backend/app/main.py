@@ -15,6 +15,7 @@ from .core.database import (
     get_database,
 )
 from .core.errors import (
+    AlertUnavailable,
     AppError,
     ConflictError,
     InferenceUnavailable,
@@ -22,6 +23,7 @@ from .core.errors import (
     ValidationError,
 )
 from .core.redis import close_redis, open_redis
+from .grpc_gen.alert_pb2_grpc import AlertServiceStub
 from .grpc_gen.inference_pb2_grpc import InferenceServiceStub
 from .observability import setup_observability
 
@@ -55,8 +57,15 @@ async def lifespan(app: FastAPI):
         interceptors=aio_client_interceptors(),
     )
     app.state.inference_stub = InferenceServiceStub(app.state.inference_channel)
+    app.state.alert_channel = grpc.aio.insecure_channel(
+        settings.ALERT_TARGET,
+        options=_GRPC_CHANNEL_OPTIONS,
+        interceptors=aio_client_interceptors(),
+    )
+    app.state.alert_stub = AlertServiceStub(app.state.alert_channel)
     logger.info("backend ready")
     yield
+    await app.state.alert_channel.close(grace=2)
     await app.state.inference_channel.close(grace=2)
     await close_redis(app.state.redis)
     await close_mongodb_connection()
@@ -64,23 +73,35 @@ async def lifespan(app: FastAPI):
 
 
 def register_error_handlers(app: FastAPI) -> None:
+
     @app.exception_handler(NotFoundError)
     async def _not_found(_: Request, exc: NotFoundError) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(exc)})
+
 
     @app.exception_handler(ConflictError)
     async def _conflict(_: Request, exc: ConflictError) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": str(exc)})
 
+
     @app.exception_handler(ValidationError)
     async def _validation(_: Request, exc: ValidationError) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(exc)})
+
 
     @app.exception_handler(InferenceUnavailable)
     async def _inference_unavailable(
         _: Request, exc: InferenceUnavailable
     ) -> JSONResponse:
         return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+    @app.exception_handler(AlertUnavailable)
+    async def _alert_unavailable(
+        _: Request, exc: AlertUnavailable
+    ) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": str(exc)})
+
 
     @app.exception_handler(AppError)
     async def _app_error(_: Request, exc: AppError) -> JSONResponse:
