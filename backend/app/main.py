@@ -1,21 +1,38 @@
 import logging
 from contextlib import asynccontextmanager
 
+import grpc
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from opentelemetry.instrumentation.grpc import aio_client_interceptors
 
 from .api.v1 import alerts, cameras, detections, stats
+from .core.config import settings
 from .core.database import (
     close_mongodb_connection,
     connect_to_mongodb,
     get_database,
 )
-from .core.errors import AppError, ConflictError, NotFoundError, ValidationError
+from .core.errors import (
+    AppError,
+    ConflictError,
+    InferenceUnavailable,
+    NotFoundError,
+    ValidationError,
+)
 from .core.redis import close_redis, open_redis
+from .grpc_gen.inference_pb2_grpc import InferenceServiceStub
 from .observability import setup_observability
 
 logger = logging.getLogger(__name__)
+
+_GRPC_CHANNEL_OPTIONS = [
+    ("grpc.keepalive_time_ms", 30_000),
+    ("grpc.keepalive_timeout_ms", 10_000),
+    ("grpc.max_receive_message_length", 8 * 1024 * 1024),
+    ("grpc.max_send_message_length", 8 * 1024 * 1024),
+]
 
 
 async def _create_indexes() -> None:
@@ -32,8 +49,15 @@ async def lifespan(app: FastAPI):
     await connect_to_mongodb()
     await _create_indexes()
     app.state.redis = await open_redis()
+    app.state.inference_channel = grpc.aio.insecure_channel(
+        settings.INFERENCE_TARGET,
+        options=_GRPC_CHANNEL_OPTIONS,
+        interceptors=aio_client_interceptors(),
+    )
+    app.state.inference_stub = InferenceServiceStub(app.state.inference_channel)
     logger.info("backend ready")
     yield
+    await app.state.inference_channel.close(grace=2)
     await close_redis(app.state.redis)
     await close_mongodb_connection()
     logger.info("backend stopped")
@@ -51,6 +75,12 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ValidationError)
     async def _validation(_: Request, exc: ValidationError) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+    @app.exception_handler(InferenceUnavailable)
+    async def _inference_unavailable(
+        _: Request, exc: InferenceUnavailable
+    ) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": str(exc)})
 
     @app.exception_handler(AppError)
     async def _app_error(_: Request, exc: AppError) -> JSONResponse:

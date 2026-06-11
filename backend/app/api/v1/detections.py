@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 
 from app.core.idempotency import IdempotencyState, idempotency
-from app.dependencies import get_detection_usecase
+from app.dependencies import get_detection_usecase, get_inference_client
 from app.schemas.detection import DetectionCreate, DetectionResponse
+from app.services.inference_service import InferenceClient
 from app.usecases.detection_usecase import DetectionUseCase
 
 router = APIRouter(prefix="/detections", tags=["detections"])
@@ -19,6 +20,29 @@ async def create_detection(
     result = await usecase.create(payload)
     await idem.store(result.model_dump(mode="json", by_alias=True))
     return result
+
+
+@router.post(
+    "/analyze",
+    response_model=DetectionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def analyze_frame(
+    session_id: int = Form(...),
+    frame_index: int = Form(...),
+    camera_id: str = Form("default"),
+    file: UploadFile = File(...),
+    usecase: DetectionUseCase = Depends(get_detection_usecase),
+    client: InferenceClient = Depends(get_inference_client),
+) -> DetectionResponse:
+    payload = await file.read()
+    return await usecase.analyze_frame(
+        client=client,
+        payload=payload,
+        session_id=session_id,
+        frame_index=frame_index,
+        camera_id=camera_id,
+    )
 
 
 @router.get("", response_model=list[DetectionResponse])
