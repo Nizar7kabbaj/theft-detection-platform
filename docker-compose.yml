@@ -40,6 +40,8 @@ services:
       - "traefik.http.routers.backend.tls=true"
       - "traefik.http.routers.backend.middlewares=gateway-chain@file"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
+    volumes:
+      - ./backend/tests:/app/tests
     restart: unless-stopped
 
   traefik:
