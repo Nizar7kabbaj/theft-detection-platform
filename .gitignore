@@ -58,3 +58,5 @@ infrastructure/prometheus/prometheus.yml
 infrastructure/grafana/provisioning/datasources/prometheus.yml
 infrastructure/grafana/provisioning/datasources/loki.yml
 infrastructure/grafana/provisioning/datasources/tempo.yml
+infrastructure/traefik/traefik.yml
+infrastructure/traefik/dynamic.yml

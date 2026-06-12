@@ -40,3 +40,11 @@ scrape_configs:
           - tempo:3200
         labels:
           service: theft-tempo
+
+  - job_name: traefik
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - traefik:8082
+        labels:
+          service: theft-traefik
