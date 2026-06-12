@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -56,6 +57,13 @@ class AlertUseCase:
         self._redis = redis
         self._alert_client = alert_client
 
+    async def _publish(self, event: str, response: AlertResponse) -> None:
+        try:
+            payload = response.model_dump_json(by_alias=True)
+            await self._redis.publish(f"alerts:{event}", payload)
+        except Exception as exc:
+            logger.warning("pubsub publish failed event=%s: %s", event, exc)
+
     async def create(self, payload: AlertCreate) -> AlertResponse:
         doc = payload.model_dump()
         doc["created_at"] = datetime.now(timezone.utc)
@@ -68,7 +76,9 @@ class AlertUseCase:
             logger.warning("alert delivery unavailable for %s: %s", payload.alert_id, exc)
 
         await invalidate_prefix(self._redis, self.LIST_PREFIX)
-        return _to_response(created)
+        response = _to_response(created)
+        await self._publish("created", response)
+        return response
 
     async def list(
         self, severity: str | None = None, limit: int = 50, skip: int = 0
@@ -88,10 +98,19 @@ class AlertUseCase:
         if updated is None:
             raise NotFoundError(f"alert {alert_id} not found")
         await invalidate_prefix(self._redis, self.LIST_PREFIX)
-        return _to_response(updated)
+        response = _to_response(updated)
+        await self._publish("acknowledged", response)
+        return response
 
     async def delete(self, alert_id: str) -> None:
         deleted = await self._repo.delete(alert_id)
         if not deleted:
             raise NotFoundError(f"alert {alert_id} not found")
         await invalidate_prefix(self._redis, self.LIST_PREFIX)
+        try:
+            await self._redis.publish(
+                "alerts:deleted",
+                json.dumps({"alert_id": alert_id}),
+            )
+        except Exception as exc:
+            logger.warning("pubsub publish failed event=deleted: %s", exc)

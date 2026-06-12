@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from opentelemetry.instrumentation.grpc import aio_client_interceptors
 
-from .api.v1 import alerts, cameras, detections, stats
+from .api.v1 import alerts, cameras, detections, stats, streams
 from .core.config import settings
 from .core.database import (
     close_mongodb_connection,
@@ -26,6 +26,7 @@ from .core.redis import close_redis, open_redis
 from .grpc_gen.alert_pb2_grpc import AlertServiceStub
 from .grpc_gen.inference_pb2_grpc import InferenceServiceStub
 from .observability import setup_observability
+from .services.broadcast_service import BroadcastService
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,12 @@ async def lifespan(app: FastAPI):
     await connect_to_mongodb()
     await _create_indexes()
     app.state.redis = await open_redis()
+    app.state.broadcaster = BroadcastService(
+        redis=app.state.redis,
+        max_connections=settings.WS_MAX_CONNECTIONS,
+        heartbeat_seconds=settings.WS_HEARTBEAT_SECONDS,
+    )
+    await app.state.broadcaster.start()
     app.state.inference_channel = grpc.aio.insecure_channel(
         settings.INFERENCE_TARGET,
         options=_GRPC_CHANNEL_OPTIONS,
@@ -67,6 +74,7 @@ async def lifespan(app: FastAPI):
     yield
     await app.state.alert_channel.close(grace=2)
     await app.state.inference_channel.close(grace=2)
+    await app.state.broadcaster.stop()
     await close_redis(app.state.redis)
     await close_mongodb_connection()
     logger.info("backend stopped")
@@ -130,6 +138,7 @@ app.include_router(cameras.router, prefix="/api/v1")
 app.include_router(detections.router, prefix="/api/v1")
 app.include_router(alerts.router, prefix="/api/v1")
 app.include_router(stats.router, prefix="/api/v1")
+app.include_router(streams.router)
 
 
 @app.get("/health", tags=["health"])

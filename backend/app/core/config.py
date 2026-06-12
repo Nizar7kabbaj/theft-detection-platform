@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     TELEGRAM_CHAT_ID:   str | None = None
     INFERENCE_TARGET:   str = "ai:50051"
     ALERT_TARGET:       str = "alert-service:50052"
+    WS_MAX_CONNECTIONS:   int = 100
+    WS_HEARTBEAT_SECONDS: int = 30
 
     model_config = SettingsConfigDict(env_file="backend/.env")
 
