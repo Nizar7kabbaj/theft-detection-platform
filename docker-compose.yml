@@ -4,7 +4,7 @@ services:
       image: theft-backend:dev
       container_name: theft-backend
       ports:
-        - "8000:8000"
+        - "127.0.0.1:8001:8000"
       env_file:
         - ./backend/.env
       environment:
@@ -31,6 +31,37 @@ services:
         timeout: 5s
         retries: 5
         start_period: 15s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.backend.rule=Host(`localhost`) && (PathPrefix(`/api`) || PathPrefix(`/ws`) || Path(`/health`))"
+        - "traefik.http.routers.backend.entrypoints=websecure"
+        - "traefik.http.routers.backend.tls=true"
+        - "traefik.http.routers.backend.middlewares=gateway-chain@file"
+        - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      restart: unless-stopped
+
+  traefik:
+      image: traefik:v3.7.5
+      container_name: theft-traefik
+      user: "0:0"
+      ports:
+        - "127.0.0.1:80:80"
+        - "127.0.0.1:443:443"
+        - "127.0.0.1:8080:8080"
+      volumes:
+        - ./infrastructure/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+        - ./infrastructure/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+        - ./infrastructure/traefik/certs:/etc/traefik/certs:ro
+        - /var/run/docker.sock:/var/run/docker.sock:ro
+      depends_on:
+        alloy:
+          condition: service_started
+      healthcheck:
+        test: ["CMD", "traefik", "healthcheck"]
+        interval: 30s
+        timeout: 5s
+        retries: 5
+        start_period: 10s
       restart: unless-stopped
 
   ai:
@@ -181,20 +212,6 @@ services:
         retries: 5
         start_period: 10s
       restart: unless-stopped
-
-  # frontend: planned Next.js 15
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     args:
-  #       NEXT_PUBLIC_API_URL: http://localhost:8000
-  #   image: theft-frontend:dev
-  #   container_name: theft-frontend
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - backend
-  #   restart: unless-stopped
 
   prometheus:
       image: prom/prometheus:v3.12.0

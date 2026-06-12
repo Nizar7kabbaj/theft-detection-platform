@@ -1,0 +1,58 @@
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+  format: json
+
+accessLog:
+  format: json
+
+api:
+  insecure: true
+  dashboard: true
+
+ping: {}
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+    http:
+      tls: {}
+  metrics:
+    address: ":8082"
+  traefik:
+    address: ":8080"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    watch: true
+    network: theft-detection-platform_default
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addRoutersLabels: true
+    addServicesLabels: true
+    addEntryPointsLabels: true
+
+tracing:
+  serviceName: theft-traefik
+  sampleRate: 1.0
+  otlp:
+    http:
+      endpoint: http://theft-alloy:4318/v1/traces
