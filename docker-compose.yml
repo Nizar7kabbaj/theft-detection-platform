@@ -1,170 +1,182 @@
 services:
   backend:
-      build: ./backend
-      image: theft-backend:dev
-      container_name: theft-backend
-      ports:
-        - "127.0.0.1:8001:8000"
-      env_file:
-        - ./backend/.env
-      environment:
-        OTEL_SERVICE_NAME: "theft-backend"
-        OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0"
-        OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
-        OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-        OTEL_TRACES_EXPORTER: "otlp"
-        OTEL_METRICS_EXPORTER: "prometheus"
-        OTEL_LOGS_EXPORTER: "none"
-        OTEL_PYTHON_LOG_CORRELATION: "true"
-        OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
-        PROMETHEUS_EXPORTER_PORT: "9464"
-      depends_on:
-        mongo:
-          condition: service_healthy
-        alloy:
-          condition: service_started
-        alert-service:
-          condition: service_healthy
-      healthcheck:
-        test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)\""]
-        interval: 30s
-        timeout: 5s
-        retries: 5
-        start_period: 15s
-      labels:
-        - "traefik.enable=true"
-        - "traefik.http.routers.backend.rule=Host(`localhost`) && (PathPrefix(`/api`) || PathPrefix(`/ws`) || Path(`/health`))"
-        - "traefik.http.routers.backend.entrypoints=websecure"
-        - "traefik.http.routers.backend.tls=true"
-        - "traefik.http.routers.backend.middlewares=gateway-chain@file"
-        - "traefik.http.services.backend.loadbalancer.server.port=8000"
-      restart: unless-stopped
+    build: ./backend
+    image: theft-backend:dev
+    container_name: theft-backend
+    ports:
+      - "127.0.0.1:8001:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      OTEL_SERVICE_NAME: "theft-backend"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+      OTEL_TRACES_EXPORTER: "otlp"
+      OTEL_METRICS_EXPORTER: "prometheus"
+      OTEL_LOGS_EXPORTER: "none"
+      OTEL_PYTHON_LOG_CORRELATION: "true"
+      OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
+      PROMETHEUS_EXPORTER_PORT: "9464"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      alloy:
+        condition: service_started
+      alert-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`localhost`) && (PathPrefix(`/api`) || PathPrefix(`/ws`) || Path(`/health`))"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls=true"
+      - "traefik.http.routers.backend.middlewares=gateway-chain@file"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+    restart: unless-stopped
 
   traefik:
-      image: traefik:v3.7.5
-      container_name: theft-traefik
-      user: "0:0"
-      ports:
-        - "127.0.0.1:80:80"
-        - "127.0.0.1:443:443"
-        - "127.0.0.1:8080:8080"
-      volumes:
-        - ./infrastructure/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-        - ./infrastructure/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
-        - ./infrastructure/traefik/certs:/etc/traefik/certs:ro
-        - /var/run/docker.sock:/var/run/docker.sock:ro
-      depends_on:
-        alloy:
-          condition: service_started
-      healthcheck:
-        test: ["CMD", "traefik", "healthcheck"]
-        interval: 30s
-        timeout: 5s
-        retries: 5
-        start_period: 10s
-      restart: unless-stopped
+    image: traefik:v3.7.5
+    container_name: theft-traefik
+    user: "0:0"
+    ports:
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./infrastructure/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./infrastructure/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - ./infrastructure/traefik/certs:/etc/traefik/certs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
 
   ai:
-      build: ./ai-service
-      image: theft-ai:dev
-      container_name: theft-ai
-      user: "1000:1000"
-      ports:
-        - "127.0.0.1:50051:50051"
-      environment:
-        OTEL_SERVICE_NAME: "theft-ai"
-        OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-ai"
-        OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
-        OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-        OTEL_TRACES_EXPORTER: "otlp"
-        OTEL_METRICS_EXPORTER: "prometheus"
-        OTEL_LOGS_EXPORTER: "none"
-        OTEL_PYTHON_LOG_CORRELATION: "true"
-        OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
-        PROMETHEUS_EXPORTER_PORT: "9464"
-      volumes:
-        - ./ai-model:/app/ai-model:ro
-      depends_on:
-        alloy:
-          condition: service_started
-      healthcheck:
-        test: ["CMD", "grpc_health_probe", "-addr=:50051"]
-        interval: 30s
-        timeout: 5s
-        retries: 5
-        start_period: 60s
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: 1
-                capabilities: [gpu]
-      profiles: ["ai"]
-      restart: unless-stopped
+    build: ./ai-service
+    image: theft-ai:dev
+    container_name: theft-ai
+    user: "1000:1000"
+    ports:
+      - "127.0.0.1:50051:50051"
+    environment:
+      OTEL_SERVICE_NAME: "theft-ai"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-ai"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+      OTEL_TRACES_EXPORTER: "otlp"
+      OTEL_METRICS_EXPORTER: "prometheus"
+      OTEL_LOGS_EXPORTER: "none"
+      OTEL_PYTHON_LOG_CORRELATION: "true"
+      OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
+      PROMETHEUS_EXPORTER_PORT: "9464"
+    volumes:
+      - ./ai-model:/app/ai-model:ro
+    depends_on:
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles: ["ai"]
+    restart: unless-stopped
 
   alert-service:
-      build: ./alert-service
-      image: theft-alert:dev
-      container_name: theft-alert
-      user: "1000:1000"
-      ports:
-        - "127.0.0.1:50052:50052"
-      env_file:
-        - ./backend/.env
-      environment:
-        OTEL_SERVICE_NAME: "theft-alert"
-        OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-alert"
-        OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
-        OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-        OTEL_TRACES_EXPORTER: "otlp"
-        OTEL_METRICS_EXPORTER: "prometheus"
-        OTEL_LOGS_EXPORTER: "none"
-        OTEL_PYTHON_LOG_CORRELATION: "true"
-        OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
-        PROMETHEUS_EXPORTER_PORT: "9464"
-        REDIS_URL: "${ALERT_REDIS_URL}"
-      volumes:
-        - ./ai-model:/app/ai-model:ro
-      depends_on:
-        redis:
-          condition: service_healthy
-        alloy:
-          condition: service_started
-      healthcheck:
-        test: ["CMD", "grpc_health_probe", "-addr=:50052"]
-        interval: 30s
-        timeout: 5s
-        retries: 5
-        start_period: 15s
-      restart: unless-stopped
+    build: ./alert-service
+    image: theft-alert:dev
+    container_name: theft-alert
+    user: "1000:1000"
+    ports:
+      - "127.0.0.1:50052:50052"
+    env_file:
+      - ./backend/.env
+    environment:
+      OTEL_SERVICE_NAME: "theft-alert"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-alert"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+      OTEL_TRACES_EXPORTER: "otlp"
+      OTEL_METRICS_EXPORTER: "prometheus"
+      OTEL_LOGS_EXPORTER: "none"
+      OTEL_PYTHON_LOG_CORRELATION: "true"
+      OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
+      PROMETHEUS_EXPORTER_PORT: "9464"
+      REDIS_URL: "${ALERT_REDIS_URL}"
+    volumes:
+      - ./ai-model:/app/ai-model:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:50052"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
   alert-worker:
-      image: theft-alert:dev
-      container_name: theft-alert-worker
-      user: "1000:1000"
-      command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=INFO", "--pool=solo", "--concurrency=1"]
-      env_file:
-        - ./backend/.env
-      environment:
-        OTEL_SERVICE_NAME: "theft-alert-worker"
-        OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-alert-worker"
-        OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
-        OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-        OTEL_TRACES_EXPORTER: "otlp"
-        OTEL_METRICS_EXPORTER: "prometheus"
-        OTEL_LOGS_EXPORTER: "none"
-        OTEL_PYTHON_LOG_CORRELATION: "true"
-        OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
-        PROMETHEUS_EXPORTER_PORT: "9465"
-        REDIS_URL: "${ALERT_REDIS_URL}"
-      volumes:
-        - ./ai-model:/app/ai-model:ro
-      depends_on:
-        redis:
-          condition: service_healthy
-        alert-service:
-          condition: service_healthy
-      restart: unless-stopped
+    image: theft-alert:dev
+    container_name: theft-alert-worker
+    user: "1000:1000"
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=INFO", "--pool=solo", "--concurrency=1"]
+    env_file:
+      - ./backend/.env
+    environment:
+      OTEL_SERVICE_NAME: "theft-alert-worker"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-alert-worker"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+      OTEL_TRACES_EXPORTER: "otlp"
+      OTEL_METRICS_EXPORTER: "prometheus"
+      OTEL_LOGS_EXPORTER: "none"
+      OTEL_PYTHON_LOG_CORRELATION: "true"
+      OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
+      PROMETHEUS_EXPORTER_PORT: "9465"
+      REDIS_URL: "${ALERT_REDIS_URL}"
+    volumes:
+      - ./ai-model:/app/ai-model:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      alert-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.celery_app inspect ping -t 5 > /dev/null 2>&1 || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
   mongo:
     image: mongo:7.0
     container_name: theft-mongo
@@ -194,198 +206,206 @@ services:
     restart: unless-stopped
 
   redis:
-      image: redis:7.2-alpine
-      container_name: theft-redis
-      user: "999:999"
-      group_add:
-        - "971"
-      command: ["redis-server", "/etc/redis/redis.conf"]
-      ports:
-        - "127.0.0.1:6379:6379"
-      volumes:
-        - redis_data:/data
-        - ./infrastructure/redis/redis.conf:/etc/redis/redis.conf:ro
-      healthcheck:
-        test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis.conf)\" ping | grep -q PONG"]
-        interval: 30s
-        timeout: 10s
-        retries: 5
-        start_period: 10s
-      restart: unless-stopped
+    image: redis:7.2-alpine
+    container_name: theft-redis
+    user: "999:999"
+    group_add:
+      - "971"
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./infrastructure/redis/redis.conf:/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis.conf)\" ping | grep -q PONG"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
 
   prometheus:
-      image: prom/prometheus:v3.12.0
-      container_name: theft-prometheus
-      user: "65534:65534"
-      group_add:
-        - "1971"
-      command:
-        - "--config.file=/etc/prometheus/prometheus.yml"
-        - "--storage.tsdb.path=/prometheus"
-        - "--storage.tsdb.retention.time=30d"
-        - "--web.console.libraries=/etc/prometheus/console_libraries"
-        - "--web.console.templates=/etc/prometheus/consoles"
-        - "--web.listen-address=:9090"
-      ports:
-        - "127.0.0.1:9090:9090"
-      volumes:
-        - prometheus_data:/prometheus
-        - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      healthcheck:
-        test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"]
-        interval: 30s
-        timeout: 5s
-        retries: 5
-        start_period: 10s
-      depends_on:
-        - node-exporter
-        - mongodb-exporter
-        - redis-exporter
-      restart: unless-stopped
+    image: prom/prometheus:v3.12.0
+    container_name: theft-prometheus
+    user: "65534:65534"
+    group_add:
+      - "1971"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.listen-address=:9090"
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      node-exporter:
+        condition: service_healthy
+      mongodb-exporter:
+        condition: service_started
+      redis-exporter:
+        condition: service_started
+    restart: unless-stopped
 
   node-exporter:
-      image: prom/node-exporter:v1.8.2
-      container_name: theft-node-exporter
-      command:
-        - "--path.procfs=/host/proc"
-        - "--path.rootfs=/rootfs"
-        - "--path.sysfs=/host/sys"
-        - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
-      ports:
-        - "127.0.0.1:9100:9100"
-      volumes:
-        - /proc:/host/proc:ro
-        - /sys:/host/sys:ro
-        - /:/rootfs:ro,rslave
-      healthcheck:
-        test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9100/metrics"]
-        interval: 30s
-        timeout: 5s
-        retries: 3
-        start_period: 5s
-      restart: unless-stopped
+    image: prom/node-exporter:v1.8.2
+    container_name: theft-node-exporter
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    ports:
+      - "127.0.0.1:9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro,rslave
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9100/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
 
+  # mongodb-exporter and redis-exporter ship as distroless images with no shell
+  # and no http client, so a container-level healthcheck is not possible. The
+  # prometheus up{} metric on the corresponding scrape jobs is the real signal:
+  # if either exporter stops responding, up{} drops to 0 within the scrape
+  # interval (15s) and the alert fires from the grafana dashboard.
   mongodb-exporter:
-      image: percona/mongodb_exporter:0.40
-      container_name: theft-mongodb-exporter
-      command:
-        - "--mongodb.uri=mongodb://${MONGO_EXPORTER_USERNAME}:${MONGO_EXPORTER_PASSWORD}@theft-mongo:27017/admin?tls=true&tlsInsecure=true"
-        - "--collect-all"
-        - "--compatible-mode"
-      ports:
-        - "127.0.0.1:9216:9216"
-      depends_on:
-        mongo:
-          condition: service_healthy
-      restart: unless-stopped
+    image: percona/mongodb_exporter:0.40
+    container_name: theft-mongodb-exporter
+    command:
+      - "--mongodb.uri=mongodb://${MONGO_EXPORTER_USERNAME}:${MONGO_EXPORTER_PASSWORD}@theft-mongo:27017/admin?tls=true&tlsInsecure=true"
+      - "--collect-all"
+      - "--compatible-mode"
+    ports:
+      - "127.0.0.1:9216:9216"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
 
   redis-exporter:
-      image: oliver006/redis_exporter:v1.65.0
-      container_name: theft-redis-exporter
-      environment:
-        REDIS_ADDR: "redis://theft-redis:6379"
-        REDIS_PASSWORD: "${REDIS_PASSWORD_LOCAL}"
-      ports:
-        - "127.0.0.1:9121:9121"
-      depends_on:
-        redis:
-          condition: service_healthy
-      restart: unless-stopped
+    image: oliver006/redis_exporter:v1.65.0
+    container_name: theft-redis-exporter
+    environment:
+      REDIS_ADDR: "redis://theft-redis:6379"
+      REDIS_PASSWORD: "${REDIS_PASSWORD_LOCAL}"
+    ports:
+      - "127.0.0.1:9121:9121"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
   grafana:
-      image: grafana/grafana:12.4.4
-      container_name: theft-grafana
-      user: "472:472"
-      group_add:
-        - "1972"
-      environment:
-        GF_SECURITY_ADMIN_USER: "admin"
-        GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD}"
-        GF_USERS_ALLOW_SIGN_UP: "false"
-        GF_AUTH_ANONYMOUS_ENABLED: "false"
-        GF_ANALYTICS_REPORTING_ENABLED: "false"
-        GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
-        GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
-      ports:
-        - "127.0.0.1:3000:3000"
-      volumes:
-        - grafana_data:/var/lib/grafana
-        - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
-      healthcheck:
-        test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/health || exit 1"]
-        interval: 30s
-        timeout: 5s
-        retries: 5
-        start_period: 30s
-      depends_on:
-        prometheus:
-          condition: service_healthy
-        loki:
-          condition: service_healthy
-        tempo:
-          condition: service_healthy
-      restart: unless-stopped
+    image: grafana/grafana:12.4.4
+    container_name: theft-grafana
+    user: "472:472"
+    group_add:
+      - "1972"
+    environment:
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    restart: unless-stopped
 
   loki:
-      image: grafana/loki:3.3.2
-      container_name: theft-loki
-      user: "10001:10001"
-      command: ["-config.file=/etc/loki/loki-config.yml"]
-      ports:
-        - "127.0.0.1:3100:3100"
-      volumes:
-        - loki_data:/loki
-        - ./infrastructure/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
-      healthcheck:
-        test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3100/ready || exit 1"]
-        interval: 30s
-        timeout: 5s
-        retries: 5
-        start_period: 30s
-      restart: unless-stopped
+    image: grafana/loki:3.3.2
+    container_name: theft-loki
+    user: "10001:10001"
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - loki_data:/loki
+      - ./infrastructure/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
   alloy:
-      image: grafana/alloy:v1.5.1
-      container_name: theft-alloy
-      user: "0:0"
-      command:
-        - "run"
-        - "--server.http.listen-addr=0.0.0.0:12345"
-        - "--storage.path=/var/lib/alloy/data"
-        - "/etc/alloy/config.alloy"
-      ports:
-        - "127.0.0.1:12345:12345"
-      volumes:
-        - alloy_data:/var/lib/alloy/data
-        - ./infrastructure/alloy/config.alloy:/etc/alloy/config.alloy:ro
-        - /var/run/docker.sock:/var/run/docker.sock:ro
-        - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      depends_on:
-        loki:
-          condition: service_healthy
-      restart: unless-stopped
+    image: grafana/alloy:v1.5.1
+    container_name: theft-alloy
+    user: "0:0"
+    command:
+      - "run"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "--storage.path=/var/lib/alloy/data"
+      - "/etc/alloy/config.alloy"
+    ports:
+      - "127.0.0.1:12345:12345"
+    volumes:
+      - alloy_data:/var/lib/alloy/data
+      - ./infrastructure/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+    restart: unless-stopped
 
   tempo:
-      image: grafana/tempo:2.6.1
-      container_name: theft-tempo
-      user: "10001:10001"
-      group_add:
-        - "1973"
-      command: ["-config.file=/etc/tempo/tempo.yml"]
-      ports:
-        - "127.0.0.1:3200:3200"
-        - "127.0.0.1:4317:4317"
-        - "127.0.0.1:4318:4318"
-      volumes:
-        - tempo_data:/var/tempo
-        - ./infrastructure/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
-      healthcheck:
-        test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3200/ready || exit 1"]
-        interval: 30s
-        timeout: 5s
-        retries: 5
-        start_period: 30s
-      restart: unless-stopped
+    image: grafana/tempo:2.6.1
+    container_name: theft-tempo
+    user: "10001:10001"
+    group_add:
+      - "1973"
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    ports:
+      - "127.0.0.1:3200:3200"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    volumes:
+      - tempo_data:/var/tempo
+      - ./infrastructure/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3200/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
 volumes:
   mongo_data:
