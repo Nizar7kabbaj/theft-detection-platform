@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     ALERT_TARGET:       str = "alert-service:50052"
     WS_MAX_CONNECTIONS:   int = 100
     WS_HEARTBEAT_SECONDS: int = 30
+    ALERT_THRESHOLD:    float = 0.7
 
     model_config = SettingsConfigDict(env_file="backend/.env")
 

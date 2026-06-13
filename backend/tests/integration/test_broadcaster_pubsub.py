@@ -128,3 +128,35 @@ async def test_ws_drops_non_json_pubsub_message(
 
         envelope = await _recv_until_event(ws, "created")
         assert envelope["data"]["alert_id"] == "ws-survives"
+
+
+async def test_ws_cameras_receives_created_event(
+    ws_server: tuple[str, BroadcastService],
+    redis_client: Redis,
+) -> None:
+    base_url, _ = ws_server
+    async with websockets.connect(f"{base_url}/ws/cameras") as ws:
+        await asyncio.sleep(0.1)
+
+        payload = {"_id": "cam-1", "name": "front-door", "status": "active"}
+        await redis_client.publish("cameras:created", json.dumps(payload))
+
+        envelope = await _recv_until_event(ws, "created")
+        assert envelope["event"] == "created"
+        assert envelope["data"] == payload
+
+
+async def test_ws_cameras_receives_deleted_event(
+    ws_server: tuple[str, BroadcastService],
+    redis_client: Redis,
+) -> None:
+    base_url, _ = ws_server
+    async with websockets.connect(f"{base_url}/ws/cameras") as ws:
+        await asyncio.sleep(0.1)
+
+        payload = {"_id": "cam-2", "name": "back-door", "status": "active"}
+        await redis_client.publish("cameras:deleted", json.dumps(payload))
+
+        envelope = await _recv_until_event(ws, "deleted")
+        assert envelope["event"] == "deleted"
+        assert envelope["data"] == payload
