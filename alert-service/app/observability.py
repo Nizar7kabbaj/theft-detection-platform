@@ -17,7 +17,7 @@ from pythonjsonlogger.json import JsonFormatter
 
 
 def setup_observability(service_name: str) -> None:
-    resource = Resource.create({"service.name": service_name})
+    resource = Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", service_name)})
     tracer_provider = TracerProvider(resource=resource)
     tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
     trace.set_tracer_provider(tracer_provider)

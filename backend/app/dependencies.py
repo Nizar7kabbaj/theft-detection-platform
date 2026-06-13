@@ -59,18 +59,19 @@ def get_camera_usecase(
     return CameraUseCase(repo, redis)
 
 
-def get_detection_usecase(
-    repo: DetectionRepository = Depends(get_detection_repo),
-) -> DetectionUseCase:
-    return DetectionUseCase(repo)
-
-
 def get_alert_usecase(
     repo: AlertRepository = Depends(get_alert_repo),
     redis: Redis = Depends(get_redis),
     alert_client: AlertClient = Depends(get_alert_client),
 ) -> AlertUseCase:
     return AlertUseCase(repo, redis, alert_client)
+
+
+def get_detection_usecase(
+    repo: DetectionRepository = Depends(get_detection_repo),
+    alert_usecase: AlertUseCase = Depends(get_alert_usecase),
+) -> DetectionUseCase:
+    return DetectionUseCase(repo, alert_usecase)
 
 
 def get_stats_usecase(
