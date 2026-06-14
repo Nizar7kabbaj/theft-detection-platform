@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -103,14 +102,12 @@ class AlertUseCase:
         return response
 
     async def delete(self, alert_id: str) -> None:
+        doc = await self._repo.get(alert_id)
+        if doc is None:
+            raise NotFoundError(f"alert {alert_id} not found")
+        response = _to_response(doc)
         deleted = await self._repo.delete(alert_id)
         if not deleted:
             raise NotFoundError(f"alert {alert_id} not found")
         await invalidate_prefix(self._redis, self.LIST_PREFIX)
-        try:
-            await self._redis.publish(
-                "alerts:deleted",
-                json.dumps({"alert_id": alert_id}),
-            )
-        except Exception as exc:
-            logger.warning("pubsub publish failed event=deleted: %s", exc)
+        await self._publish("deleted", response)

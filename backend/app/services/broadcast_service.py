@@ -69,7 +69,7 @@ class BroadcastService:
                 try:
                     await ws.close()
                 except Exception:
-                    pass
+                    logger.debug("websocket close during shutdown failed", exc_info=True)
             self._connections[topic].clear()
         logger.info("broadcaster stopped")
 

@@ -14,9 +14,9 @@ async def create_detection(
     payload: DetectionCreate,
     usecase: DetectionUseCase = Depends(get_detection_usecase),
     idem: IdempotencyState = Depends(idempotency),
-) -> DetectionResponse | dict:
+) -> DetectionResponse:
     if idem.is_hit:
-        return idem.cached_response
+        return DetectionResponse.model_validate(idem.cached_response)
     result = await usecase.create(payload)
     await idem.store(result.model_dump(mode="json", by_alias=True))
     return result
