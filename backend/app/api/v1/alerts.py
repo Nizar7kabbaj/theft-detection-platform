@@ -13,9 +13,9 @@ async def create_alert(
     payload: AlertCreate,
     usecase: AlertUseCase = Depends(get_alert_usecase),
     idem: IdempotencyState = Depends(idempotency),
-) -> AlertResponse | dict:
+) -> AlertResponse:
     if idem.is_hit:
-        return idem.cached_response
+        return AlertResponse.model_validate(idem.cached_response)
     result = await usecase.create(payload)
     await idem.store(result.model_dump(mode="json", by_alias=True))
     return result
