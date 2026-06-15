@@ -19,7 +19,7 @@ module "networking" {
 
   name                = "vnet-theft-detection-dev"
   resource_group_name = module.resource_group.name
-  location            = "francecentral"
+  location            = "spaincentral"
   environment         = "dev"
 
   address_space = ["10.0.0.0/16"]
@@ -50,7 +50,7 @@ module "networking" {
 |---|---|---|---|
 | name | string | - | yes |
 | resource_group_name | string | - | yes |
-| location | string | `francecentral` | no |
+| location | string | `spaincentral` | no |
 | environment | string | - | yes |
 | project | string | `theft-detection` | no |
 | address_space | list(string) | - | yes |

@@ -1,6 +1,6 @@
-# Copy to terraform.tfvars to override defaults. All four variables have
-# sensible defaults in variables.tf — this file exists only to document
-# the available knobs. terraform.tfvars itself is gitignored.
+# Copy to terraform.tfvars to override defaults. Every variable has a
+# default in variables.tf, so this file is documentation only.
+# terraform.tfvars is gitignored.
 
 environment = "prod"
 project     = "theft-detection"

@@ -67,7 +67,7 @@ The state backend is the one piece of infrastructure that does NOT
 get destroyed by `terraform destroy`. It's bootstrap infra — it has
 to outlive the resources it tracks.
 
-To delete it manually for true zero cost:
+To remove the state backend entirely:
 
 ```bash
 az group delete -n rg-tfstate-theft --yes

@@ -28,7 +28,7 @@ module "security" {
 |---|---|---|---|
 | name | string | — | 3-24 chars, globally unique, alphanumeric + hyphens |
 | resource_group_name | string | — | from the resource-group module |
-| location | string | francecentral | inherit from the RG |
+| location | string | spaincentral | inherit from the RG |
 | tenant_id | string | — | from `data.azurerm_client_config.current` |
 | environment | string | — | dev or prod |
 | project | string | theft-detection | for tagging |

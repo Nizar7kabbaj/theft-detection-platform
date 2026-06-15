@@ -7,7 +7,7 @@ VERSION="1.0.0"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-CERT_DIR="${REPO_ROOT}/infrastructure/traefik/certs"
+CERT_DIR="${REPO_ROOT}/config/traefik/certs"
 CERT_FILE="${CERT_DIR}/localhost.crt"
 KEY_FILE="${CERT_DIR}/localhost.key"
 VALIDITY_DAYS=365

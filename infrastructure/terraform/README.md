@@ -1,13 +1,13 @@
 # Terraform
 
-Infrastructure-as-code for the Azure side of the real-time theft detection
-platform. This directory is the Terraform root.
+Infrastructure-as-code for the Azure side of the theft detection platform.
+This directory is the Terraform root.
 
 ## Status
 
-Scaffold and three modules in progress. Each module and environment is built
-by its own ticket. A directory holding only a `.gitkeep` is a placeholder
-waiting for the ticket that fills it.
+Scaffold and three modules in progress. Each module and each environment lands
+incrementally. A directory holding only a `.gitkeep` is a placeholder waiting
+for the work that fills it.
 
 ## Layout
 
@@ -35,29 +35,30 @@ but do not pick an environment. An environment under `environments/` calls the
 modules with concrete values (region, sizes, names) and holds the backend and
 provider configuration for that environment.
 
-The pattern: write a module once, call it from both `dev` and `prod` with
-different inputs. `dev` stays cheap; `prod` is sized for real use.
+Write a module once, call it from both `dev` and `prod` with different inputs.
+`dev` stays cheap. `prod` is sized for whatever workload it ends up carrying.
 
 ## Target subscription
 
 - Subscription: Azure for Students
-- Resource group: `rg-theft-detection`
-- Region: France Central
+- Region: Spain Central
 
-The resource group already exists and survived the OS migration. Terraform
-manages resources inside it.
+Project resources and state both live in Spain Central. Azure for Students
+allowlist blocks `Microsoft.Storage` in France Central, so splitting regions
+would force every storage-adjacent resource to cross regions. Keeping the
+whole dev stack in one region avoids that.
 
 ## Cost discipline
 
-This subscription runs on a fixed student credit. The rule is simple: when you
-stop demoing, tear it down.
+This subscription runs on a fixed student credit. Tear it down when you stop
+demoing.
 
 ```bash
 cd infrastructure/terraform/environments/dev
 terraform destroy -auto-approve
 ```
 
-Bring it back in a few minutes when needed:
+Bring it back when needed:
 
 ```bash
 terraform apply -auto-approve
@@ -66,20 +67,25 @@ terraform apply -auto-approve
 Destroy whenever the stack sits idle for more than a day. Never provision a
 Premium tier of anything. Basic, Consumption, and Serverless only.
 
+`-auto-approve` is safe here because every resource in the dev environment
+destroys to nothing billable. The state backend (resource group
+`rg-tfstate-theft`, storage account `sttfstatetheft`) is excluded from this
+and is torn down manually if ever needed.
+
 ## What is safe to commit
 
 `.gitignore` blocks the dangerous files: state (`*.tfstate`) holds secrets in
 plaintext, `.terraform/` is a local cache, and `*.tfvars` files often carry
-credentials. Two files are kept on purpose: `.terraform.lock.hcl` pins provider
-versions for repeatable builds, and any `*.tfvars.example` documents the
+credentials. Two things stay on purpose: `.terraform.lock.hcl` pins provider
+versions for repeatable builds, and `*.tfvars.example` documents what
 variables a real `*.tfvars` must supply.
 
-Never commit a real `*.tfvars` or any `*.tfstate`. If you need to share what
-variables an environment expects, commit a `.tfvars.example` with placeholder
-values.
+Never commit a real `*.tfvars` or any `*.tfstate`. To share what variables an
+environment expects, commit a `.tfvars.example` with placeholder values.
 
 ## Prerequisites
 
-- Terraform 1.15.5 or later
-- Azure CLI 2.86.0 or later, logged in (`az login`)
+- Terraform >= 1.10 (lock file pins azurerm `~> 4.0`, currently v4.74.0)
+- Azure CLI, logged in via `az login`
 - Access to the Azure for Students subscription above
+- `AZURE_SUBSCRIPTION_ID` exported from a gitignored `.tf-env` at repo root
