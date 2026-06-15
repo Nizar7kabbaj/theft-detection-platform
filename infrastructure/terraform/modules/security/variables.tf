@@ -1,6 +1,7 @@
 variable "name" {
   description = "Name of the Key Vault. Must be globally unique across Azure."
   type        = string
+
   validation {
     condition     = can(regex("^[a-zA-Z][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$", var.name))
     error_message = "Key Vault name must be 3 to 24 characters, start with a letter, end with a letter or digit, and contain only letters, digits, and hyphens."
@@ -15,7 +16,7 @@ variable "resource_group_name" {
 variable "location" {
   description = "Azure region for the Key Vault."
   type        = string
-  default     = "francecentral"
+  default     = "spaincentral"
 }
 
 variable "tenant_id" {
@@ -44,6 +45,7 @@ variable "sku_name" {
   description = "Key Vault SKU. Use standard for dev, premium only when HSM-backed keys are required."
   type        = string
   default     = "standard"
+
   validation {
     condition     = contains(["standard", "premium"], var.sku_name)
     error_message = "sku_name must be standard or premium."
@@ -54,6 +56,7 @@ variable "soft_delete_retention_days" {
   description = "Days to retain soft-deleted vault contents. 7 keeps cost low and lets you purge faster between destroy and recreate in dev."
   type        = number
   default     = 7
+
   validation {
     condition     = var.soft_delete_retention_days >= 7 && var.soft_delete_retention_days <= 90
     error_message = "soft_delete_retention_days must be between 7 and 90."
@@ -82,6 +85,7 @@ variable "network_acls_default_action" {
   description = "Default action when no network ACL rule matches. Allow or Deny."
   type        = string
   default     = "Deny"
+
   validation {
     condition     = contains(["Allow", "Deny"], var.network_acls_default_action)
     error_message = "network_acls_default_action must be Allow or Deny."
@@ -92,6 +96,7 @@ variable "network_acls_bypass" {
   description = "Traffic categories that bypass network ACLs. AzureServices or None."
   type        = string
   default     = "AzureServices"
+
   validation {
     condition     = contains(["AzureServices", "None"], var.network_acls_bypass)
     error_message = "network_acls_bypass must be AzureServices or None."

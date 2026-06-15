@@ -12,7 +12,7 @@ Two folders, same three rule sets in each.
 
 The three rule sets:
 
-- **cost-control** keeps the stack on the zero-cost-on-destroy path. No management locks, no key vault purge protection, no premium key vault SKU outside prod.
+- **cost-control** blocks the resources that make teardown expensive or impossible. No management locks, no key vault purge protection, no premium key vault SKU outside prod.
 - **security-baseline** sets the minimum security floor. Key vault stays closed to the public internet, network ACLs default to Deny, RBAC authorization is mandatory, project tags are required on every taggable resource.
 - **naming-conventions** requires every project resource to start with the right type prefix and live in spaincentral. Key vault names cap at 24 characters.
 

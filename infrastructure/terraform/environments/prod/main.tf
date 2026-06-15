@@ -84,4 +84,9 @@ resource "random_string" "kv_suffix" {
   upper   = false
   special = false
   numeric = true
+
+  keepers = {
+    project     = var.project
+    environment = var.environment
+  }
 }

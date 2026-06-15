@@ -16,7 +16,7 @@ variable "resource_group_name" {
 variable "location" {
   description = "Azure region for the VNet and its child resources."
   type        = string
-  default     = "francecentral"
+  default     = "spaincentral"
 }
 
 variable "environment" {
@@ -81,6 +81,13 @@ variable "subnets" {
   }))
 
   default = {}
+  validation {
+    condition = alltrue([
+      for subnet_name, subnet in var.subnets :
+      length(subnet.security_rules) == length(distinct([for rule in subnet.security_rules : rule.priority]))
+    ])
+    error_message = "Each subnet's security_rules must have unique priorities."
+  }
 }
 
 variable "private_dns_zones" {

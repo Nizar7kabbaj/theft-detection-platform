@@ -2,7 +2,6 @@ package terraform.naming
 
 import rego.v1
 
-
 deny contains msg if {
 	resource := input.resource_changes[_]
 	resource.change.actions[_] != "delete"
