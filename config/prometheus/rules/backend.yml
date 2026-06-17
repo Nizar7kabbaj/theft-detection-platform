@@ -1,0 +1,17 @@
+groups:
+  - name: backend
+    interval: 30s
+    rules:
+      - alert: BackendHigh5xxRate
+        expr: |
+          sum(rate(http_server_duration_milliseconds_count{job="backend",http_status_code=~"5.."}[5m]))
+          /
+          sum(rate(http_server_duration_milliseconds_count{job="backend"}[5m]))
+          > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: backend 5xx rate above 1 percent
+          description: backend 5xx rate is {{ $value | humanizePercentage }} sustained for over 5 minutes

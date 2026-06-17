@@ -62,4 +62,6 @@ config/grafana/provisioning/dashboards/dashboards.yml
 config/traefik/traefik.yml
 config/traefik/dynamic.yml
 config/traefik/certs/*
+config/alertmanager/alertmanager.yml
+config/alertmanager/webhook_token
 !config/traefik/certs/.gitkeep

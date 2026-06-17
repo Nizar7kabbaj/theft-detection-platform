@@ -245,6 +245,7 @@ services:
     volumes:
       - prometheus_data:/prometheus
       - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus/rules:/etc/prometheus/rules:ro
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"]
       interval: 30s
@@ -282,11 +283,6 @@ services:
       start_period: 5s
     restart: unless-stopped
 
-  # mongodb-exporter and redis-exporter ship as distroless images with no shell
-  # and no http client, so a container-level healthcheck is not possible. The
-  # prometheus up{} metric on the corresponding scrape jobs is the real signal:
-  # if either exporter stops responding, up{} drops to 0 within the scrape
-  # interval (15s) and the alert fires from the grafana dashboard.
   mongodb-exporter:
     image: percona/mongodb_exporter:0.40
     container_name: theft-mongodb-exporter
@@ -389,6 +385,28 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: theft-alertmanager
+    user: "65534:65534"
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--web.listen-address=:9093"
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - alertmanager_data:/alertmanager
+      - ./config/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./config/alertmanager/webhook_token:/etc/alertmanager/webhook_token:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9093/-/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   alloy:
     image: grafana/alloy:v1.5.1
     container_name: theft-alloy
@@ -440,3 +458,4 @@ volumes:
   loki_data:
   alloy_data:
   tempo_data:
+  alertmanager_data:
