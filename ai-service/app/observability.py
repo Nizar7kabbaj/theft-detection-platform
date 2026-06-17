@@ -33,3 +33,19 @@ def setup_observability(service_name: str) -> None:
     root.addHandler(handler)
     root.setLevel(logging.INFO)
     GrpcAioInstrumentorServer().instrument()
+
+def get_frames_counter():
+    meter = metrics.get_meter("theft.ai")
+    return meter.create_counter(
+        "theft_ai_frames_processed",
+        unit="1",
+        description="frames processed by the inference pipeline",
+    )
+
+def get_inference_histogram():
+    meter = metrics.get_meter("theft.ai")
+    return meter.create_histogram(
+        "theft_ai_inference_duration",
+        unit="ms",
+        description="time spent running the detector on a single frame",
+    )
