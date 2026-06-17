@@ -58,6 +58,7 @@ config/prometheus/prometheus.yml
 config/grafana/provisioning/datasources/prometheus.yml
 config/grafana/provisioning/datasources/loki.yml
 config/grafana/provisioning/datasources/tempo.yml
+config/grafana/provisioning/dashboards/dashboards.yml
 config/traefik/traefik.yml
 config/traefik/dynamic.yml
 config/traefik/certs/*
