@@ -48,7 +48,7 @@
             "mode": "absolute",
             "steps": [{ "color": "green", "value": null }]
           },
-          "unit": "reqps"
+          "unit": "none"
         },
         "overrides": []
       },
@@ -62,13 +62,13 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus-local" },
           "editorMode": "code",
-          "expr": "sum(rate(http_server_duration_milliseconds_count{job=\"backend\"}[1m]))",
-          "legendFormat": "requests",
+          "expr": "rate(theft_ai_frames_processed_total[1m])",
+          "legendFormat": "{{session_id}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Request rate",
+      "title": "FPS per session",
       "type": "timeseries"
     },
     {
@@ -98,11 +98,7 @@
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 200 },
-              { "color": "red", "value": 500 }
-            ]
+            "steps": [{ "color": "green", "value": null }]
           },
           "unit": "ms"
         },
@@ -118,13 +114,13 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus-local" },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_duration_milliseconds_bucket{job=\"backend\"}[5m])))",
-          "legendFormat": "p95",
+          "expr": "histogram_quantile(0.95, sum by (le, session_id) (rate(theft_ai_inference_duration_milliseconds_bucket[5m])))",
+          "legendFormat": "{{session_id}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Overall latency p95",
+      "title": "Inference latency p95 per session",
       "type": "timeseries"
     },
     {
@@ -156,11 +152,7 @@
           "min": 0,
           "thresholds": {
             "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.01 },
-              { "color": "red", "value": 0.05 }
-            ]
+            "steps": [{ "color": "green", "value": null }]
           },
           "unit": "percentunit"
         },
@@ -176,13 +168,13 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus-local" },
           "editorMode": "code",
-          "expr": "sum(rate(http_server_duration_milliseconds_count{job=\"backend\",http_status_code=~\"5..\"}[5m])) / sum(rate(http_server_duration_milliseconds_count{job=\"backend\"}[5m]))",
-          "legendFormat": "5xx rate",
+          "expr": "nvidia_smi_utilization_gpu_ratio",
+          "legendFormat": "{{uuid}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Error rate (5xx)",
+      "title": "GPU utilisation",
       "type": "timeseries"
     },
     {
@@ -212,9 +204,13 @@
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 75 },
+              { "color": "red", "value": 85 }
+            ]
           },
-          "unit": "short"
+          "unit": "celsius"
         },
         "overrides": []
       },
@@ -228,169 +224,13 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus-local" },
           "editorMode": "code",
-          "expr": "sum(http_server_active_requests{job=\"backend\"})",
-          "legendFormat": "in-flight",
+          "expr": "nvidia_smi_temperature_gpu",
+          "legendFormat": "{{uuid}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "In-flight requests",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus-local" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
-          },
-          "unit": "ms"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 14 },
-      "id": 5,
-      "options": {
-        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus-local" },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, http_target) (rate(http_server_duration_milliseconds_bucket{job=\"backend\"}[5m])))",
-          "legendFormat": "{{http_target}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Latency p95 by route",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus-local" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 22 },
-      "id": 6,
-      "options": {
-        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus-local" },
-          "editorMode": "code",
-          "expr": "sum by (http_target) (rate(http_server_duration_milliseconds_count{job=\"backend\",http_status_code=~\"4..\"}[1m]))",
-          "legendFormat": "{{http_target}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "4xx by route",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus-local" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 22 },
-      "id": 7,
-      "options": {
-        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus-local" },
-          "editorMode": "code",
-          "expr": "sum by (http_target) (rate(http_server_duration_milliseconds_count{job=\"backend\",http_status_code=~\"5..\"}[1m]))",
-          "legendFormat": "{{http_target}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "5xx by route",
+      "title": "GPU temperature",
       "type": "timeseries"
     },
     {
@@ -426,8 +266,8 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 29 },
-      "id": 8,
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 14 },
+      "id": 5,
       "options": {
         "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
@@ -436,25 +276,135 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus-local" },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, http_target) (rate(http_server_response_size_bytes_bucket{job=\"backend\"}[5m])))",
-          "legendFormat": "{{http_target}}",
+          "expr": "nvidia_smi_memory_used_bytes",
+          "legendFormat": "{{uuid}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Response size p95 by route",
+      "title": "VRAM used",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus-local" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.8 },
+              { "color": "red", "value": 0.95 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 14 },
+      "id": 6,
+      "options": {
+        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-local" },
+          "editorMode": "code",
+          "expr": "nvidia_smi_memory_used_bytes / nvidia_smi_memory_total_bytes",
+          "legendFormat": "{{uuid}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "VRAM used (percent)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus-local" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "watt"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 14 },
+      "id": 7,
+      "options": {
+        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-local" },
+          "editorMode": "code",
+          "expr": "nvidia_smi_power_draw_watts",
+          "legendFormat": "{{uuid}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GPU power draw",
       "type": "timeseries"
     }
   ],
   "refresh": "10s",
   "schemaVersion": 39,
-  "tags": ["backend", "http"],
+  "tags": ["ai", "pipeline"],
   "templating": { "list": [] },
   "time": { "from": "now-15m", "to": "now" },
   "timepicker": {},
   "timezone": "",
-  "title": "Backend HTTP",
-  "uid": "backend-http",
+  "title": "AI Pipeline",
+  "uid": "ai-pipeline",
   "version": 1,
   "weekStart": ""
 }
