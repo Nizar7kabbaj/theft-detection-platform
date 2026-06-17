@@ -314,6 +314,28 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  nvidia-gpu-exporter:
+    image: utkuozdemir/nvidia_gpu_exporter:1.4.1
+    container_name: theft-nvidia-gpu-exporter
+    ports:
+      - "127.0.0.1:9835:9835"
+    group_add:
+      - "44"
+      - "990"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/9835' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:12.4.4
     container_name: theft-grafana
