@@ -1,5 +1,3 @@
-"""generic mongo repository. one create/get/list/update/delete/count for every collection."""
-
 from typing import Any, Generic, TypeVar
 
 from bson import ObjectId

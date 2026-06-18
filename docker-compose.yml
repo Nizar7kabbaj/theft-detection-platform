@@ -90,6 +90,7 @@ services:
       PROMETHEUS_EXPORTER_PORT: "9464"
     volumes:
       - ./ai-model:/app/ai-model:ro
+      - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
     depends_on:
       alloy:
         condition: service_started
@@ -132,6 +133,7 @@ services:
       REDIS_URL: "${ALERT_REDIS_URL}"
     volumes:
       - ./ai-model:/app/ai-model:ro
+      - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
     depends_on:
       redis:
         condition: service_healthy

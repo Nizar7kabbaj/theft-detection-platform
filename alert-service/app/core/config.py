@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -5,6 +7,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     GRPC_HOST: str = "0.0.0.0"
     GRPC_PORT: int = 50052
+
+    HTTP_HOST: str = "0.0.0.0"
+    HTTP_PORT: int = 8000
 
     REDIS_URL: str = "redis://theft-redis:6379/1"
 
@@ -18,6 +23,8 @@ class Settings(BaseSettings):
 
     CELERY_TASK_MAX_RETRIES: int = 3
     CELERY_TASK_RETRY_DELAY_SEC: int = 10
+
+    ALERTMANAGER_WEBHOOK_TOKEN_FILE: Path = Path("/run/secrets/webhook_token")
 
     LOG_LEVEL: str = "INFO"
 

@@ -14,9 +14,7 @@ pytestmark = [
 ]
 
 
-# minimal 8x8 black jpeg, base64-encoded. enough bytes for the inference
-# service to decode and run yolov8-pose against without exercising real
-# model accuracy. ~330 bytes decoded.
+
 _TINY_JPEG_B64 = (
     "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a"
     "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIy"
