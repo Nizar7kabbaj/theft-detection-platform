@@ -4,6 +4,7 @@ from pathlib import Path
 import requests
 
 from app.core.config import settings
+from app.metrics import telegram_messages_total
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ def _token() -> str:
 def send_message(text: str) -> bool:
     if not is_configured():
         logger.warning("telegram not configured, skipping message")
+        telegram_messages_total.add(1, {"result": "unconfigured"})
         return False
     url = TELEGRAM_API_URL.format(token=_token(), method="sendMessage")
     payload = {
@@ -34,9 +36,11 @@ def send_message(text: str) -> bool:
         )
         response.raise_for_status()
         logger.info("telegram message sent chars=%d", len(text))
+        telegram_messages_total.add(1, {"result": "sent"})
         return True
     except requests.exceptions.RequestException as exc:
         logger.error("telegram send failed: %s", exc)
+        telegram_messages_total.add(1, {"result": "failed"})
         return False
 
 

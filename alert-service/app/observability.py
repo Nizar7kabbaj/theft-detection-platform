@@ -9,11 +9,15 @@ from opentelemetry.instrumentation.grpc import GrpcAioInstrumentorServer
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.view import ExplicitBucketHistogramAggregation, View
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from prometheus_client import start_http_server
 from pythonjsonlogger.json import JsonFormatter
+
+
+_WEBHOOK_DURATION_BUCKETS = (0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
 
 
 def setup_observability(service_name: str) -> None:
@@ -23,7 +27,15 @@ def setup_observability(service_name: str) -> None:
     trace.set_tracer_provider(tracer_provider)
 
     metric_reader = PrometheusMetricReader()
-    metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[metric_reader]))
+    views = [
+        View(
+            instrument_name="theft_alert_webhook_duration_seconds",
+            aggregation=ExplicitBucketHistogramAggregation(_WEBHOOK_DURATION_BUCKETS),
+        ),
+    ]
+    metrics.set_meter_provider(
+        MeterProvider(resource=resource, metric_readers=[metric_reader], views=views)
+    )
     start_http_server(port=int(os.getenv("PROMETHEUS_EXPORTER_PORT", "9464")))
 
     LoggingInstrumentor().instrument(set_logging_format=False)
