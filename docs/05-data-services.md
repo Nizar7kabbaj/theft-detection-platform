@@ -1,0 +1,296 @@
+# Data Services
+
+The backend depends on two local data-plane services during development: MongoDB and Redis. Each runs in Docker on the dev laptop, published on loopback only. This doc covers what runs, why, and how to operate each one.
+
+## Local MongoDB
+
+The development MongoDB instance runs in Docker on the developer machine.
+Production still uses MongoDB Atlas. The local copy lets the dev loop work
+offline and removes Atlas as a hard dependency for testing platform-services
+work.
+
+### Why Docker, not a host install
+
+The original plan was a host-installed MongoDB Community 7 from the official
+apt repository. Two real problems blocked that path on this machine:
+
+1. The official repo doesn't publish packages for Ubuntu 26.04 (resolute).
+   MongoDB's currently-supported codenames stop at noble (24.04). Upstream
+   warns against the standard fallback of pointing 26.04 at the noble suite.
+
+2. MongoDB 8.x has a hard refusal to start on Linux kernel 6.19 and newer, due
+   to an upstream incompatibility between the kernel's restartable-sequences
+   interface and the TCMalloc version vendored into 8.x. This machine runs
+   kernel 7.0. MongoDB 7.0 doesn't have the kernel check, but its apt packages
+   only reach jammy (22.04), two LTS versions behind.
+
+Docker sidesteps both problems. The official `mongo:7` image runs on any host
+kernel because the affected TCMalloc version isn't in it. The image is the
+same MongoDB Inc. binary, packaged differently. All hardening requirements
+still apply: auth, TLS, loopback-only bind, smoke test.
+
+### What runs
+
+A single service in the project's `docker-compose.yml`:
+
+```
+service:     mongo
+image:       mongo:7.0
+container:   theft-mongo
+port:        127.0.0.1:27017 (host) -> 27017 (container)
+restart:     unless-stopped
+healthcheck: mongosh ping over TLS, every 30s
+```
+
+Two bind mounts and one named volume:
+
+```
+infrastructure/mongodb/mongod.conf  ->  /etc/mongo/mongod.conf       (ro)
+/etc/mongod-tls/mongod.pem          ->  /etc/mongo/tls/mongod.pem    (ro)
+mongo_data (named)                  ->  /data/db
+```
+
+The container's mongod runs as UID 999 with supplementary group 972 added so
+it can read the cert file. GID 972 belongs to the host's `mongo-cert` group,
+which owns the TLS files at `/etc/mongod-tls/`.
+
+### TLS
+
+The certificate is self-signed, generated locally with openssl, valid for five
+years. SAN covers `localhost` and `127.0.0.1`, which is enough for
+loopback-only access.
+
+```
+location:     /etc/mongod-tls/mongod.pem
+ownership:    root:mongo-cert (GID 972)
+permissions:  640
+expiry:       2031
+```
+
+The same file is both the server certificate and the CA file. MongoDB
+7.0 requires a CA file when `requireTLS` is set, and a self-signed cert is its
+own CA. Clients trust it by pointing `--tlsCAFile` at the same path.
+
+The public cert lives at a host-readable location in the developer's home
+directory for clients running outside the container. The private key stays in
+`/etc/mongod-tls/`, reachable only to root and members of `mongo-cert`.
+
+### Authentication
+
+Two users exist in the database. Both passwords live in the password manager,
+not in any file on disk and not in any committed config.
+
+```
+admin (in admin database)
+  roles:   userAdminAnyDatabase, dbAdminAnyDatabase, readWriteAnyDatabase
+  purpose: user management and break-glass access
+
+theft_app (in theft_detection_db)
+  roles:   readWrite on theft_detection_db only
+  purpose: application connection from the backend
+```
+
+The localhost exception created the admin user — the one-time mongod
+allowance that lets the first connection from `127.0.0.1` create a user when
+zero users exist. That exception closes after the first user is created.
+
+Password rotation: update the password manager entry first, then run
+`db.changeUserPassword` inside mongosh authenticated as admin.
+
+### Operating the service
+
+```bash
+# Start
+docker compose up -d mongo
+
+# Stop
+docker compose stop mongo
+
+# Status + recent logs
+docker compose ps mongo
+docker logs theft-mongo --tail 50
+```
+
+The healthcheck runs every 30 seconds. A healthy container shows
+`Status: Up (healthy)`. Unhealthy means look at the logs first, since mongod's
+startup errors are usually plain English.
+
+### Connecting from the host
+
+`mongosh` is not installed on the host. Connections go through `docker exec`
+into the container's bundled mongosh. The host-readable cert exists for the
+future case of a Python client (Motor) or another tool running directly on the
+host without Docker.
+
+```bash
+docker exec -i theft-mongo mongosh \
+  --tls \
+  --tlsCAFile /etc/mongo/tls/mongod.pem \
+  --tlsAllowInvalidHostnames \
+  --quiet
+```
+
+Pass the username and password to `db.auth()` once inside the shell. The
+`--tlsAllowInvalidHostnames` flag is acceptable for self-signed local trust;
+the cert chain is still verified.
+
+### Connecting from the backend
+
+`backend/.env` holds two MongoDB URLs:
+
+```
+MONGODB_URL_LOCAL   local Docker mongo, TLS, theft_app credentials
+MONGODB_URL         Atlas, production fallback
+```
+
+The backend code currently reads `MONGODB_URL`. Switching the code to prefer
+`MONGODB_URL_LOCAL` when present is a separate backend change. Both URLs being
+defined now means the wiring is ready when that change lands.
+
+### Atlas fallback
+
+The Atlas cluster stays provisioned and reachable through the `MONGODB_URL`
+connection string. The dev loop runs against local Docker. Prod-parity
+testing runs against Atlas by pointing the backend at `MONGODB_URL` directly.
+
+### Troubleshooting
+
+#### Container crashes with "kernel 6.19+ incompatible"
+
+The image tag is `mongo:8` or later. Pin to `mongo:7.0` in
+`docker-compose.yml`. The TCMalloc fix isn't in any 8.x release yet.
+
+#### Container crashes with "TLS without chain of trust no longer supported"
+
+`mongod.conf` is missing the `CAFile` line under `net.tls`. Add:
+
+```yaml
+CAFile: /etc/mongo/tls/mongod.pem
+```
+
+Same path as `certificateKeyFile`. The self-signed cert serves as its own CA.
+
+#### Container starts but clients can't connect
+
+```bash
+docker compose ps mongo
+```
+
+If `Status` is unhealthy, look at logs:
+
+```bash
+docker logs theft-mongo --tail 50
+```
+
+A "Permission denied" line on `/etc/mongo/tls/mongod.pem` means either the
+`group_add: ["972"]` in compose isn't propagating, or the host file
+permissions drifted:
+
+```bash
+sudo ls -la /etc/mongod-tls/
+```
+
+Files should be mode 640 owned `root:mongo-cert`. Directory should be mode
+750.
+
+#### Atlas connection works, local connection doesn't
+
+Usually the local URL has an unencoded special character in the password.
+Connection strings need `@`, `/`, `:`, and `#` URL-encoded (`%40`, `%2F`,
+`%3A`, `%23`). Atlas-generated passwords contain those often. Regenerate the
+local password as alphanumeric-only to avoid this.
+
+#### Smoke test
+
+```bash
+docker exec -i theft-mongo mongosh \
+  --tls \
+  --tlsCAFile /etc/mongo/tls/mongod.pem \
+  --tlsAllowInvalidHostnames \
+  --quiet
+```
+
+```javascript
+use theft_detection_db
+db.auth("theft_app", "<password>")
+db.smoke_test.insertOne({ test: "roundtrip", at: new Date() })
+db.smoke_test.findOne({ test: "roundtrip" })
+db.smoke_test.deleteMany({ test: "roundtrip" })
+```
+
+A successful round-trip prints an `ObjectId`, the inserted document, and a
+deletion count of 1.
+
+## Local Redis
+
+### Why Docker, not host apt
+
+The Redis apt repo serves Ubuntu 26.04, and Redis 7 has none of the libc-adjacent kernel issues that forced MongoDB into Docker. A host install would have worked. Docker won out anyway because the next ticket in this epic puts Redis in `docker-compose.yml`, so installing on host now would mean tearing it down and redoing the same work in Docker an hour later.
+
+Pinned to `redis:7.2-alpine`. The 7.2.x line is the last under plain 3-Clause BSD. From 7.4.0 onward Redis dual-licenses under RSALv2/SSPLv1, which is fine for a research project but matters for any future industrial partnership. Pinning to `7.2` (not the floating `7-alpine` tag) keeps the line BSD across image rebuilds.
+
+### Why no TLS
+
+MongoDB runs with TLS even on loopback. Redis doesn't.
+
+The argument for TLS on a loopback port is defense in depth: a local-process compromise can't sniff plaintext. The argument against is that the same local process can usually read `/proc/<pid>/environ` or similar, which means TLS doesn't actually raise the bar much against the only attacker who could reach `127.0.0.1` in the first place. The cost is real: cert lifecycle, a dedicated `redis-cert` group, client-side TLS args in every consumer.
+
+Mongo has TLS because Atlas mandates it in production and local dev should mirror that. Azure Cache for Redis offers TLS too, and the Terraform module ticket wires it on. Local dev runs `requirepass` over loopback only, which is the standard Redis pattern for a single-machine setup.
+
+### Permissions model
+
+The Redis config file holds the `requirepass` value as plaintext. It can't live in the repo. Same problem as the Mongo TLS cert, solved the same way:
+
+- Live config: `infrastructure/redis/redis.conf`, owner `root`, group `redis-conf` (GID 971), mode 640
+- Template: `infrastructure/redis/redis.conf.example`, world-readable, placeholder where the password belongs
+- Gitignore covers the live file; the template is committed
+- Container runs as UID 999 (the redis user inside the alpine image) and joins GID 971 via `group_add`
+
+The container needs `user: "999:999"` set explicitly. Without it, the alpine entrypoint starts as root and drops to redis via `gosu`, which resets supplementary groups and silently discards the `group_add: ["971"]`. With `user:` set, the container starts as 999 directly and the group_add survives.
+
+### Config summary
+
+```conf
+bind 0.0.0.0          # inside container only, loopback enforced by compose port map
+port 6379
+protected-mode yes
+requirepass <40-char alphanumeric, in password manager>
+appendonly yes        # AOF on
+appendfsync everysec  # good durability/performance balance, Redis default
+save ""               # RDB off, AOF is the only persistence path
+```
+
+### Smoke test
+
+```bash
+docker exec -i theft-redis redis-cli -a "$REDIS_PASSWORD" --no-auth-warning <<'EOF'
+PING
+SET smoke:test "roundtrip"
+GET smoke:test
+DEL smoke:test
+EOF
+```
+
+Healthy output: `PONG`, `OK`, `roundtrip`, `1`.
+
+### Known startup warning
+
+```
+WARNING Memory overcommit must be enabled! ... add 'vm.overcommit_memory = 1' to /etc/sysctl.conf
+```
+
+This affects Redis's background save fork behavior under memory pressure. Not blocking on a 16 GB laptop with this workload, but for prod-parity it should be set on the eventual deployment host. Should be a deliberate host change, not a side-effect of installing Redis.
+
+### Troubleshooting
+
+#### Container restarts with "Fatal error, can't open config file ... Permission denied"
+
+The `user: "999:999"` directive is missing from the compose service, or GID 971 doesn't exist on the host, or the config file isn't group-owned by `redis-conf`. Check in that order.
+
+#### redis-cli returns NOAUTH or WRONGPASS
+
+`$REDIS_PASSWORD` in the shell doesn't match what's in `redis.conf`. Either the shell variable expired (new terminal session — re-source from Bitwarden) or someone edited `redis.conf` without updating Bitwarden + `.env`.
+
+#### Healthcheck unhealthy but logs look fine
+
+The compose healthcheck reads `requirepass` from the mounted config file and authenticates. If the file isn't readable from inside the container (back to the perms issue above) the healthcheck silently fails. Run `docker exec theft-redis cat /etc/redis/redis.conf | head -1` to check readability from the container's perspective.

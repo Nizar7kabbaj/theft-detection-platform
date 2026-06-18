@@ -5,7 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 
 class StatsRepository:
-    """reads across alerts, detections, cameras. takes the db, not one collection."""
+
 
     def __init__(self, db: AsyncIOMotorDatabase) -> None:
         self._db = db

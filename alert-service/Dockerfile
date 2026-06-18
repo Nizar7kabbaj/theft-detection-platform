@@ -15,8 +15,10 @@ RUN groupadd --system --gid 1000 alert \
 
 WORKDIR /app
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r requirements-dev.txt && \
+    opentelemetry-bootstrap -a install
 
 ARG GRPC_HEALTH_PROBE_VERSION=v0.4.25
 RUN curl -L -o /usr/local/bin/grpc_health_probe \
@@ -24,11 +26,12 @@ RUN curl -L -o /usr/local/bin/grpc_health_probe \
     && chmod +x /usr/local/bin/grpc_health_probe
 
 COPY app /app/app
+COPY pyproject.toml /app/pyproject.toml
 
 RUN chown -R alert:alert /app
 
 USER alert
 
-EXPOSE 50052 9464
+EXPOSE 50052 8000 9464
 
 CMD ["python", "-m", "app.main"]

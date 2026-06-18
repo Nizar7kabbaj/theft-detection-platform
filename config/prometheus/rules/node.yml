@@ -1,0 +1,21 @@
+groups:
+  - name: node
+    interval: 30s
+    rules:
+      - alert: NodeDiskUsageHigh
+        expr: |
+          (
+            node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+            -
+            node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+          )
+          /
+          node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+          > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: node
+        annotations:
+          summary: root filesystem above 80 percent on {{ $labels.instance }}
+          description: root filesystem is {{ $value | humanizePercentage }} full on {{ $labels.instance }}

@@ -1,0 +1,36 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = [
+    "--strict-markers",
+    "--cov=app",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+]
+markers = [
+    "unit: pure unit tests, no external services",
+    "integration: tests against running mongo, redis, or grpc",
+]
+filterwarnings = [
+    "ignore:.*alias.*has no effect.*:UserWarning:pydantic",
+]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = [
+    "app/grpc_gen/*",
+    "app/__pycache__/*",
+    "app/main.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

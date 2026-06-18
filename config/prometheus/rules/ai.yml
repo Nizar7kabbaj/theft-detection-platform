@@ -1,0 +1,16 @@
+groups:
+  - name: ai
+    interval: 30s
+    rules:
+      - alert: AiServiceLowFps
+        expr: |
+          rate(theft_ai_frames_processed_total[1m]) < 5
+          and
+          rate(theft_ai_frames_processed_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: ai service fps below 5 on session {{ $labels.session_id }}
+          description: session {{ $labels.session_id }} processed {{ $value | humanize }} frames per second over the last minute while active in the last five minutes
