@@ -372,6 +372,16 @@ services:
         start_period: 60s
       restart: unless-stopped
 
+  portainer:
+      image: portainer/portainer-ce:lts
+      container_name: theft-portainer
+      command: -H unix:///var/run/docker.sock
+      ports:
+        - "127.0.0.1:9443:9443"
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+        - portainer_data:/data
+
   grafana:
     image: grafana/grafana:12.4.4
     container_name: theft-grafana
@@ -502,3 +512,4 @@ volumes:
   netdata_config:
   netdata_lib:
   netdata_cache:
+  portainer_data:
