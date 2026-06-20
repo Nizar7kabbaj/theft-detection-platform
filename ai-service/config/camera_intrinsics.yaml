@@ -1,0 +1,17 @@
+camera:
+  model: c922_pro
+  resolution: [1920, 1080]
+  pixel_format: mjpg
+calibration:
+  pattern_size: [9, 6]
+  square_size_mm: 25.0
+  image_count: 19
+  reprojection_error_mean_px: 0.17868008804656096
+  reprojection_error_max_px: 0.39350036176112274
+  reprojection_error_rms_px: 0.19792488649912743
+camera_matrix:
+- [1431.523251780349, 0.0, 952.6929406544856]
+- [0.0, 1431.9950638950431, 539.7880331921406]
+- [0.0, 0.0, 1.0]
+distortion_coefficients: [0.070854500564967, -0.3641279238674886, -0.0006881942257146891,
+  0.0025721975868125318, 0.610478730690927]
