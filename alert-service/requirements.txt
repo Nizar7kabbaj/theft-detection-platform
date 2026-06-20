@@ -3,7 +3,7 @@ grpcio-tools==1.71.2
 grpcio-health-checking==1.71.2
 fastapi==0.115.6
 uvicorn[standard]==0.46.0
-pydantic-settings==2.14.0
+pydantic-settings==2.14.2
 python-dotenv==1.2.2
 celery==5.4.0
 redis==5.2.1

@@ -4,7 +4,7 @@ motor==3.7.1
 pymongo==4.17.0
 python-multipart==0.0.31
 aiofiles==25.1.0
-pydantic-settings==2.14.0
+pydantic-settings==2.14.2
 python-dotenv==1.2.2
 Pillow==12.2.0
 redis==5.2.1
