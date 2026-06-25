@@ -1,0 +1,77 @@
+@startuml
+title ml lifecycle — clip selection to live serving
+skinparam activity {
+  BackgroundColor #dae8fc
+  BorderColor #6c8ebf
+  ArrowColor #333333
+  FontName Arial
+  DiamondBackgroundColor #fff2cc
+  DiamondBorderColor #d6b656
+}
+skinparam swimlane {
+  BorderColor #999999
+  TitleBackgroundColor #f5f5f5
+  TitleFontSize 14
+}
+|#f5f5f5|data labeller|
+start
+:select clip batch for annotation; <<#d5e8d4>>
+:push batch to label-studio-service;
+|#f5f5f5|label-studio-service|
+:annotator labels actions per clip;
+:store labels to postgresql;
+:export labelled dataset to delta lake silver;
+|#f5f5f5|training-orchestrator-service|
+switch (training trigger?)
+case (manual)
+  :ml engineer triggers run;
+case (drift-driven)
+  :drift-detection-service fires on ks-test breach;
+case (scheduled)
+  :cron tick;
+endswitch
+:request offline features from feature-store-service;
+|#f5f5f5|feature-store-service|
+:read offline store from delta lake;
+:return feature set;
+|#f5f5f5|training-orchestrator-service|
+:checkout dataset version from delta lake (dvc);
+:run poseconv3d training stages as argo steps;
+:log params and metrics to mlflow;
+:upload model artifact to mlflow;
+if (metrics meet threshold?) then (no)
+  :archive failed run; <<#f8cecc>>
+  stop
+else (yes)
+endif
+|#f5f5f5|audit-service|
+:append service_lifecycle event (training run completed);
+|#f5f5f5|MLflow|
+:write run metadata to postgresql;
+:register new model version in registry;
+:store artifact to azure blob;
+|#f5f5f5|ml engineer|
+:review metrics in mlflow ui;
+if (promote candidate?) then (no)
+  :archive candidate;
+  stop
+else (yes)
+endif
+:tag model version as production;
+|#f5f5f5|MLflow|
+:apply production alias to version;
+|#f5f5f5|audit-service|
+:append admin_action event (model promoted);
+|#f5f5f5|model-serving-service|
+:poll model registry, detect new production version;
+:triton pulls artifact from azure blob;
+:hot-swap model into gpu memory, no restart;
+note right
+  swap is transparent to ai-service.
+  ai-service calls model-serving per frame,
+  does not load models itself.
+end note
+|#f5f5f5|audit-service|
+:append service_lifecycle event (version live);
+stop
+@enduml

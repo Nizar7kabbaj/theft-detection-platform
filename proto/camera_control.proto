@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package theftdetection.v1;
+
+import "google/protobuf/timestamp.proto";
+
+enum CommandKind {
+  COMMAND_KIND_UNSPECIFIED = 0;
+  COMMAND_KIND_START_CAPTURE = 1;
+  COMMAND_KIND_STOP_CAPTURE = 2;
+  COMMAND_KIND_SET_CAPTURE_RATE = 3;
+  COMMAND_KIND_ROTATE_TOKEN = 4;
+  COMMAND_KIND_REQUEST_DIAGNOSTICS = 5;
+  COMMAND_KIND_REQUEST_SNAPSHOT_FLUSH = 6;
+}
+
+message StartCapturePayload {
+  int32 target_fps = 1;
+  string profile_name = 2;
+}
+
+message StopCapturePayload {
+  string reason = 1;
+}
+
+message SetCaptureRatePayload {
+  int32 target_fps = 1;
+}
+
+message RotateTokenPayload {
+  string new_token_id = 1;
+}
+
+message RequestDiagnosticsPayload {
+  bool include_frame_buffer_stats = 1;
+}
+
+message RequestSnapshotFlushPayload {
+  google.protobuf.Timestamp older_than = 1;
+}
+
+message CameraCommand {
+  string command_id = 1;
+  CommandKind kind = 2;
+  google.protobuf.Timestamp issued_at = 3;
+  string issued_by = 4;
+
+  oneof payload {
+    StartCapturePayload start_capture = 20;
+    StopCapturePayload stop_capture = 21;
+    SetCaptureRatePayload set_capture_rate = 22;
+    RotateTokenPayload rotate_token = 23;
+    RequestDiagnosticsPayload request_diagnostics = 24;
+    RequestSnapshotFlushPayload request_snapshot_flush = 25;
+  }
+}
+
+enum CommandStatus {
+  COMMAND_STATUS_UNSPECIFIED = 0;
+  COMMAND_STATUS_APPLIED = 1;
+  COMMAND_STATUS_REJECTED = 2;
+  COMMAND_STATUS_FAILED = 3;
+  COMMAND_STATUS_NOT_APPLICABLE = 4;
+}
+
+message CameraCommandAck {
+  string command_id = 1;
+  CommandStatus status = 2;
+  google.protobuf.Timestamp applied_at = 3;
+  string failure_reason = 4;
+}
+
+message CameraStatusReport {
+  string camera_id = 1;
+  google.protobuf.Timestamp reported_at = 2;
+  bool capturing = 3;
+  int32 current_fps = 4;
+  int32 frame_buffer_seconds = 5;
+  int64 frames_captured_total = 6;
+  int64 frames_uploaded_total = 7;
+  string agent_version = 8;
+}
+
+message AttachRequest {
+  string camera_id = 1;
+  string agent_version = 2;
+  string hostname = 3;
+}
+
+message ControlStreamClientMessage {
+  oneof message {
+    AttachRequest attach = 1;
+    CameraCommandAck ack = 2;
+    CameraStatusReport status_report = 3;
+  }
+}
+
+message ControlStreamServerMessage {
+  oneof message {
+    CameraCommand command = 1;
+  }
+}
+
+service CameraControlService {
+  rpc Control(stream ControlStreamClientMessage)
+      returns (stream ControlStreamServerMessage);
+}

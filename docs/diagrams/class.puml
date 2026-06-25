@@ -1,0 +1,681 @@
+@startuml
+title theft-detection-platform — domain model
+
+skinparam class {
+  BackgroundColor #dae8fc
+  BorderColor #6c8ebf
+  ArrowColor #333333
+  FontName Arial
+  FontSize 12
+}
+skinparam packageStyle rectangle
+hide empty members
+
+legend right
+  <b>classifier colours</b>
+  |<#dae8fc> document |  MongoDB persisted record |
+  |<#e1d5e7> value |  embedded subdocument / value type |
+  |<#fff2cc> enum |  enumeration |
+  |<#f8cecc> abstract |  abstract parent |
+  |<#ffe6cc> payload |  audit oneof variant |
+  |<#d5e8d4> redis |  Redis key/value classifier |
+  |<#fde9d9> blob |  Azure Blob object classifier |
+  |<#e8f0fe> delta |  Delta Lake table |
+  |<#f5f5f5> dto |  transport DTO / read model |
+endlegend
+
+note as N_scope
+  backend documents grounded in the persisted
+  shape (create input plus repository-written fields). response
+  schemas modelled separately as read-model projections.
+  service classes grounded in the locked protos.
+end note
+
+' ============================================================
+package "shared value types" {
+  class Bbox <<value>> #e1d5e7 {
+    + x1 : Float
+    + y1 : Float
+    + x2 : Float
+    + y2 : Float
+  }
+  class Keypoint <<value>> #e1d5e7 {
+    + name : String [0..1]
+    + x : Float
+    + y : Float
+    + confidence : Float {0..1}
+  }
+  class Person <<value>> <<untyped>> #e1d5e7 {
+  }
+  class DetectedObject <<value>> <<untyped>> #e1d5e7 {
+    + class_name : String
+  }
+}
+
+note bottom of Person
+  persisted as raw dict today (Struct/untyped). typed
+  Person message deferred. composition arrow reflects the
+  target typed shape, not the current dict.
+end note
+
+' ============================================================
+package "backend — operational store (MongoDB)" {
+  class Camera <<document>> #dae8fc {
+    + id : ObjectId
+    + name : String {unique}
+    + location : String
+    + stream_url : String [0..1]
+    + status : String = "active"
+    + created_at : DateTime
+  }
+  class Detection <<document>> #dae8fc {
+    + id : ObjectId
+    + session_id : Int64
+    + frame_index : Int32
+    + timestamp : String
+    + camera_id : String = "default"
+    + class_name : String
+    + confidence : Float {0..1}
+    + created_at : DateTime
+  }
+  class Alert <<document>> #dae8fc {
+    + id : ObjectId
+    + alert_id : String
+    + session_id : Int64
+    + frame_index : Int32
+    + timestamp : String
+    + camera_id : String = "default"
+    + severity : String
+    + alert_type : String = "object_proximity"
+    + snapshot_path : String [0..1]
+    + torso_angle : Float [0..1]
+    + created_at : DateTime
+    + acknowledged : Boolean = false
+    + acknowledged_at : DateTime [0..1]
+  }
+}
+
+note bottom of Detection
+  index (session_id asc, timestamp desc). camera_id is a
+  soft string reference, not an ObjectId foreign key — gap.
+end note
+
+note bottom of Alert
+  index (acknowledged asc, created_at desc). acknowledgement
+  owned here. torso_angle declared but never set — dead field,
+  drop or formalize. severity normalized upper-case on write.
+end note
+
+' ============================================================
+package "backend — read models (HTTP DTO)" {
+  class AlertResponse <<dto>> #f5f5f5 {
+    + id : String
+    + alert_id : String
+    + session_id : Int64
+    + timestamp : String
+    + camera_id : String
+    + severity : String
+    + object_name : String
+    + confidence : Float [0..1]
+    + snapshot_url : String [0..1]
+    + alert_type : String [0..1]
+  }
+  class StatsResponse <<dto>> #f5f5f5 {
+    + total_alerts : Int
+    + total_detections : Int
+    + total_cameras : Int
+    + alerts_today : Int
+    + high_severity : Int
+    + medium_severity : Int
+    + top_objects : TopObject [0..*]
+  }
+  class TopObject <<dto>> #f5f5f5 {
+    + object : String [0..1]
+    + count : Int
+  }
+}
+
+note bottom of AlertResponse
+  projection over Alert. flattens object.class_name to
+  object_name, snapshot_path to snapshot_url. drops
+  frame_index, person, object, keypoints, torso_angle.
+end note
+
+' ============================================================
+package "auth-service (MongoDB)" {
+  class User <<document>> #dae8fc {
+    + id : ObjectId
+    + username : String {unique}
+    + email : String {unique}
+    + password_hash : String
+    + is_active : Boolean = true
+    + created_at : DateTime
+    + updated_at : DateTime
+    + last_login_at : DateTime [0..1]
+    + password_changed_at : DateTime
+  }
+  class Session <<document>> #dae8fc {
+    + id : String
+    + user_id : ObjectId
+    + issued_at : DateTime
+    + last_used_at : DateTime
+    + expires_at : DateTime
+    + source_ip : String
+    + user_agent : String
+    + revoked : Boolean = false
+    + revoked_at : DateTime [0..1]
+    + revoked_reason : String [0..1]
+  }
+  class RefreshToken <<document>> #dae8fc {
+    + id : String
+    + session_id : String
+    + user_id : ObjectId
+    + issued_at : DateTime
+    + expires_at : DateTime
+    + rotated : Boolean = false
+    + rotated_at : DateTime [0..1]
+    + successor_jti : String [0..1]
+  }
+  class Lockout <<document>> #dae8fc {
+    + id : ObjectId
+    + username_attempted : String
+    + user_id : ObjectId [0..1]
+    + source_ip : String
+    + user_agent : String
+    + attempt_count : Int
+    + locked_at : DateTime
+    + unlocked_at : DateTime [0..1]
+    + unlock_reason : String [0..1]
+  }
+  enum Role <<enum>> #fff2cc {
+    OPERATOR
+    ADMIN
+    ML_ENGINEER
+    COMPLIANCE
+    VIEWER
+  }
+}
+
+note bottom of RefreshToken
+  rotation-on-every-refresh. successor_jti chains a token
+  to the one that replaced it; reuse of a rotated token
+  revokes the session. user_id denormalized for lookup.
+end note
+
+note bottom of Role
+  COMPLIANCE added to back the Compliance Officer actor
+  (audit query / chain verify). VIEWER pending confirmation
+  against auth-service RBAC code.
+end note
+
+' ============================================================
+package "audit-service (MongoDB, append-only)" {
+  class AuditLogEntry <<document>> #dae8fc {
+    + id : String
+    + sequence_number : String {unique}
+    + previous_hash : String
+    + chain_hash : String {unique}
+    + occurred_at : DateTime
+    + persisted_at : DateTime
+    + source_service : String
+    + trace_id : String
+    + actor : String [0..1]
+    + severity : Severity
+    + payload_kind : String
+  }
+  enum Severity <<enum>> #fff2cc {
+    INFO
+    NOTICE
+    WARNING
+    CRITICAL
+  }
+  abstract class AuditPayload <<abstract>> #f8cecc {
+  }
+  class LoginSuccess <<payload>> #ffe6cc {
+    + user_id : String
+    + username : String
+    + source_ip : String
+    + user_agent : String
+    + roles : String [0..*]
+  }
+  class LoginFailure <<payload>> #ffe6cc {
+    + username_attempted : String
+    + source_ip : String
+    + user_agent : String
+    + failure_reason : String
+    + attempt_count : Int32
+  }
+  class LogoutEvent <<payload>> #ffe6cc {
+    + user_id : String
+    + session_id : String
+    + source_ip : String
+  }
+  class DetectionWritten <<payload>> #ffe6cc {
+    + detection_id : String
+    + session_id : Int64
+    + frame_index : Int32
+    + camera_id : String
+    + alert_type : String
+    + score : Float
+    + track_id : Int32
+  }
+  class AlertDispatched <<payload>> #ffe6cc {
+    + alert_id : String
+    + session_id : Int64
+    + camera_id : String
+    + severity : String
+    + alert_type : String
+    + channel : String
+    + delivered : Boolean
+    + attempt_count : Int32
+    + failure_reason : String
+  }
+  class AlertAcknowledged <<payload>> #ffe6cc {
+    + alert_id : String
+    + acknowledged_by : String
+  }
+  class ConfigChanged <<payload>> #ffe6cc {
+    + actor_user_id : String
+    + resource_kind : String
+    + resource_id : String
+    + field_path : String
+    + before_value_hash : String
+    + after_value_hash : String
+  }
+  class AdminAction <<payload>> #ffe6cc {
+    + actor_user_id : String
+    + action : String
+    + target_kind : String
+    + target_id : String
+    + reason : String
+  }
+  class DefenseRejected <<payload>> #ffe6cc {
+    + session_id : Int64
+    + frame_index : Int32
+    + rejection_kind : String
+    + anomaly_score : Float
+    + detector_name : String
+  }
+  class DataSubjectErasure <<payload>> #ffe6cc {
+    + data_subject_id : String
+    + requested_by : String
+    + scopes : String [0..*]
+    + records_deleted : Int32
+    + completed : Boolean
+  }
+  class ServiceLifecycleEvent <<payload>> #ffe6cc {
+    + service_name : String
+    + event_kind : String
+    + version : String
+    + hostname : String
+  }
+}
+
+note right of AuditLogEntry
+  sequence_number zero-padded 20 digits, stored as string,
+  same form on wire and in the hash input. previous_hash
+  links each row to the prior chain_hash.
+end note
+
+' ============================================================
+package "notification-service (MongoDB)" {
+  class Notification <<document>> #dae8fc {
+    + id : ObjectId
+    + notification_id : String {unique}
+    + kind : NotificationKind
+    + created_at : DateTime
+    + received_at : DateTime
+    + source_alert_id : String [0..1]
+    + terminal_state : TerminalState
+    + terminal_state_at : DateTime
+  }
+  enum NotificationKind <<enum>> #fff2cc {
+    THEFT_EVENT
+    INFRA_ALERT
+  }
+  enum Channel <<enum>> #fff2cc {
+    TELEGRAM
+    PUSH
+    EMAIL
+  }
+  enum TerminalState <<enum>> #fff2cc {
+    PENDING
+    ENQUEUED
+    IN_FLIGHT
+    DELIVERED
+    FAILED
+    DROPPED_DLQ
+  }
+  enum DeliveryOutcome <<enum>> #fff2cc {
+    ACCEPTED
+    FAILED
+    RATE_LIMITED
+    DROPPED
+  }
+  class DeliveryAttempt <<value>> #e1d5e7 {
+    + channel : Channel
+    + attempt_number : Int
+    + started_at : DateTime
+    + finished_at : DateTime [0..1]
+    + outcome : DeliveryOutcome
+    + failure_reason : String [0..1]
+    + provider_message_id : String [0..1]
+  }
+  class TheftEventPayload <<value>> #e1d5e7 {
+    + session_id : Int64
+    + frame_index : Int32
+    + camera_id : String
+    + severity : String
+    + alert_type : String
+    + track_id : Int32
+    + score : Float
+    + snapshot_path : String [0..1]
+  }
+  class InfraAlertPayload <<value>> #e1d5e7 {
+    + alertname : String
+    + severity : String
+    + service : String
+    + summary : String [0..1]
+    + status : String
+    + starts_at : DateTime
+    + ends_at : DateTime [0..1]
+    + generator_url : String [0..1]
+    + fingerprint : String [0..1]
+    + group_key : String
+  }
+}
+
+note bottom of Notification
+  one row per intent. channels resolved at acceptance;
+  telegram wired first, push and email (SMTP) are the
+  remaining worker adapters. delivery history embedded.
+end note
+
+' ============================================================
+package "notification-service — inbound DTO" {
+  class AlertmanagerWebhook <<dto>> #f5f5f5 {
+    + version : String
+    + group_key : String
+    + status : String
+    + receiver : String
+    + external_url : String
+    + to_telegram_html() : String
+  }
+  class AlertmanagerAlert <<dto>> #f5f5f5 {
+    + status : String
+    + starts_at : DateTime
+    + ends_at : DateTime [0..1]
+    + generator_url : String [0..1]
+    + fingerprint : String [0..1]
+  }
+}
+
+note bottom of AlertmanagerWebhook
+  to_telegram_html couples inbound format to one output
+  channel.Moves rendering to a per-channel renderer off
+  this DTO.
+end note
+
+' ============================================================
+package "privacy-service (MongoDB)" {
+  class DataSubject <<document>> #dae8fc {
+    + id : ObjectId
+    + data_subject_id : String {unique}
+    + display_name : String [0..1]
+    + created_at : DateTime
+    + created_reason : CreatedReason
+    + erasure_requested : Boolean = false
+    + erasure_requested_at : DateTime [0..1]
+    + erasure_requested_by : String [0..1]
+    + erasure_completed : Boolean = false
+    + erasure_completed_at : DateTime [0..1]
+    + suppression_active : Boolean = false
+    + suppression_mode : SuppressionMode [0..1]
+    + suppression_activated_at : DateTime [0..1]
+  }
+  enum CreatedReason <<enum>> #fff2cc {
+    FACE_MATCH
+    EMPLOYEE_BADGE
+    ERASURE_REQUEST_FILED
+    MANUAL_ADMIN_ENTRY
+  }
+  enum SuppressionMode <<enum>> #fff2cc {
+    BLUR_FACE_ONLY
+    DROP_SNAPSHOT
+    DROP_ALL
+  }
+  enum ErasureStore <<enum>> #fff2cc {
+    MONGO
+    BLOB
+    DELTA
+    AUDIT_LOG
+  }
+  class SubjectReferences <<value>> #e1d5e7 {
+    + mongo_detection_ids : String [0..*]
+    + mongo_notification_ids : String [0..*]
+    + blob_snapshot_keys : String [0..*]
+    + audit_log_event_ids : String [0..*]
+  }
+  class DeltaRowRef <<value>> #e1d5e7 {
+    + table : String
+    + primary_key : String
+  }
+  class ErasureStep <<value>> #e1d5e7 {
+    + store : ErasureStore
+    + started_at : DateTime
+    + finished_at : DateTime [0..1]
+    + records_processed : Int
+    + records_failed : Int
+    + failure_reason : String [0..1]
+  }
+}
+
+note bottom of SubjectReferences
+  denormalized cross-store index for bounded-time erasure.
+  source of truth stays in each store. audit_log entries are
+  redacted with a tombstone, never deleted.
+  enum literals pending privacy-service code confirmation.
+end note
+
+' ============================================================
+package "Redis 7 — key/value classifiers" {
+  class CacheEntry <<redis>> #d5e8d4 {
+    + key : cache:{resource}:{params}
+    + value : JSON
+    + ttl : Duration
+  }
+  class IdempotencyKey <<redis>> #d5e8d4 {
+    + key : idem:{method}:{path}:{header}
+    + value : response_hash
+    + ttl : 24h
+  }
+  class RefreshTokenBlocklist <<redis>> #d5e8d4 {
+    + key : refresh_blocked:{jti}
+    + value : reason
+    + ttl : until_expiry
+  }
+  class LockoutCounter <<redis>> #d5e8d4 {
+    + key : lockout:{username}
+    + value : attempt_count
+    + ttl : 15m
+  }
+  class CeleryQueue <<redis>> #d5e8d4 {
+    + key : celery_queue
+    + value : task_dict
+  }
+  class PubSubChannel <<redis>> #d5e8d4 {
+    + channels : alerts:* , cameras:*
+    + payload : JSON
+  }
+  class AnomalyScoreCache <<redis>> #d5e8d4 {
+    + key : anomaly:{session_id}
+    + value : Float
+  }
+  class CameraPendingCommands <<redis>> #d5e8d4 {
+    + key : camera_pending:{camera_id}
+    + value : CameraCommand_queue
+  }
+  class FeatureViewOnline <<redis>> #d5e8d4 {
+    + key : feast:{view}:{entity}
+    + value : feature_vector
+  }
+  class RateLimitCounter <<redis>> #d5e8d4 {
+    + key : ratelimit:{key}
+    + value : count
+    + ttl : window
+  }
+}
+
+' ============================================================
+package "Azure Blob — object classifiers" {
+  class SnapshotImage <<blob>> #fde9d9 {
+    + key : snapshots/{camera_id}/{date}/{alert_id}.jpg
+    + content_type : image/jpeg
+  }
+  class ModelArtifact <<blob>> #fde9d9 {
+    + key : mlflow/{run_id}/artifacts/...
+    + content_type : binary
+  }
+  class DvcArtifact <<blob>> #fde9d9 {
+    + key : dvc/{md5}/...
+    + content_type : binary
+  }
+}
+
+' ============================================================
+package "Delta Lake — medallion tables (Azure Blob)" {
+  class BronzeDetections <<delta>> #e8f0fe {
+    + session_id : Long
+    + frame_index : Int
+    + camera_id : String
+    + class_name : String
+    + confidence : Double
+    + ingested_at : Timestamp
+  }
+  class BronzeAlerts <<delta>> #e8f0fe {
+    + alert_id : String
+    + session_id : Long
+    + severity : String
+    + alert_type : String
+    + ingested_at : Timestamp
+  }
+  class BronzePresenceEvents <<delta>> #e8f0fe {
+    + event_id : String
+    + kind : String
+    + camera_id : String
+    + session_id : Long
+    + track_id : Int
+    + ingested_at : Timestamp
+  }
+  class SilverSessions <<delta>> #e8f0fe {
+    + session_id : Long
+    + camera_id : String
+    + start_ts : Timestamp
+    + end_ts : Timestamp
+    + detection_count : Int
+    + alert_count : Int
+  }
+  class SilverDetectionsLabeled <<delta>> #e8f0fe {
+    + detection_id : String
+    + session_id : Long
+    + label : String
+    + labeled_by : String
+    + labeled_at : Timestamp
+  }
+  class GoldDailyKpis <<delta>> #e8f0fe {
+    + date : Date
+    + camera_id : String
+    + alert_count : Int
+    + ack_rate : Double
+    + top_object : String
+    + mean_confidence : Double
+  }
+  class GoldDriftBaseline <<delta>> #e8f0fe {
+    + feature_name : String
+    + baseline_distribution : Array
+    + computed_at : Timestamp
+  }
+}
+
+note bottom of BronzePresenceEvents
+  bronze tables mirror their source collection or proto.
+  silver is cleaned per-session; gold is the serving layer.
+end note
+
+' ============================================================
+package "PostgreSQL — external schemas" {
+  class MLflowTrackingDB <<external>> #f5f5f5 {
+  }
+  class LabelStudioMetadataDB <<external>> #f5f5f5 {
+  }
+}
+
+note bottom of MLflowTrackingDB
+  two databases on one instance. owned by their services,
+  schemas not modelled here.
+end note
+
+' ===================== relationships =======================
+
+Detection "1" *-- "1" Bbox
+Detection "1" *-- "0..*" Keypoint
+Alert "1" *-- "0..1" Person
+Alert "1" *-- "0..1" DetectedObject
+Alert "1" *-- "0..*" Keypoint
+User "1" *-- "0..*" Session
+Session "1" *-- "0..*" RefreshToken
+AuditLogEntry "1" *-- "1" AuditPayload
+Notification "1" *-- "0..1" TheftEventPayload
+Notification "1" *-- "0..1" InfraAlertPayload
+Notification "1" *-- "0..*" DeliveryAttempt
+TheftEventPayload "1" *-- "0..1" Person
+TheftEventPayload "1" *-- "0..1" DetectedObject
+TheftEventPayload "1" *-- "0..*" Keypoint
+DataSubject "1" *-- "1" SubjectReferences
+DataSubject "1" *-- "0..*" ErasureStep
+SubjectReferences "1" *-- "0..*" DeltaRowRef
+AlertmanagerWebhook "1" *-- "1..*" AlertmanagerAlert
+
+AuditPayload <|-- LoginSuccess
+AuditPayload <|-- LoginFailure
+AuditPayload <|-- LogoutEvent
+AuditPayload <|-- DetectionWritten
+AuditPayload <|-- AlertDispatched
+AuditPayload <|-- AlertAcknowledged
+AuditPayload <|-- ConfigChanged
+AuditPayload <|-- AdminAction
+AuditPayload <|-- DefenseRejected
+AuditPayload <|-- DataSubjectErasure
+AuditPayload <|-- ServiceLifecycleEvent
+
+Detection "0..*" --> "0..1" Camera : at >
+Alert "0..*" --> "0..1" Camera : at >
+AlertResponse ..> Alert : projection of >
+StatsResponse "1" *-- "0..*" TopObject
+StatsResponse ..> Alert : aggregates >
+Notification "0..*" --> "0..1" Alert : source >
+Lockout "0..*" --> "0..1" User : attempted >
+RefreshToken "0..1" --> "0..1" RefreshToken : succeededBy >
+AuditLogEntry "1" --> "0..1" AuditLogEntry : chainedTo >
+
+User ..> Role
+AuditLogEntry ..> Severity
+Notification ..> NotificationKind
+Notification ..> TerminalState
+DeliveryAttempt ..> Channel
+DeliveryAttempt ..> DeliveryOutcome
+DataSubject ..> CreatedReason
+DataSubject ..> SuppressionMode
+ErasureStep ..> ErasureStore
+
+InfraAlertPayload ..> AlertmanagerWebhook : built from
+Alert ..> SnapshotImage : snapshot_path
+TheftEventPayload ..> SnapshotImage : snapshot_path
+RefreshToken ..> RefreshTokenBlocklist : checked via
+Lockout ..> LockoutCounter : live counter
+SubjectReferences ..> Detection
+SubjectReferences ..> Notification
+SubjectReferences ..> AuditLogEntry
+SubjectReferences ..> SnapshotImage
+
+@enduml

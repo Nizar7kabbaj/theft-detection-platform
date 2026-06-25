@@ -1,0 +1,257 @@
+@startuml
+title deployment view: edge appliance to azure aks
+
+skinparam node {
+  BackgroundColor #dae8fc
+  BorderColor #6c8ebf
+  FontName Arial
+}
+skinparam database {
+  BackgroundColor #e1d5e7
+  BorderColor #9673a6
+}
+skinparam component {
+  BackgroundColor #d5e8d4
+  BorderColor #82b366
+  FontName Arial
+}
+skinparam cloud {
+  BackgroundColor #F5F5F5
+  BorderColor #cccccc
+}
+
+actor "Operator" as operator
+actor "Admin /\nML Engineer /\nCompliance" as backoffice
+actor "Data Subject" as dataSubj
+
+node "Edge Appliance\n[1..N per store]" as edge <<device>> {
+
+  node "Edge GPU" as edgeGPU <<device>> #f8cecc
+
+  node "USB Camera\n/dev/video0" as cam <<device>> #f8cecc
+
+  node "Container Runtime" as edgeRT <<executionEnvironment>> {
+    component "camera-service" as CAM #dae8fc
+    component "detect-gate-service" as DET #dae8fc
+    component "ai-service" as AI #dae8fc
+    component "adversarial-defense-service" as DEF #dae8fc
+    component "federated-edge-client" as FECLIENT #d5e8d4
+    component "Alloy\n(edge collector)" as ALLOYEDGE #e1d5e7
+  }
+}
+
+node "Private Link\n(VPN / ExpressRoute)" as VPN <<executionEnvironment>> #f8cecc
+
+cloud "Azure Front Door\n(global)" as FRONTDOOR #F5F5F5 {
+  node "CDN edge" as CDN #dae8fc
+}
+
+cloud "Azure" as azure {
+
+  node "spaincentral" as primary <<executionEnvironment>> {
+
+    node "Application Gateway" as APPGW <<executionEnvironment>> #dae8fc
+
+    node "Azure Container Registry" as ACR <<executionEnvironment>> #e1d5e7
+    node "Azure Key Vault" as KV <<executionEnvironment>> #fff2cc
+    node "Managed Identity" as MI <<executionEnvironment>> #fff2cc
+    node "Event Hub" as EH <<executionEnvironment>> #ffe6cc
+
+    node "AKS Cluster" as aks <<executionEnvironment>> {
+
+      node "System Node Pool" as sysPool {
+
+        node "Application" as appTier {
+          component "frontend" as FE #ffe6cc
+          component "backend" as BE #ffe6cc
+        }
+
+        node "Notification" as notifTier {
+          component "notification-service" as NOTIF #ffe6cc
+          component "notification-worker" as NW #ffe6cc
+        }
+
+        node "Identity, Security & Compliance" as secTier {
+          component "auth-service" as AUTH #fff2cc
+          component "audit-service" as AUD #fff2cc
+          component "privacy-service" as PRIV #fff2cc
+        }
+
+        node "Data Plane" as dataPlaneTier {
+          component "ingest-service" as ING #dae8fc
+          component "analytics-service" as ANL #dae8fc
+        }
+
+        node "ML Platform (CPU)" as mlCPU {
+          component "training-orchestrator-service" as TRAIN #d5e8d4
+          component "drift-detection-service" as DRIFT #d5e8d4
+          component "federated-aggregator-service" as FAG #d5e8d4
+          component "MLflow" as MLF #d5e8d4
+          component "Label Studio" as LS #d5e8d4
+          component "Feast" as FEAST #d5e8d4
+        }
+
+        node "Observability" as obsTier {
+          component "Prometheus" as PROM #e1d5e7
+          component "Grafana" as GRAF #e1d5e7
+          component "Loki" as LOKI #e1d5e7
+          component "Tempo" as TEMPO #e1d5e7
+          component "Alloy" as ALLOY #e1d5e7
+          component "Alertmanager" as AM #e1d5e7
+        }
+      }
+
+      node "GPU Node Pool\n(NV / ND series)" as gpuPool {
+        node "Cloud GPU" as cloudGPU <<device>> #f8cecc
+        component "model-serving-service" as MSRV #d5e8d4
+        component "Triton" as TRI #d5e8d4
+      }
+    }
+
+    node "Managed Data Services" as dataTier <<executionEnvironment>> {
+      database "MongoDB\n(Cosmos DB API)" as MONGO
+      database "Redis\n(Azure Cache)" as REDIS
+      database "Delta Lake\n(Azure Blob)" as DELTA
+      database "PostgreSQL" as PG
+    }
+  }
+}
+
+cloud "Public Internet" as internet {
+  node "Telegram Bot API" as TG #f8cecc
+}
+
+cam -- CAM : V4L2
+AI -- edgeGPU : CUDA
+DET -- edgeGPU : CUDA
+MSRV -- cloudGPU : CUDA
+TRI -- cloudGPU : CUDA
+
+CAM -- DET : frame transport
+DET -- AI : presence.proto StreamPresence (bidi)
+AI -- DEF : defense.proto ValidateKeypoints (gRPC TLS)
+AI -- MSRV : forward pass yolov8-pose / poseconv3d (gRPC TLS)
+FECLIENT -- FAG : federated round (gRPC TLS)
+ALLOYEDGE -- ALLOY : OTel push (TLS)
+
+operator -- FRONTDOOR : HTTPS
+backoffice -- FRONTDOOR : HTTPS
+dataSubj -- FRONTDOOR : HTTPS
+FRONTDOOR -- APPGW : HTTPS
+
+APPGW -- FE : HTTPS
+FE -- BE : /api/v1 + /ws
+APPGW -- AUTH : HTTP /auth
+APPGW -- PRIV : HTTP /privacy
+APPGW -- AUD : HTTP /audit query
+
+edge -- VPN : private link
+VPN -- APPGW : TLS
+CAM -- BE : camera_control.proto Control (edge-initiated bidi)
+AI -- BE : theft event (gRPC TLS)
+
+BE -- AI : inference.proto Analyze (gRPC TLS)
+BE -- NOTIF : notification.proto SendAlert (gRPC TLS)
+BE -- AUTH : auth.proto VerifyToken (gRPC TLS)
+BE -- AUD : audit.proto AppendEvent (gRPC TLS)
+BE -- ANL : HTTP BI views
+BE -- MONGO : cameras, detections, alerts, stats
+BE -- REDIS : cache, pub/sub, idempotency
+
+AI -- AUD : audit.proto DefenseRejected (gRPC TLS)
+
+NOTIF -- NW : Celery via Redis
+NOTIF -- MONGO : notifications
+NOTIF -- REDIS : Celery broker
+NW -- TG : HTTPS sendPhoto / sendMessage
+NW -- AUD : audit.proto AlertDispatched (gRPC TLS)
+AM -- NOTIF : webhook
+ANL -- NOTIF : weekly report handoff
+
+AUTH -- MONGO : users, sessions, refresh_tokens, lockouts
+AUD -- MONGO : audit_log
+PRIV -- MONGO : data_subjects, erasure
+PRIV -- DELTA : erasure cascade
+
+MONGO -- ING : change streams
+REDIS -- ING : pub/sub
+ING -- DELTA : append bronze
+ANL -- DELTA : read bronze, write silver / gold
+
+MSRV -- MLF : registry pull
+MSRV -- DELTA : pull artifact weights
+TRAIN -- MLF : log runs
+TRAIN -- DELTA : training data (DVC)
+TRAIN -- FEAST : offline features
+TRAIN -- LS : labels
+DRIFT -- DELTA : keypoint distributions
+DRIFT -- AM : drift alerts
+FEAST -- DELTA : offline store
+FEAST -- REDIS : online store
+FAG -- MLF : log federated run
+MLF -- PG : run metadata
+MLF -- DELTA : artifacts
+LS -- PG : metadata
+LS -- DELTA : export to silver
+
+ALLOY -- PROM : metrics
+ALLOY -- LOKI : logs
+ALLOY -- TEMPO : traces
+PROM -- AM : alerts
+GRAF -- PROM : query
+
+aks ..> ACR : pull images
+aks ..> KV : secrets via CSI driver
+aks ..> MI : workload identity
+dataTier ..> KV : connection strings
+
+note bottom of edge
+  one appliance per store.
+  detection and pose action recognition run near
+  the camera, no round-tripping frames to cloud.
+end note
+
+note right of CAM
+  frame transport to detect-gate
+  (event hub, grpc stream, or shared fs)
+  deferred to gap-list step 5
+end note
+
+note right of DET
+  detect-model hosting unresolved.
+  inventory lists model-serving-service as a
+  detect-gate dependency, but the edge note
+  says detect runs local. one of the two gives
+end note
+
+note bottom of gpuPool
+  model-serving placement (edge co-located vs
+  cloud gpu pool) interacts with the no-round-trip
+  rule above. ai-service to model-serving path
+  unresolved until that lands
+end note
+
+note right of AI
+  inventory: ai-service emits theft events to
+  backend and notification-service. drawn here as
+  backend-mediated (contract row 7). a direct
+  ai-to-notification arrow is not yet a contract row
+end note
+
+note bottom of FECLIENT
+  edge-client placement (camera-service vs a
+  dedicated edge agent) tbd pending edge-runtime design
+end note
+
+note right of EH
+  spaincentral. frame-transport candidate for the
+  edge ingest path, role deferred to gap-list step 5.
+  not yet wired to a service
+end note
+
+note right of gpuPool
+  dedicated gpu pool for model-serving and triton.
+  sized via nv / nd skus
+end note
+
+@enduml

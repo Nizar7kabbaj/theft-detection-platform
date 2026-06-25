@@ -11,7 +11,6 @@ from opentelemetry import trace
 
 from app.grpc_gen import common_pb2, inference_pb2, inference_pb2_grpc
 from app.inference import Detector, DetectionResult
-from app.observability import get_frames_counter
 from app.observability import get_frames_counter, get_inference_histogram
 
 logger = logging.getLogger(__name__)

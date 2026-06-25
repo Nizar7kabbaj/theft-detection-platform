@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package theftdetection.v1;
+
+import "google/protobuf/timestamp.proto";
+
+enum PresenceEventKind {
+  PRESENCE_EVENT_KIND_UNSPECIFIED = 0;
+  PRESENCE_EVENT_KIND_PERSON_ENTERED = 1;
+  PRESENCE_EVENT_KIND_PERSON_LEFT = 2;
+}
+
+message PresenceEvent {
+  string event_id = 1;
+  PresenceEventKind kind = 2;
+  google.protobuf.Timestamp occurred_at = 3;
+  string camera_id = 4;
+  int64 session_id = 5;
+  int32 track_id = 6;
+  float detection_confidence = 7;
+  int32 source_frame_index = 8;
+}
+
+enum AckStatus {
+  ACK_STATUS_UNSPECIFIED = 0;
+  ACK_STATUS_ACCEPTED = 1;
+  ACK_STATUS_DROPPED_DUPLICATE = 2;
+  ACK_STATUS_DROPPED_STALE = 3;
+}
+
+message PresenceAck {
+  string event_id = 1;
+  AckStatus status = 2;
+}
+
+service PresenceService {
+  rpc StreamPresence(stream PresenceEvent) returns (stream PresenceAck);
+}
