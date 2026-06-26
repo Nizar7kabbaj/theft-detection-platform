@@ -3,7 +3,7 @@ compact: true
 framework:
   - terraform
 directory:
-  - infrastructure/terraform
+  - infra/terraform
 skip-check:
   - CKV_AZURE_110
   - CKV_AZURE_42

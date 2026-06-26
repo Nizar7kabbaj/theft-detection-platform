@@ -4,9 +4,9 @@ repos:
     hooks:
       - id: check-yaml
       - id: trailing-whitespace
-        exclude: ^infrastructure/(mongodb/mongod\.conf|tempo/tempo\.yml)$
+        exclude: ^config/(mongodb/mongod\.conf|tempo/tempo\.yml)$
       - id: end-of-file-fixer
-        exclude: ^infrastructure/(mongodb/mongod\.conf|tempo/tempo\.yml)$
+        exclude: ^config/(mongodb/mongod\.conf|tempo/tempo\.yml)$
       - id: check-merge-conflict
 
   - repo: https://github.com/gitleaks/gitleaks
@@ -35,7 +35,7 @@ repos:
           - --framework
           - terraform
           - --directory
-          - infrastructure/terraform
+          - infra/terraform
           - --config-file
           - .checkov.yaml
 
@@ -43,7 +43,7 @@ repos:
     hooks:
       - id: conftest
         name: conftest opa policies against terraform plan
-        entry: conftest test --policy infrastructure/terraform/policies/opa
+        entry: conftest test --policy infra/terraform/policies/opa
         language: system
         stages: [manual]
         pass_filenames: true
@@ -53,4 +53,4 @@ repos:
     rev: v2.10.0
     hooks:
       - id: pip-audit
-        args: ["--requirement", "backend/requirements.txt"]
+        args: ["--requirement", "services/api/requirements.txt"]

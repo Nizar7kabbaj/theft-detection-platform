@@ -1,12 +1,12 @@
 services:
   backend:
-    build: ./backend
+    build: ./services/api
     image: theft-backend:dev
     container_name: theft-backend
     ports:
       - "127.0.0.1:8001:8000"
     env_file:
-      - ./backend/.env
+      - ./services/api/.env
     environment:
       OTEL_SERVICE_NAME: "theft-backend"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0"
@@ -41,7 +41,7 @@ services:
       - "traefik.http.routers.backend.middlewares=gateway-chain@file"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
     volumes:
-      - ./backend/tests:/app/tests
+      - ./services/api/tests:/app/tests
     restart: unless-stopped
 
   traefik:
@@ -71,7 +71,7 @@ services:
     restart: unless-stopped
 
   ai:
-    build: ./ai-service
+    build: ./services/ai
     image: theft-ai:dev
     container_name: theft-ai
     user: "1000:1000"
@@ -89,7 +89,7 @@ services:
       OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
       PROMETHEUS_EXPORTER_PORT: "9464"
     volumes:
-      - ./ai-model:/app/ai-model:ro
+      - ./ml:/app/ai-model:ro
       - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
     depends_on:
       alloy:
@@ -111,14 +111,14 @@ services:
     restart: unless-stopped
 
   alert-service:
-    build: ./alert-service
+    build: ./services/alert
     image: theft-alert:dev
     container_name: theft-alert
     user: "1000:1000"
     ports:
       - "127.0.0.1:50052:50052"
     env_file:
-      - ./backend/.env
+      - ./services/api/.env
     environment:
       OTEL_SERVICE_NAME: "theft-alert"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-alert"
@@ -132,7 +132,7 @@ services:
       PROMETHEUS_EXPORTER_PORT: "9464"
       REDIS_URL: "${ALERT_REDIS_URL}"
     volumes:
-      - ./ai-model:/app/ai-model:ro
+      - ./ml:/app/ai-model:ro
       - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
     depends_on:
       redis:
@@ -153,7 +153,7 @@ services:
     user: "1000:1000"
     command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=INFO", "--pool=solo", "--concurrency=1"]
     env_file:
-      - ./backend/.env
+      - ./services/api/.env
     environment:
       OTEL_SERVICE_NAME: "theft-alert-worker"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-alert-worker"
@@ -167,7 +167,7 @@ services:
       PROMETHEUS_EXPORTER_PORT: "9465"
       REDIS_URL: "${ALERT_REDIS_URL}"
     volumes:
-      - ./ai-model:/app/ai-model:ro
+      - ./ml:/app/ai-model:ro
     depends_on:
       redis:
         condition: service_healthy
