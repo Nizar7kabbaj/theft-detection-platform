@@ -22,7 +22,7 @@ def _token() -> str:
 def send_message(text: str) -> bool:
     if not is_configured():
         logger.warning("telegram not configured, skipping message")
-        telegram_messages_total.add(1, {"result": "unconfigured"})
+        telegram_messages_total.add(1, {"method": "message", "result": "unconfigured"})
         return False
     url = TELEGRAM_API_URL.format(token=_token(), method="sendMessage")
     payload = {
@@ -36,21 +36,23 @@ def send_message(text: str) -> bool:
         )
         response.raise_for_status()
         logger.info("telegram message sent chars=%d", len(text))
-        telegram_messages_total.add(1, {"result": "sent"})
+        telegram_messages_total.add(1, {"method": "message", "result": "sent"})
         return True
     except requests.exceptions.RequestException as exc:
         logger.error("telegram send failed: %s", exc)
-        telegram_messages_total.add(1, {"result": "failed"})
+        telegram_messages_total.add(1, {"method": "message", "result": "failed"})
         return False
 
 
 def send_photo(image_path: str, caption: str = "") -> bool:
     if not is_configured():
         logger.warning("telegram not configured, skipping photo")
+        telegram_messages_total.add(1, {"method": "photo", "result": "unconfigured"})
         return False
     path = Path(image_path) if image_path else None
     if path is None or not path.is_file():
         logger.warning("snapshot file not found, skipping photo path=%s", image_path)
+        telegram_messages_total.add(1, {"method": "photo", "result": "snapshot_missing"})
         return False
     if len(caption) > settings.TELEGRAM_CAPTION_MAX_CHARS:
         caption = caption[: settings.TELEGRAM_CAPTION_MAX_CHARS - 3] + "..."
@@ -68,10 +70,13 @@ def send_photo(image_path: str, caption: str = "") -> bool:
             )
         response.raise_for_status()
         logger.info("telegram photo sent file=%s", path.name)
+        telegram_messages_total.add(1, {"method": "photo", "result": "sent"})
         return True
     except requests.exceptions.RequestException as exc:
         logger.error("telegram photo send failed: %s", exc)
+        telegram_messages_total.add(1, {"method": "photo", "result": "failed"})
         return False
     except OSError as exc:
         logger.error("snapshot file read failed: %s", exc)
+        telegram_messages_total.add(1, {"method": "photo", "result": "failed"})
         return False

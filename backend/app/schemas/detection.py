@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from app.schemas.common import Bbox, Keypoint, MongoModel
@@ -24,3 +26,4 @@ class DetectionResponse(MongoModel):
     confidence: float
     bbox: Bbox
     keypoints: list[Keypoint] | None = None
+    created_at: datetime

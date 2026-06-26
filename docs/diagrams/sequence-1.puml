@@ -1,0 +1,239 @@
+@startuml
+title Runtime detection flow: login, subscribe, frame to alert
+
+skinparam participant {
+  BackgroundColor #dae8fc
+  BorderColor #6c8ebf
+  FontName Arial
+}
+skinparam sequence {
+  ArrowColor #333333
+  LifeLineBorderColor #999999
+  GroupBackgroundColor #f5f5f5
+  GroupBorderColor #cccccc
+  DividerBackgroundColor #eeeeee
+}
+skinparam database {
+  BackgroundColor #fff2cc
+  BorderColor #d6b656
+}
+skinparam queue {
+  BackgroundColor #fff2cc
+  BorderColor #d6b656
+}
+skinparam note {
+  BackgroundColor #ffe6cc
+  BorderColor #d79b00
+}
+hide footbox
+
+actor "Operator" as op
+
+box "Frontend" #F5F5F5
+  participant "frontend" as fe #96CBFE
+end box
+
+box "Backend and identity" #F5F5F5
+  participant "backend" as be #A8D08D
+  participant "auth-service" as auth #A8D08D
+  participant "audit-service" as aud #A8D08D
+end box
+
+box "Edge (in-store)" #F5F5F5
+  participant "camera-service" as cs #96CBFE
+end box
+
+box "Inference plane" #F5F5F5
+  participant "detect-gate-service" as dgs #A8D08D
+  participant "ai-service" as ai #A8D08D
+  participant "adversarial-defense-service" as def #A8D08D
+  participant "model-serving-service" as mss #A8D08D
+  participant "privacy-service" as priv #A8D08D
+end box
+
+box "Notification" #F5F5F5
+  participant "notification-service" as ns #A8D08D
+  queue "redis (broker)" as rb #fff2cc
+  participant "notification-worker" as nw #A8D08D
+end box
+
+database "mongodb" as mdb #F4B183
+participant "Telegram" as tg #D5A6E6
+
+== Operator login ==
+
+[-> op : operator approaches dashboard
+op -> fe : enter credentials
+activate fe
+fe -> be : POST /api/v1/auth/login
+activate be
+be -> auth : login (HTTP)
+activate auth
+auth -> mdb : look up user
+activate mdb
+mdb --> auth : user record
+deactivate mdb
+auth -> auth : argon2 verify, mint JWT
+auth ->> aud : AppendEvent LoginSuccess
+auth --> be : access token + refresh
+deactivate auth
+be --> fe : HttpOnly cookie + CSRF
+deactivate be
+fe --> op : logged in
+deactivate fe
+
+== Subscribe to live updates ==
+
+op -> fe : open dashboard
+activate fe
+fe -> be : WebSocket /ws/alerts + /ws/cameras (cookie)
+activate be
+be -> auth : VerifyToken
+activate auth
+auth --> be : VALID + user_id + roles
+deactivate auth
+be -> rb : PSUBSCRIBE alerts:* cameras:*
+be --> fe : stream open
+deactivate be
+fe --> op : waiting for alerts
+deactivate fe
+
+== Ambient gating at 15 fps ==
+
+loop steady state
+  [-> cs : frame arrives at sensor
+  cs -> cs : capture frame (V4L2)
+  cs ->> dgs : forward frame
+  note over cs, dgs
+    frame data plane transport
+    (Event Hub, gRPC stream, or shared FS)
+    deferred to gap-list step 5
+  end note
+  activate dgs
+  dgs -> dgs : run yolov8n-detect
+  note over dgs
+    service inventory lists model-serving-service
+    as a detect-gate dependency; detect-model hosting
+    (in-process vs model-serving-service) unresolved
+  end note
+  deactivate dgs
+end
+
+== Person enters ==
+
+cs ->> dgs : forward frame
+activate dgs
+dgs -> dgs : entry detected, instant transition
+dgs ->> ai : PresenceEvent PERSON_ENTERED (bidi stream)
+activate ai
+ai -->> dgs : PresenceAck ACCEPTED
+dgs ->> cs : SetCaptureRate fps=60
+note over dgs, cs
+  FPS adjustment path
+  (direct or via backend camera_control.proto)
+  TBD pending detect-gate-service placement
+end note
+deactivate dgs
+
+== Active classification ==
+
+loop while person tracked
+  ai -> mss : YOLOv8-pose forward pass
+  activate mss
+  mss --> ai : keypoints + bbox
+  deactivate mss
+
+  ai -> def : ValidateKeypoints
+  activate def
+  def --> ai : verdict ACCEPT / REJECT / DEGRADED
+  deactivate def
+
+  alt verdict REJECT
+    ai ->> aud : AppendEvent DefenseRejected
+    ai -> ai : drop frame
+  else verdict ACCEPT or DEGRADED
+    ai -> mss : PoseConv3D classifier forward pass
+    activate mss
+    mss --> ai : action class + confidence
+    deactivate mss
+
+    alt theft action classified
+      ai -> priv : blur snapshot
+      activate priv
+      priv --> ai : blurred snapshot
+      deactivate priv
+
+      ai ->> be : theft event (gRPC)
+      activate be
+      note over ai, ns
+        inventory: ai-service emits theft events to
+        backend and notification-service; drawn here as
+        backend-mediated (contract row 7). direct
+        ai to notification path not yet a contract row
+      end note
+      be -> mdb : insert Alert
+      activate mdb
+      mdb --> be : alert_id
+      deactivate mdb
+
+      par real-time fan-out
+        be ->> rb : PUBLISH alerts:created
+        rb -->> be : PSUBSCRIBE delivery
+        be ->> fe : ws frame (event=created)
+        fe --> op : show alert on dashboard
+      else async dispatch
+        be ->> ns : SendAlert (gRPC)
+        activate ns
+        ns -> mdb : insert notification
+        ns ->> rb : Celery send_task
+        activate rb
+        ns --> be : ACCEPTED
+        deactivate ns
+        rb ->> nw : Celery brpop
+        deactivate rb
+        activate nw
+        nw -> nw : read blurred snapshot from FS
+        nw -> tg : sendPhoto + caption
+        tg --> nw : message_id
+        nw ->> aud : AppendEvent AlertDispatched
+        deactivate nw
+      end
+
+      be ->> aud : AppendEvent DetectionWritten
+      deactivate be
+    else nothing
+      ai -> ai : slide window
+    end
+  end
+end
+
+== Operator acknowledges ==
+
+op -> fe : click acknowledge
+activate fe
+fe -> be : PATCH /api/v1/alerts/{id}/acknowledge
+activate be
+be -> mdb : update alert acknowledged
+activate mdb
+mdb --> be : ok
+deactivate mdb
+be ->> aud : AppendEvent AlertAcknowledged
+be ->> rb : PUBLISH alerts:acknowledged
+rb -->> be : PSUBSCRIBE delivery
+be ->> fe : ws frame (event=acknowledged)
+be --> fe : 200
+deactivate be
+fe --> op : alert marked acknowledged
+deactivate fe
+
+== Person exits ==
+
+dgs -> dgs : exit detected, 30-frame debounce
+activate dgs
+dgs ->> ai : PresenceEvent PERSON_LEFT
+ai -->> dgs : PresenceAck ACCEPTED
+deactivate ai
+dgs ->> cs : SetCaptureRate fps=15
+deactivate dgs
+
+@enduml

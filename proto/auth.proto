@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package theftdetection.v1;
+
+import "google/protobuf/timestamp.proto";
+
+enum VerificationStatus {
+  VERIFICATION_STATUS_UNSPECIFIED = 0;
+  VERIFICATION_STATUS_VALID = 1;
+  VERIFICATION_STATUS_EXPIRED = 2;
+  VERIFICATION_STATUS_REVOKED = 3;
+  VERIFICATION_STATUS_MALFORMED = 4;
+  VERIFICATION_STATUS_SIGNATURE_INVALID = 5;
+  VERIFICATION_STATUS_AUDIENCE_MISMATCH = 6;
+  VERIFICATION_STATUS_USER_DISABLED = 7;
+}
+
+message VerifyTokenRequest {
+  string token = 1;
+  string expected_audience = 2;
+  string source_ip = 3;
+  string user_agent = 4;
+}
+
+message VerifyTokenReply {
+  VerificationStatus status = 1;
+  string user_id = 2;
+  string username = 3;
+  repeated string roles = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  string session_id = 6;
+}
+
+message IntrospectSessionRequest {
+  string session_id = 1;
+}
+
+message IntrospectSessionReply {
+  bool active = 1;
+  string user_id = 2;
+  google.protobuf.Timestamp issued_at = 3;
+  google.protobuf.Timestamp last_used_at = 4;
+  string source_ip = 5;
+  string user_agent = 6;
+}
+
+message RevokeSessionRequest {
+  string session_id = 1;
+  string reason = 2;
+  string revoked_by = 3;
+}
+
+message RevokeSessionReply {
+  bool revoked = 1;
+  google.protobuf.Timestamp revoked_at = 2;
+}
+
+service AuthService {
+  rpc VerifyToken(VerifyTokenRequest) returns (VerifyTokenReply);
+  rpc IntrospectSession(IntrospectSessionRequest) returns (IntrospectSessionReply);
+  rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionReply);
+}
