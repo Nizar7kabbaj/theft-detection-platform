@@ -1,6 +1,6 @@
 # Observability
 
-A full observability stack runs locally on the dev laptop: metrics scraped by Prometheus, dashboards rendered by Grafana, logs aggregated by Loki via Alloy, traces stored in Tempo, and alerts routed through Alertmanager to the alert-service webhook that forwards to Telegram. Three application services emit OpenTelemetry signals into that stack: backend, ai, and alert-service.
+A full observability stack runs locally on the dev laptop: metrics scraped by Prometheus, dashboards rendered by Grafana, logs aggregated by Loki via Alloy, traces stored in Tempo, and alerts routed through Alertmanager to the notification-service webhook that forwards to Telegram. Three application services emit OpenTelemetry signals into that stack: backend, ai, and notification-service.
 
 Everything below covers one component at a time: what runs, the config that matters, the smoke tests that prove it works, and the troubleshooting steps for the failures that actually happened during setup.
 
@@ -68,7 +68,7 @@ User: `theft_monitor`, role: `clusterMonitor` on the `admin` database.
 
 Principle of least privilege. The exporter only needs metrics access. If the monitoring user's password leaks, the blast radius is "someone can read aggregate stats," not "someone has full database control."
 
-Password lives only in `backend/.env` (gitignored, mode 600) and the password manager. Hash-verified on the way in to confirm no corruption between the openssl generation and the .env append.
+Password lives only in `services/api/.env` (gitignored, mode 600) and the password manager. Hash-verified on the way in to confirm no corruption between the openssl generation and the .env append.
 
 ### Operating the service
 
@@ -244,7 +244,7 @@ On first boot Grafana auto-installs four Grafana Labs drilldown plugins (pyrosco
 
 Same loopback reasoning as Prometheus. The browser talks to Grafana over plain HTTP on `127.0.0.1`, and any local process that reaches that port can also read the env files compose loaded. A self-signed cert on loopback buys nothing.
 
-The admin password is a different question. Grafana ships with `admin/admin` as the default, which is worse than no auth: tools fingerprint that combo on sight. A 32-byte random admin password is set on first boot via the `GF_SECURITY_ADMIN_PASSWORD` env var, generated with `openssl rand -base64 32`, stored only in `backend/.env` and the password manager, hash-verified end-to-end.
+The admin password is a different question. Grafana ships with `admin/admin` as the default, which is worse than no auth: tools fingerprint that combo on sight. A 32-byte random admin password is set on first boot via the `GF_SECURITY_ADMIN_PASSWORD` env var, generated with `openssl rand -base64 32`, stored only in `services/api/.env` and the password manager, hash-verified end-to-end.
 
 ### Permissions model
 
@@ -266,9 +266,9 @@ The `editable: false` flag in the YAML maps to `readOnly: true` on the datasourc
 
 ### How the admin password reaches the container
 
-The compose service references `${GF_SECURITY_ADMIN_PASSWORD}` in its `environment:` block. Compose substitutes the value at startup from `backend/.env`, found via the `.env` symlink at the repo root. The variable lands in the container's environment only because the service explicitly asks for it, not because the whole env file was sourced.
+The compose service references `${GF_SECURITY_ADMIN_PASSWORD}` in its `environment:` block. Compose substitutes the value at startup from `services/api/.env`, found via the `.env` symlink at the repo root. The variable lands in the container's environment only because the service explicitly asks for it, not because the whole env file was sourced.
 
-Other variables in `backend/.env` are not visible to the Grafana container.
+Other variables in `services/api/.env` are not visible to the Grafana container.
 
 ### Operating the service
 
@@ -296,14 +296,14 @@ curl -sf http://127.0.0.1:3000/api/health | python3 -m json.tool
 
 ```bash
 # Datasource list (uses admin password from .env, value never on screen)
-GF_PASS=$(grep '^GF_SECURITY_ADMIN_PASSWORD=' backend/.env | cut -d= -f2-)
+GF_PASS=$(grep '^GF_SECURITY_ADMIN_PASSWORD=' services/api/.env | cut -d= -f2-)
 curl -sf -u "admin:${GF_PASS}" http://127.0.0.1:3000/api/datasources | python3 -m json.tool
 unset GF_PASS
 ```
 
 ```bash
 # Datasource end-to-end health (Grafana actually reaches Prometheus)
-GF_PASS=$(grep '^GF_SECURITY_ADMIN_PASSWORD=' backend/.env | cut -d= -f2-)
+GF_PASS=$(grep '^GF_SECURITY_ADMIN_PASSWORD=' services/api/.env | cut -d= -f2-)
 curl -sf -u "admin:${GF_PASS}" http://127.0.0.1:3000/api/datasources/uid/prometheus-local/health | python3 -m json.tool
 unset GF_PASS
 ```
@@ -335,7 +335,7 @@ The first four panels are the overview. The bottom four are the breakdown that t
 
 #### AI Pipeline (`uid: ai-pipeline`)
 
-The inference path. Two domain metrics from `ai-service/app/observability.py`, five GPU metrics from the nvidia-gpu-exporter.
+The inference path. Two domain metrics from `services/ai/app/observability.py`, five GPU metrics from the nvidia-gpu-exporter.
 
 | Panel                            | Query                                                                                                      | Answers                                            |
 |----------------------------------|------------------------------------------------------------------------------------------------------------|----------------------------------------------------|
@@ -349,9 +349,9 @@ The inference path. Two domain metrics from `ai-service/app/observability.py`, f
 
 The `session_id` label on the AI metrics is the bridge between application-level FPS and physical-level GPU stats. When FPS drops on one session, the GPU panels show whether it was the camera (no work to do), the model (low utilisation, low power, low temp), or thermal throttling (high temp, dropping clocks).
 
-#### Alert Service (`uid: alert-service`)
+#### Notification Service (`uid: notification-service`)
 
-The webhook → Telegram path. Domain metrics from `alert-service/app/metrics.py`.
+The webhook → Telegram path. Domain metrics from `services/notification/app/metrics.py`.
 
 | Panel                          | Query                                                                                                  | Answers                                           |
 |--------------------------------|--------------------------------------------------------------------------------------------------------|---------------------------------------------------|
@@ -360,11 +360,11 @@ The webhook → Telegram path. Domain metrics from `alert-service/app/metrics.py
 | Webhook latency quantiles      | `histogram_quantile(0.50/0.95/0.99, sum by (le) (rate(theft_alert_webhook_duration_seconds_bucket[5m])))` | End-to-end webhook processing time             |
 | Webhook accept ratio (5m)      | `accepted / total`                                                                                     | Stat panel: how clean the inbound stream is       |
 | Telegram send ratio (5m)       | `sent / total`                                                                                         | Stat panel: how reliable Telegram delivery is     |
-| Process memory                 | `process_resident_memory_bytes{job="alert-service"}`, `_virtual_memory_bytes`                          | Memory leak detection                             |
+| Process memory                 | `process_resident_memory_bytes{job="notification-service"}`, `_virtual_memory_bytes`                          | Memory leak detection                             |
 
 The two stat panels are the canary view. Both should sit near 100% in steady state. Anything below 99% means alertmanager is sending rejected webhooks, or Telegram is failing to deliver, and the timeseries above show the pattern.
 
-The webhook duration histogram has explicit buckets (0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0 seconds) pinned in `alert-service/app/observability.py`. See the OpenTelemetry section below for why.
+The webhook duration histogram has explicit buckets (0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0 seconds) pinned in `services/notification/app/observability.py`. See the OpenTelemetry section below for why.
 
 #### How to edit a dashboard
 
@@ -385,11 +385,11 @@ Open `http://127.0.0.1:3000`. Login as `admin` with the password from the passwo
 
 #### Login fails with "invalid username or password"
 
-The password in `backend/.env` and the password manager have drifted. Recover by hashing both and comparing.
+The password in `services/api/.env` and the password manager have drifted. Recover by hashing both and comparing.
 
 ```bash
 # Hash of the value currently in .env
-grep '^GF_SECURITY_ADMIN_PASSWORD=' backend/.env | cut -d= -f2- | tr -d '\n' | sha256sum
+grep '^GF_SECURITY_ADMIN_PASSWORD=' services/api/.env | cut -d= -f2- | tr -d '\n' | sha256sum
 ```
 
 Compare against the hash stored in the password manager entry's notes field. If they don't match, the password manager is authoritative: copy the correct value back into `.env` and recreate the container with `docker compose up -d --force-recreate grafana`.
@@ -577,7 +577,7 @@ Another Loki, a Tempo distributor sharing the port, or rarely a misconfigured fr
 
 ## Local OpenTelemetry
 
-Three services on the stack are instrumented: `backend`, `ai`, and `alert-service`. Each one emits three signals — traces, metrics, structured JSON logs — and each signal carries the same `trace_id`. That's what turns three independent streams into one click-through view of a single request.
+Three services on the stack are instrumented: `backend`, `ai`, and `notification-service`. Each one emits three signals — traces, metrics, structured JSON logs — and each signal carries the same `trace_id`. That's what turns three independent streams into one click-through view of a single request.
 
 ### Why three signals
 
@@ -613,13 +613,13 @@ Metrics is the exception. Prometheus pulls each service's `:9464` endpoint direc
 |----------------|------------------------|---------------|------------|--------------------------------------------------------------------------------------------------------------|
 | `backend`      | FastAPI                | pymongo       | —          | (none in observability module)                                                                              |
 | `ai`           | gRPC server            | —             | —          | `theft_ai_frames_processed` (counter), `theft_ai_inference_duration` (histogram, ms)                        |
-| `alert-service`| gRPC server + requests | —             | Celery     | `theft_alert_webhooks_total`, `theft_alert_telegram_messages_total`, `theft_alert_webhook_duration_seconds` |
+| `notification-service`| gRPC server + requests | —             | Celery     | `theft_alert_webhooks_total`, `theft_alert_telegram_messages_total`, `theft_alert_webhook_duration_seconds` |
 
-Backend covers the HTTP entry path and the Mongo client. ai covers the inference RPC plus two domain instruments for frames-through and per-frame latency. alert-service covers the gRPC handoff from ai, the outbound `requests` call to Telegram, the Celery task that does the actual send, plus three domain instruments tied to the webhook → Telegram path.
+Backend covers the HTTP entry path and the Mongo client. ai covers the inference RPC plus two domain instruments for frames-through and per-frame latency. notification-service covers the gRPC handoff from ai, the outbound `requests` call to Telegram, the Celery task that does the actual send, plus three domain instruments tied to the webhook → Telegram path.
 
 ### Histogram units
 
-OTel's default histogram buckets assume the recorded value is in milliseconds. The `theft_ai_inference_duration` histogram in `ai-service/app/observability.py` records milliseconds, so the defaults fit. The `theft_alert_webhook_duration_seconds` histogram records seconds. At default buckets every sub-second observation lands in the first non-zero bucket and the p95 / p99 lose all signal. The alert-service module pins explicit buckets via an SDK `View`:
+OTel's default histogram buckets assume the recorded value is in milliseconds. The `theft_ai_inference_duration` histogram in `services/ai/app/observability.py` records milliseconds, so the defaults fit. The `theft_alert_webhook_duration_seconds` histogram records seconds. At default buckets every sub-second observation lands in the first non-zero bucket and the p95 / p99 lose all signal. The notification-service module pins explicit buckets via an SDK `View`:
 
 ```python
 _WEBHOOK_DURATION_BUCKETS = (0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
@@ -643,7 +643,7 @@ The three settings live in each datasource's provisioning YAML. No code change t
 
 Each service identifies itself with four resource attributes:
 ```
-service.name           theft-backend | theft-ai | theft-alert
+service.name           theft-backend | theft-ai | notification
 
 service.namespace      theft
 
@@ -658,12 +658,12 @@ Inside the modules each service exposes the same entry point:
 ```python
 setup_observability(service_name="theft-backend")    # backend takes an app arg too
 setup_observability(service_name="theft-ai")
-setup_observability(service_name="theft-alert")
+setup_observability(service_name="notification")
 ```
 
-Each module wires the instrumentors that service actually uses. Backend wires FastAPI + pymongo. ai wires the gRPC server. alert-service wires the gRPC server + `requests` (Telegram and webhook callbacks) + Celery. All three share the trace exporter, the Prometheus metric reader on port 9464, the `LoggingInstrumentor` for trace_id injection into log records, and the `python-json-logger` stdout handler.
+Each module wires the instrumentors that service actually uses. Backend wires FastAPI + pymongo. ai wires the gRPC server. notification-service wires the gRPC server + `requests` (Telegram and webhook callbacks) + Celery. All three share the trace exporter, the Prometheus metric reader on port 9464, the `LoggingInstrumentor` for trace_id injection into log records, and the `python-json-logger` stdout handler.
 
-The three observability modules are nearly identical and will graduate into a shared internal package once the next round of refactoring lands. Tempo's `metrics_generator` is already configured with `service-graphs` and `span-metrics`, so the Grafana service map renders the call graph between backend → ai → alert-service without extra config.
+The three observability modules are nearly identical and will graduate into a shared internal package once the next round of refactoring lands. Tempo's `metrics_generator` is already configured with `service-graphs` and `span-metrics`, so the Grafana service map renders the call graph between backend → ai → notification-service without extra config.
 
 ### What runs
 
@@ -671,7 +671,7 @@ The three observability modules are nearly identical and will graduate into a sh
 
 ### The env block
 
-Backend reads OTel env from `backend/.env`:
+Backend reads OTel env from `services/api/.env`:
 ```
 OTEL_SERVICE_NAME=theft-backend
 
@@ -691,14 +691,14 @@ OTEL_PYTHON_LOG_FORMAT=%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTrac
 
 PROMETHEUS_EXPORTER_PORT=9464
 ```
-`ai` and `alert-service` declare the same vars inline in their compose `environment:` blocks, overriding `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` per service.
+`ai` and `notification-service` declare the same vars inline in their compose `environment:` blocks, overriding `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` per service.
 
 `OTEL_LOGS_EXPORTER=none` is set deliberately. Logs ship as JSON on stdout, not via OTLP. Setting it to anything else creates a second log path competing with the Alloy socket-tail one and breaks the correlation story.
 
 ### Operating the services
 
 ```bash
-# Start the default stack (backend, alert-service, observability)
+# Start the default stack (backend, notification-service, observability)
 docker compose up -d
 
 # Start with the AI profile (adds the ai service)
@@ -710,10 +710,10 @@ docker compose up -d tempo
 # Recreate after .env edits
 docker compose up -d --force-recreate backend
 docker compose --profile ai up -d --force-recreate ai
-docker compose up -d --force-recreate alert-service
+docker compose up -d --force-recreate notification-service
 
 # Status + recent logs
-docker compose ps tempo backend ai alert-service
+docker compose ps tempo backend ai notification-service
 docker compose logs --tail=50 tempo
 ```
 
@@ -748,13 +748,13 @@ curl -s http://127.0.0.1:9090/api/v1/targets \
   | sort -u
 ```
 
-Expected: `ready` from the first call. A `traces` array from the third, each entry carrying `rootServiceName: theft-backend` and a non-empty `spanSet` with the FastAPI server span and its pymongo children. The fourth lists every job, backend, ai (when the profile is up), alert-service, plus the exporters, all `up`.
+Expected: `ready` from the first call. A `traces` array from the third, each entry carrying `rootServiceName: theft-backend` and a non-empty `spanSet` with the FastAPI server span and its pymongo children. The fourth lists every job, backend, ai (when the profile is up), notification-service, plus the exporters, all `up`.
 
 ### Browser check
 
 Open `http://127.0.0.1:3000` and go to Explore. With Loki selected, query `{service="theft-backend"}` over the last 15 minutes. Each JSON log line carries a `trace_id` field rendered as a clickable button. Click it. Tempo opens the trace with the FastAPI SERVER span at the root and pymongo CLIENT spans below. Click "Logs for this span" inside the Tempo panel: Grafana switches back to Loki with the same trace id pre-filled in the query bar.
 
-For a cross-service trace, hit an endpoint that touches inference (any path that calls into `ai` over gRPC) and search Tempo for `service.name=theft-backend` over the last few minutes. Each result spans all three services: FastAPI server span at the root, a gRPC CLIENT span for the backend → ai hop, a gRPC SERVER span on `ai`, and downstream a gRPC CLIENT span for ai → alert-service when an alert fires. The Grafana service map renders the same graph visually.
+For a cross-service trace, hit an endpoint that touches inference (any path that calls into `ai` over gRPC) and search Tempo for `service.name=theft-backend` over the last few minutes. Each result spans all three services: FastAPI server span at the root, a gRPC CLIENT span for the backend → ai hop, a gRPC SERVER span on `ai`, and downstream a gRPC CLIENT span for ai → notification-service when an alert fires. The Grafana service map renders the same graph visually.
 
 ### Troubleshooting
 
@@ -790,7 +790,7 @@ Default OTel buckets fit millisecond observations. If you add a histogram in sec
 
 ## Alertmanager
 
-The last hop in the observability stack. Prometheus rules fire, Alertmanager groups and routes them, alert-service receives the webhook and forwards to Telegram. The phone buzzes, the operator looks at the dashboard, the loop closes.
+The last hop in the observability stack. Prometheus rules fire, Alertmanager groups and routes them, notification-service receives the webhook and forwards to Telegram. The phone buzzes, the operator looks at the dashboard, the loop closes.
 
 ### Why a separate service
 
@@ -818,7 +818,7 @@ The `AiServiceLowFps` expression has a second clause (`rate(theft_ai_frames_proc
 
 ```yaml
 route:
-  receiver: alert-service-webhook
+  receiver: notification-service-webhook
   group_by:
     - alertname
     - service
@@ -829,11 +829,11 @@ route:
 
 One receiver. Group on `(alertname, service)`. Hold new alerts in a group for 30 seconds before sending the first notification (`group_wait`), so a burst of related firings collapses into one Telegram message. Wait 5 minutes between updates for an evolving group (`group_interval`). Repeat unresolved alerts every 4 hours (`repeat_interval`) — long enough not to spam, short enough that an alert sitting unaddressed for a workday gets a second nudge.
 
-`send_resolved: true` is set on the webhook receiver. When the underlying condition clears, Alertmanager fires a resolved notification with `status: "resolved"`. The alert-service formats those distinctly so the operator knows the page is over.
+`send_resolved: true` is set on the webhook receiver. When the underlying condition clears, Alertmanager fires a resolved notification with `status: "resolved"`. The notification-service formats those distinctly so the operator knows the page is over.
 
 ### Webhook receiver
 
-`alert-service/app/api/webhooks.py` exposes one route:
+`services/notification/app/api/webhooks.py` exposes one route:
 ```
 POST /webhooks/alertmanager
 
@@ -845,13 +845,13 @@ Three things happen on each request:
 2. **Payload parse.** FastAPI validates the JSON body against the `AlertmanagerWebhook` Pydantic schema. Unknown fields are ignored (`extra="ignore"`), camelCase field names from Alertmanager (`startsAt`, `groupKey`, `externalURL`) map to snake_case Python via field aliases. Malformed payloads fail at validation with a 422 — those aren't counted on the outcome metric because they never reach the handler body.
 3. **Forward to Telegram.** The schema's `to_telegram_html()` method builds an HTML message — alert name, severity, service, summary, and a group-size hint if the batch has more than one alert. Every field passes through `html.escape()` first, so an alert label containing `<script>` or `&` gets neutralised before it reaches Telegram. The send call runs in a thread (`asyncio.to_thread`) because the underlying `requests` call is synchronous.
 
-The outcome metric covers five terminal states: `accepted`, `unauthorized`, `misconfigured`, `telegram_unconfigured`, `telegram_failed`. The Alert Service dashboard's "Webhook accept ratio (5m)" stat panel watches the ratio of `accepted` over total.
+The outcome metric covers five terminal states: `accepted`, `unauthorized`, `misconfigured`, `telegram_unconfigured`, `telegram_failed`. The Notification Service dashboard's "Webhook accept ratio (5m)" stat panel watches the ratio of `accepted` over total.
 
 `webhook_duration_seconds` records the full handler duration in a `finally` block, so failed requests still get measured. The histogram has explicit second-scaled buckets — see the OpenTelemetry section.
 
 ### The token
 
-The token is a 32-byte base64 string generated once and shared between Alertmanager (which sends it as `Bearer`) and alert-service (which validates it). It's not in git. The file lives at `config/alertmanager/webhook_token` on the host, bind-mounted into both containers read-only.
+The token is a 32-byte base64 string generated once and shared between Alertmanager (which sends it as `Bearer`) and notification-service (which validates it). It's not in git. The file lives at `config/alertmanager/webhook_token` on the host, bind-mounted into both containers read-only.
 
 Generate:
 
@@ -860,11 +860,11 @@ openssl rand -base64 32 | tr -d '\n' > config/alertmanager/webhook_token
 chmod 644 config/alertmanager/webhook_token
 ```
 
-`chmod 644` matters. Alertmanager runs as uid 65534, alert-service as uid 1000. `chmod 600` with owner `nizar:nizar` would let alert-service read it (uid match) but not Alertmanager. The file is gitignored, the parent directory is `0755`, and the mount is `:ro` inside both containers. A 644 mode on a gitignored file in a personal directory is acceptable here.
+`chmod 644` matters. Alertmanager runs as uid 65534, notification-service as uid 1000. `chmod 600` with owner `nizar:nizar` would let notification-service read it (uid match) but not Alertmanager. The file is gitignored, the parent directory is `0755`, and the mount is `:ro` inside both containers. A 644 mode on a gitignored file in a personal directory is acceptable here.
 
 #### Token rotation
 
-The token is cached in alert-service via `@lru_cache(maxsize=1)`. Writing a new value to the file doesn't take effect until the process restarts or the cache is cleared. Workflow:
+The token is cached in notification-service via `@lru_cache(maxsize=1)`. Writing a new value to the file doesn't take effect until the process restarts or the cache is cleared. Workflow:
 
 ```bash
 # Generate new value
@@ -872,7 +872,7 @@ openssl rand -base64 32 | tr -d '\n' > config/alertmanager/webhook_token
 chmod 644 config/alertmanager/webhook_token
 
 # Recreate both consumers (restart isn't enough for bind-mount changes)
-docker compose up -d --force-recreate alertmanager alert-service
+docker compose up -d --force-recreate alertmanager notification-service
 ```
 
 `docker compose restart` won't pick up the new file content reliably because bind-mounts are resolved at container creation time. `--force-recreate` is the safe move.
@@ -887,8 +887,8 @@ docker compose up -d --force-recreate alertmanager alert-service
 # Start everything
 docker compose up -d
 
-# Just alertmanager + alert-service
-docker compose up -d alertmanager alert-service
+# Just alertmanager + notification-service
+docker compose up -d alertmanager notification-service
 
 # Reload alertmanager config after editing the YAML
 # (--web.enable-lifecycle is enabled in the compose command)
@@ -923,7 +923,7 @@ curl -sf -X POST http://127.0.0.1:8000/webhooks/alertmanager \
     "version": "4",
     "groupKey": "smoke-test",
     "status": "firing",
-    "receiver": "alert-service-webhook",
+    "receiver": "notification-service-webhook",
     "groupLabels": {"alertname": "SmokeTest"},
     "commonLabels": {"alertname": "SmokeTest", "service": "smoke", "severity": "warning"},
     "commonAnnotations": {"summary": "smoke test alert"},
@@ -976,22 +976,22 @@ Verify the hash on both sides without leaking the value:
 ```bash
 sha256sum config/alertmanager/webhook_token
 docker compose exec alertmanager sha256sum /etc/alertmanager/webhook_token
-docker compose exec alert-service sha256sum /run/secrets/webhook_token
+docker compose exec notification-service sha256sum /run/secrets/webhook_token
 ```
 
 All three hashes match → token is fine, recheck the Alertmanager logs for the actual header value sent. Any mismatch → recreate that container with `docker compose up -d --force-recreate <name>`.
 
 #### Webhook returns 503 misconfigured or telegram_unconfigured
 
-503 with `webhook token not configured` means the token file is missing or empty inside the alert-service container. Check the bind-mount landed:
+503 with `webhook token not configured` means the token file is missing or empty inside the notification-service container. Check the bind-mount landed:
 
 ```bash
-docker compose exec alert-service ls -la /run/secrets/webhook_token
+docker compose exec notification-service ls -la /run/secrets/webhook_token
 ```
 
-If the file shows `0 bytes` or doesn't exist, the bind-mount is wrong — see the previous troubleshooting entry. After fixing, `--force-recreate` the alert-service so the `lru_cache` clears.
+If the file shows `0 bytes` or doesn't exist, the bind-mount is wrong — see the previous troubleshooting entry. After fixing, `--force-recreate` the notification-service so the `lru_cache` clears.
 
-503 with `telegram not configured` means `TELEGRAM_BOT_TOKEN` or `TELEGRAM_CHAT_ID` is missing from the alert-service env. Both are set in `backend/.env` (which alert-service inherits via `env_file`). After editing the env, recreate the service.
+503 with `telegram not configured` means `TELEGRAM_BOT_TOKEN` or `TELEGRAM_CHAT_ID` is missing from the notification-service env. Both are set in `services/api/.env` (which notification-service inherits via `env_file`). After editing the env, recreate the service.
 
 #### Alerts firing in Prometheus but never reaching Alertmanager
 

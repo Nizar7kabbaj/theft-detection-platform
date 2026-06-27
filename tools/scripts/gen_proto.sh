@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat >&2 <<'EOF'
 usage: scripts/gen_proto.sh <target>
-  target: backend | ai-service | alert-service
+  target: backend | ai-service | notification-service
 generates python grpc stubs from proto/ into <target>/app/grpc_gen
 EOF
 }
@@ -47,7 +47,7 @@ main() {
       usage
       exit 0
       ;;
-    backend|ai-service|alert-service)
+    backend|ai-service|notification-service)
       ;;
     *)
       echo "unknown target: $1" >&2
