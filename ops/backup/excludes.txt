@@ -7,9 +7,9 @@ __pycache__/
 
 node_modules/
 
-ai-model/data/
-ai-model/models/*.pt
-ai-model/outputs/
+ml/data/
+ml/models/*.pt
+ml/outputs/
 
 .terraform/
 *.tfstate

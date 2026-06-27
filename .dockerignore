@@ -3,9 +3,9 @@ venv
 __pycache__
 *.pyc
 
-ai-model/outputs
-ai-model/data
-ai-model/models/*.pt
+ml/outputs
+ml/data
+ml/models/*.pt
 
 node_modules
 

@@ -1,30 +1,31 @@
+x-otel-env: &otel-env
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_TRACES_EXPORTER: "otlp"
+  OTEL_METRICS_EXPORTER: "prometheus"
+  OTEL_LOGS_EXPORTER: "none"
+  OTEL_PYTHON_LOG_CORRELATION: "true"
+  OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
+
 services:
   backend:
-    build: ./backend
+    build: ./services/api
     image: theft-backend:dev
     container_name: theft-backend
     ports:
       - "127.0.0.1:8001:8000"
     env_file:
-      - ./backend/.env
+      - ./services/api/.env
     environment:
+      <<: *otel-env
       OTEL_SERVICE_NAME: "theft-backend"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
-      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-      OTEL_TRACES_EXPORTER: "otlp"
-      OTEL_METRICS_EXPORTER: "prometheus"
-      OTEL_LOGS_EXPORTER: "none"
-      OTEL_PYTHON_LOG_CORRELATION: "true"
-      OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
       PROMETHEUS_EXPORTER_PORT: "9464"
     depends_on:
       mongo:
         condition: service_healthy
       redis:
         condition: service_healthy
-      alloy:
-        condition: service_started
       alert-service:
         condition: service_healthy
     healthcheck:
@@ -41,7 +42,7 @@ services:
       - "traefik.http.routers.backend.middlewares=gateway-chain@file"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
     volumes:
-      - ./backend/tests:/app/tests
+      - ./services/api/tests:/app/tests
     restart: unless-stopped
 
   traefik:
@@ -60,8 +61,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-      alloy:
-        condition: service_started
     healthcheck:
       test: ["CMD", "traefik", "healthcheck"]
       interval: 30s
@@ -71,29 +70,20 @@ services:
     restart: unless-stopped
 
   ai:
-    build: ./ai-service
+    build: ./services/ai
     image: theft-ai:dev
     container_name: theft-ai
     user: "1000:1000"
     ports:
       - "127.0.0.1:50051:50051"
     environment:
+      <<: *otel-env
       OTEL_SERVICE_NAME: "theft-ai"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-ai"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
-      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-      OTEL_TRACES_EXPORTER: "otlp"
-      OTEL_METRICS_EXPORTER: "prometheus"
-      OTEL_LOGS_EXPORTER: "none"
-      OTEL_PYTHON_LOG_CORRELATION: "true"
-      OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
       PROMETHEUS_EXPORTER_PORT: "9464"
     volumes:
-      - ./ai-model:/app/ai-model:ro
+      - ./ml:/app/ai-model:ro
       - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
-    depends_on:
-      alloy:
-        condition: service_started
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=:50051"]
       interval: 30s
@@ -111,34 +101,26 @@ services:
     restart: unless-stopped
 
   alert-service:
-    build: ./alert-service
+    build: ./services/alert
     image: theft-alert:dev
     container_name: theft-alert
     user: "1000:1000"
     ports:
       - "127.0.0.1:50052:50052"
     env_file:
-      - ./backend/.env
+      - ./services/api/.env
     environment:
+      <<: *otel-env
       OTEL_SERVICE_NAME: "theft-alert"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-alert"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
-      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-      OTEL_TRACES_EXPORTER: "otlp"
-      OTEL_METRICS_EXPORTER: "prometheus"
-      OTEL_LOGS_EXPORTER: "none"
-      OTEL_PYTHON_LOG_CORRELATION: "true"
-      OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
       PROMETHEUS_EXPORTER_PORT: "9464"
       REDIS_URL: "${ALERT_REDIS_URL}"
     volumes:
-      - ./ai-model:/app/ai-model:ro
+      - ./ml:/app/ai-model:ro
       - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
     depends_on:
       redis:
         condition: service_healthy
-      alloy:
-        condition: service_started
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=:50052"]
       interval: 30s
@@ -153,21 +135,15 @@ services:
     user: "1000:1000"
     command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=INFO", "--pool=solo", "--concurrency=1"]
     env_file:
-      - ./backend/.env
+      - ./services/api/.env
     environment:
+      <<: *otel-env
       OTEL_SERVICE_NAME: "theft-alert-worker"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-alert-worker"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
-      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-      OTEL_TRACES_EXPORTER: "otlp"
-      OTEL_METRICS_EXPORTER: "prometheus"
-      OTEL_LOGS_EXPORTER: "none"
-      OTEL_PYTHON_LOG_CORRELATION: "true"
-      OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
       PROMETHEUS_EXPORTER_PORT: "9465"
       REDIS_URL: "${ALERT_REDIS_URL}"
     volumes:
-      - ./ai-model:/app/ai-model:ro
+      - ./ml:/app/ai-model:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -230,6 +206,7 @@ services:
     restart: unless-stopped
 
   prometheus:
+    profiles: ["observability"]
     image: prom/prometheus:v3.12.0
     container_name: theft-prometheus
     user: "65534:65534"
@@ -264,6 +241,7 @@ services:
     restart: unless-stopped
 
   node-exporter:
+    profiles: ["observability"]
     image: prom/node-exporter:v1.8.2
     container_name: theft-node-exporter
     command:
@@ -286,6 +264,7 @@ services:
     restart: unless-stopped
 
   mongodb-exporter:
+    profiles: ["observability"]
     image: percona/mongodb_exporter:0.40
     container_name: theft-mongodb-exporter
     command:
@@ -300,6 +279,7 @@ services:
     restart: unless-stopped
 
   redis-exporter:
+    profiles: ["observability"]
     image: oliver006/redis_exporter:v1.65.0
     container_name: theft-redis-exporter
     environment:
@@ -313,6 +293,7 @@ services:
     restart: unless-stopped
 
   nvidia-gpu-exporter:
+    profiles: ["observability"]
     image: utkuozdemir/nvidia_gpu_exporter:1.4.1
     container_name: theft-nvidia-gpu-exporter
     ports:
@@ -335,6 +316,7 @@ services:
     restart: unless-stopped
 
   netdata:
+      profiles: ["observability"]
       image: netdata/netdata:stable
       container_name: theft-netdata
       hostname: legion-5
@@ -373,6 +355,7 @@ services:
       restart: unless-stopped
 
   portainer:
+    profiles: ["observability"]
     image: portainer/portainer-ce:lts
     container_name: theft-portainer
     restart: unless-stopped
@@ -384,6 +367,7 @@ services:
       - portainer_data:/data
 
   grafana:
+    profiles: ["observability"]
     image: grafana/grafana:12.4.4
     container_name: theft-grafana
     user: "472:472"
@@ -419,6 +403,7 @@ services:
     restart: unless-stopped
 
   loki:
+    profiles: ["observability"]
     image: grafana/loki:3.3.2
     container_name: theft-loki
     user: "10001:10001"
@@ -437,6 +422,7 @@ services:
     restart: unless-stopped
 
   alertmanager:
+    profiles: ["observability"]
     image: prom/alertmanager:v0.28.1
     container_name: theft-alertmanager
     user: "65534:65534"
@@ -459,6 +445,7 @@ services:
     restart: unless-stopped
 
   alloy:
+    profiles: ["observability"]
     image: grafana/alloy:v1.5.1
     container_name: theft-alloy
     user: "0:0"
@@ -480,6 +467,7 @@ services:
     restart: unless-stopped
 
   tempo:
+    profiles: ["observability"]
     image: grafana/tempo:2.6.1
     container_name: theft-tempo
     user: "10001:10001"

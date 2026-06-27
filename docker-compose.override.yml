@@ -2,7 +2,7 @@ services:
   backend:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - ./backend/app:/app/app
-      - ./ai-model/outputs/snapshots:/app/ai-model/outputs/snapshots:ro
+      - ./services/api/app:/app/app
+      - ./ml/outputs/snapshots:/app/ai-model/outputs/snapshots:ro
     environment:
       - DEBUG=True
