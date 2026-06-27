@@ -110,7 +110,7 @@ async def inference_stub(
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def alert_channel() -> AsyncIterator[grpc.aio.Channel]:
-    channel = grpc.aio.insecure_channel(settings.ALERT_TARGET)
+    channel = grpc.aio.insecure_channel(settings.NOTIFICATION_TARGET)
     yield channel
     await channel.close()
 

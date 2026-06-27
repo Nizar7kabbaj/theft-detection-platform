@@ -77,7 +77,7 @@ async def _run_http(stop_event: asyncio.Event, log: logging.Logger) -> None:
 
 
 async def _serve() -> None:
-    setup_observability(service_name="theft-alert")
+    setup_observability(service_name="notification")
     logging.getLogger().setLevel(settings.LOG_LEVEL)
     log = logging.getLogger("app.main")
 

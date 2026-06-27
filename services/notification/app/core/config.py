@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     LOG_LEVEL: str = "INFO"
 
-    model_config = SettingsConfigDict(env_file="alert-service/.env", extra="ignore")
+    model_config = SettingsConfigDict(extra="ignore")
 
 
 settings = Settings()

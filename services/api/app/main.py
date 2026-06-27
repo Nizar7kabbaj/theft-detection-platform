@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.inference_stub = InferenceServiceStub(app.state.inference_channel)
     app.state.alert_channel = grpc.aio.insecure_channel(
-        settings.ALERT_TARGET,
+        settings.NOTIFICATION_TARGET,
         options=_GRPC_CHANNEL_OPTIONS,
         interceptors=aio_client_interceptors(),
     )

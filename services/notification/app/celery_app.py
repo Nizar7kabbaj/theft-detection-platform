@@ -25,4 +25,4 @@ celery_app.conf.update(
 
 @worker_process_init.connect(weak=False)
 def _init_tracing(**_kwargs: object) -> None:
-    setup_observability(service_name="theft-alert")
+    setup_observability(service_name="notification")

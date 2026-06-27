@@ -26,7 +26,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      alert-service:
+      notification-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)\""]
@@ -100,10 +100,10 @@ services:
     profiles: ["ai"]
     restart: unless-stopped
 
-  alert-service:
-    build: ./services/alert
-    image: theft-alert:dev
-    container_name: theft-alert
+  notification-service:
+    build: ./services/notification
+    image: notification:dev
+    container_name: notification
     user: "1000:1000"
     ports:
       - "127.0.0.1:50052:50052"
@@ -111,10 +111,10 @@ services:
       - ./services/api/.env
     environment:
       <<: *otel-env
-      OTEL_SERVICE_NAME: "theft-alert"
-      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-alert"
+      OTEL_SERVICE_NAME: "notification"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification"
       PROMETHEUS_EXPORTER_PORT: "9464"
-      REDIS_URL: "${ALERT_REDIS_URL}"
+      REDIS_URL: "${NOTIFICATION_REDIS_URL}"
     volumes:
       - ./ml:/app/ai-model:ro
       - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
@@ -129,25 +129,25 @@ services:
       start_period: 15s
     restart: unless-stopped
 
-  alert-worker:
-    image: theft-alert:dev
-    container_name: theft-alert-worker
+  notification-worker:
+    image: notification:dev
+    container_name: notification-worker
     user: "1000:1000"
     command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=INFO", "--pool=solo", "--concurrency=1"]
     env_file:
       - ./services/api/.env
     environment:
       <<: *otel-env
-      OTEL_SERVICE_NAME: "theft-alert-worker"
-      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-alert-worker"
+      OTEL_SERVICE_NAME: "notification-worker"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification-worker"
       PROMETHEUS_EXPORTER_PORT: "9465"
-      REDIS_URL: "${ALERT_REDIS_URL}"
+      REDIS_URL: "${NOTIFICATION_REDIS_URL}"
     volumes:
       - ./ml:/app/ai-model:ro
     depends_on:
       redis:
         condition: service_healthy
-      alert-service:
+      notification-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.celery_app inspect ping -t 5 > /dev/null 2>&1 || exit 1"]

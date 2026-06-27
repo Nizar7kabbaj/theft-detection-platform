@@ -2,7 +2,7 @@ global:
   resolve_timeout: 5m
 
 route:
-  receiver: alert-service-webhook
+  receiver: notification-service-webhook
   group_by:
     - alertname
     - service
@@ -11,9 +11,9 @@ route:
   repeat_interval: 4h
 
 receivers:
-  - name: alert-service-webhook
+  - name: notification-service-webhook
     webhook_configs:
-      - url: http://alert-service:8000/webhooks/alertmanager
+      - url: http://notification-service:8000/webhooks/alertmanager
         send_resolved: true
         http_config:
           authorization:

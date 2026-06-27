@@ -14,7 +14,7 @@ VALID_PAYLOAD = {
     "version": "4",
     "groupKey": "{}:{alertname=\"BackendHighErrorRate\"}",
     "status": "firing",
-    "receiver": "alert-service-webhook",
+    "receiver": "notification-service-webhook",
     "groupLabels": {"alertname": "BackendHighErrorRate"},
     "commonLabels": {
         "alertname": "BackendHighErrorRate",

@@ -324,7 +324,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus-local" },
           "editorMode": "code",
-          "expr": "process_resident_memory_bytes{job=\"alert-service\"}",
+          "expr": "process_resident_memory_bytes{job=\"notification-service\"}",
           "legendFormat": "resident",
           "range": true,
           "refId": "A"
@@ -332,7 +332,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus-local" },
           "editorMode": "code",
-          "expr": "process_virtual_memory_bytes{job=\"alert-service\"}",
+          "expr": "process_virtual_memory_bytes{job=\"notification-service\"}",
           "legendFormat": "virtual",
           "range": true,
           "refId": "B"
@@ -350,7 +350,7 @@
   "timepicker": {},
   "timezone": "",
   "title": "Alert Service",
-  "uid": "alert-service",
+  "uid": "notification-service",
   "version": 1,
   "weekStart": ""
 }
