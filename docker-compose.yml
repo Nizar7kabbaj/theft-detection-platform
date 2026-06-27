@@ -1,3 +1,12 @@
+x-otel-env: &otel-env
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_TRACES_EXPORTER: "otlp"
+  OTEL_METRICS_EXPORTER: "prometheus"
+  OTEL_LOGS_EXPORTER: "none"
+  OTEL_PYTHON_LOG_CORRELATION: "true"
+  OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
+
 services:
   backend:
     build: ./services/api
@@ -8,15 +17,9 @@ services:
     env_file:
       - ./services/api/.env
     environment:
+      <<: *otel-env
       OTEL_SERVICE_NAME: "theft-backend"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
-      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-      OTEL_TRACES_EXPORTER: "otlp"
-      OTEL_METRICS_EXPORTER: "prometheus"
-      OTEL_LOGS_EXPORTER: "none"
-      OTEL_PYTHON_LOG_CORRELATION: "true"
-      OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
       PROMETHEUS_EXPORTER_PORT: "9464"
     depends_on:
       mongo:
@@ -74,15 +77,9 @@ services:
     ports:
       - "127.0.0.1:50051:50051"
     environment:
+      <<: *otel-env
       OTEL_SERVICE_NAME: "theft-ai"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-ai"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
-      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-      OTEL_TRACES_EXPORTER: "otlp"
-      OTEL_METRICS_EXPORTER: "prometheus"
-      OTEL_LOGS_EXPORTER: "none"
-      OTEL_PYTHON_LOG_CORRELATION: "true"
-      OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
       PROMETHEUS_EXPORTER_PORT: "9464"
     volumes:
       - ./ml:/app/ai-model:ro
@@ -113,15 +110,9 @@ services:
     env_file:
       - ./services/api/.env
     environment:
+      <<: *otel-env
       OTEL_SERVICE_NAME: "theft-alert"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-alert"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
-      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-      OTEL_TRACES_EXPORTER: "otlp"
-      OTEL_METRICS_EXPORTER: "prometheus"
-      OTEL_LOGS_EXPORTER: "none"
-      OTEL_PYTHON_LOG_CORRELATION: "true"
-      OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
       PROMETHEUS_EXPORTER_PORT: "9464"
       REDIS_URL: "${ALERT_REDIS_URL}"
     volumes:
@@ -146,15 +137,9 @@ services:
     env_file:
       - ./services/api/.env
     environment:
+      <<: *otel-env
       OTEL_SERVICE_NAME: "theft-alert-worker"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-alert-worker"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://theft-alloy:4318"
-      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-      OTEL_TRACES_EXPORTER: "otlp"
-      OTEL_METRICS_EXPORTER: "prometheus"
-      OTEL_LOGS_EXPORTER: "none"
-      OTEL_PYTHON_LOG_CORRELATION: "true"
-      OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
       PROMETHEUS_EXPORTER_PORT: "9465"
       REDIS_URL: "${ALERT_REDIS_URL}"
     volumes:
