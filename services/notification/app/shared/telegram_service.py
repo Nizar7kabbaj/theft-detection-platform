@@ -3,8 +3,8 @@ from pathlib import Path
 
 import requests
 
-from app.core.config import settings
-from app.metrics import telegram_messages_total
+from app.shared.config import settings
+from app.shared.metrics import telegram_messages_total
 
 logger = logging.getLogger(__name__)
 

@@ -6,10 +6,10 @@ from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from app import telegram_service
-from app.core.config import settings
-from app.metrics import webhook_duration_seconds, webhooks_total
-from app.schemas.alertmanager import AlertmanagerWebhook
+from app.server.schemas.alertmanager import AlertmanagerWebhook
+from app.shared import telegram_service
+from app.shared.config import settings
+from app.shared.metrics import webhook_duration_seconds, webhooks_total
 
 logger = logging.getLogger(__name__)
 

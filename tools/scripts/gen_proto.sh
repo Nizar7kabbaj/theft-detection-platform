@@ -5,16 +5,28 @@ usage() {
   cat >&2 <<'EOF'
 usage: scripts/gen_proto.sh <target>
   target: backend | ai-service | notification-service
-generates python grpc stubs from proto/ into <target>/app/grpc_gen
+generates python grpc stubs from proto/ into the matching app/grpc_gen path
 EOF
+}
+
+resolve_subpath() {
+  local target="$1"
+  case "${target}" in
+    notification-service)
+      echo "app/server/grpc_gen"
+      ;;
+    *)
+      echo "app/grpc_gen"
+      ;;
+  esac
 }
 
 generate() {
   local target="$1"
-  local out_host="${PWD}/${target}/app/grpc_gen"
-
+  local subpath
+  subpath="$(resolve_subpath "${target}")"
+  local out_host="${PWD}/${target}/${subpath}"
   mkdir -p "${out_host}"
-
   docker compose run --rm --no-deps \
     --user "$(id -u):$(id -g)" \
     -v "${PWD}/proto:/proto:ro" \
@@ -26,13 +38,11 @@ generate() {
       --python_out=/out \
       --grpc_python_out=/out \
       /proto/common.proto /proto/inference.proto /proto/alert.proto
-
   local f
   for f in "${out_host}"/*_pb2.py "${out_host}"/*_pb2_grpc.py; do
     sed -i 's/^import \(common\|inference\|alert\)_pb2 as/from . import \1_pb2 as/' "$f"
   done
-
-  echo "generated in ${target}/app/grpc_gen:"
+  echo "generated in ${target}/${subpath}:"
   ls -1 "${out_host}"
 }
 
@@ -41,7 +51,6 @@ main() {
     usage
     exit 2
   fi
-
   case "$1" in
     -h|--help)
       usage
@@ -55,7 +64,6 @@ main() {
       exit 2
       ;;
   esac
-
   cd "$(dirname "$0")/.."
   generate "$1"
 }

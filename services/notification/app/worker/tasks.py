@@ -5,9 +5,9 @@ from typing import Any
 
 import requests
 
-from app.celery_app import celery_app
-from app.core.config import settings
-from app.telegram_service import send_message, send_photo
+from app.shared.celery_app import celery_app
+from app.shared.config import settings
+from app.shared.telegram_service import send_message, send_photo
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def _build_text(alert: dict[str, Any]) -> str:
 
 
 @celery_app.task(
-    name="app.tasks.send_alert_task",
+    name="app.worker.tasks.send_alert_task",
     bind=True,
     max_retries=settings.CELERY_TASK_MAX_RETRIES,
     default_retry_delay=settings.CELERY_TASK_RETRY_DELAY_SEC,

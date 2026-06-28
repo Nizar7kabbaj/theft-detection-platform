@@ -1,14 +1,12 @@
 from celery import Celery
-from celery.signals import worker_process_init
 
-from app.core.config import settings
-from app.observability import setup_observability
+from app.shared.config import settings
 
 celery_app = Celery(
     "alerts",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=["app.tasks"],
+    include=["app.worker.tasks"],
 )
 
 celery_app.conf.update(
@@ -21,8 +19,3 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
 )
-
-
-@worker_process_init.connect(weak=False)
-def _init_tracing(**_kwargs: object) -> None:
-    setup_observability(service_name="notification")

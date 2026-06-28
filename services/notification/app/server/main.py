@@ -8,11 +8,11 @@ import grpc
 import uvicorn
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 
-from app.core.config import settings
-from app.grpc_gen import alert_pb2_grpc
-from app.http_app import create_app
-from app.observability import setup_observability
-from app.servicer import AlertServicer
+from app.server.grpc_gen import alert_pb2_grpc
+from app.server.http_app import create_app
+from app.server.observability import setup_server_observability
+from app.server.servicer import AlertServicer
+from app.shared.config import settings
 
 ALERT_SERVICE_FULL_NAME = "theftdetection.v1.AlertService"
 
@@ -77,11 +77,11 @@ async def _run_http(stop_event: asyncio.Event, log: logging.Logger) -> None:
 
 
 async def _serve() -> None:
-    setup_observability(service_name="notification")
+    setup_server_observability()
     logging.getLogger().setLevel(settings.LOG_LEVEL)
-    log = logging.getLogger("app.main")
+    log = logging.getLogger("app.server.main")
 
-    log.info("starting alert service")
+    log.info("starting notification server")
 
     stop_event = asyncio.Event()
 
@@ -98,7 +98,7 @@ async def _serve() -> None:
         _run_http(stop_event, log),
     )
 
-    log.info("alert service stopped")
+    log.info("notification server stopped")
 
 
 def main() -> None:
