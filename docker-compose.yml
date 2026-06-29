@@ -101,8 +101,10 @@ services:
     restart: unless-stopped
 
   notification-service:
-    build: ./services/notification
-    image: notification:dev
+    build:
+      context: ./services/notification
+      target: server
+    image: notification-server:dev
     container_name: notification
     user: "1000:1000"
     ports:
@@ -130,10 +132,13 @@ services:
     restart: unless-stopped
 
   notification-worker:
-    image: notification:dev
+    build:
+      context: ./services/notification
+      target: worker
+    image: notification-worker:dev
     container_name: notification-worker
     user: "1000:1000"
-    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=INFO", "--pool=solo", "--concurrency=1"]
+    command: ["celery", "-A", "app.worker.bootstrap", "worker", "--loglevel=INFO", "--pool=solo", "--concurrency=1"]
     env_file:
       - ./services/api/.env
     environment:
@@ -150,7 +155,7 @@ services:
       notification-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.celery_app inspect ping -t 5 > /dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "celery -A app.worker.bootstrap inspect ping -t 5 > /dev/null 2>&1 || exit 1"]
       interval: 60s
       timeout: 10s
       retries: 3

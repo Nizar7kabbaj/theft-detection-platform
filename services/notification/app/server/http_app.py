@@ -3,8 +3,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.webhooks import router as webhooks_router
-from app.schemas.alertmanager import AlertmanagerWebhook
+from app.server.api.webhooks import router as webhooks_router
 
 logger = logging.getLogger(__name__)
 

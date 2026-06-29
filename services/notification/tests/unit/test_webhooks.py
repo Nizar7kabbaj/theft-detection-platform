@@ -6,8 +6,8 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api import webhooks
-from app.http_app import create_app
+from app.server.api import webhooks
+from app.server.http_app import create_app
 
 
 VALID_PAYLOAD = {
@@ -54,7 +54,7 @@ def client(token_file: Path):
 
 
 def test_valid_token_and_payload_dispatches_to_telegram(client: TestClient) -> None:
-    with patch("app.api.webhooks.telegram_service") as mock_telegram:
+    with patch("app.server.api.webhooks.telegram_service") as mock_telegram:
         mock_telegram.is_configured.return_value = True
         mock_telegram.send_message.return_value = True
 
@@ -72,7 +72,7 @@ def test_valid_token_and_payload_dispatches_to_telegram(client: TestClient) -> N
 
 
 def test_missing_authorization_header_returns_401(client: TestClient) -> None:
-    with patch("app.api.webhooks.telegram_service") as mock_telegram:
+    with patch("app.server.api.webhooks.telegram_service") as mock_telegram:
         response = client.post("/webhooks/alertmanager", json=VALID_PAYLOAD)
 
     assert response.status_code == 401
@@ -80,7 +80,7 @@ def test_missing_authorization_header_returns_401(client: TestClient) -> None:
 
 
 def test_wrong_token_returns_401(client: TestClient) -> None:
-    with patch("app.api.webhooks.telegram_service") as mock_telegram:
+    with patch("app.server.api.webhooks.telegram_service") as mock_telegram:
         response = client.post(
             "/webhooks/alertmanager",
             json=VALID_PAYLOAD,
@@ -94,7 +94,7 @@ def test_wrong_token_returns_401(client: TestClient) -> None:
 def test_malformed_payload_returns_422(client: TestClient) -> None:
     bad_payload = {k: v for k, v in VALID_PAYLOAD.items() if k != "status"}
 
-    with patch("app.api.webhooks.telegram_service") as mock_telegram:
+    with patch("app.server.api.webhooks.telegram_service") as mock_telegram:
         response = client.post(
             "/webhooks/alertmanager",
             json=bad_payload,

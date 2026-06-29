@@ -1,3 +1,79 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "notification"
+version = "0.1.0"
+description = "notification gRPC server and Celery worker for the theft-detection-platform"
+requires-python = ">=3.11"
+dependencies = [
+    "celery==5.4.0",
+    "redis==5.2.1",
+    "requests==2.33.1",
+    "pydantic-settings==2.14.2",
+    "python-json-logger==3.2.1",
+    "prometheus-client>=0.21,<0.22",
+    "opentelemetry-api==1.29.0",
+    "opentelemetry-sdk==1.29.0",
+    "opentelemetry-exporter-otlp-proto-http==1.29.0",
+    "opentelemetry-exporter-prometheus==0.50b0",
+    "opentelemetry-instrumentation-logging==0.50b0",
+    "opentelemetry-instrumentation-celery==0.50b0",
+]
+
+[project.optional-dependencies]
+server = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.46.0",
+    "grpcio==1.71.2",
+    "grpcio-health-checking==1.71.2",
+    "opentelemetry-instrumentation-grpc==0.50b0",
+]
+worker = [
+    "opentelemetry-instrumentation-requests==0.50b0",
+]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+    "pytest-cov==6.0.0",
+    "pytest-mock==3.14.0",
+    "httpx==0.28.1",
+    "grpcio-tools==1.71.2",
+    "ruff>=0.8,<0.9",
+    "mypy>=1.13,<1.14",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "A", "C4", "DTZ", "PT", "SIM", "PTH", "ASYNC", "RUF", "PL"]
+ignore = ["E501", "PLR0913"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "PLR2004"]
+"app/server/grpc_gen/**/*.py" = ["ALL"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "app.server.grpc_gen.*"
+ignore_errors = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
@@ -20,9 +96,9 @@ filterwarnings = [
 source = ["app"]
 branch = true
 omit = [
-    "app/grpc_gen/*",
+    "app/server/grpc_gen/*",
     "app/__pycache__/*",
-    "app/main.py",
+    "app/server/main.py",
 ]
 
 [tool.coverage.report]

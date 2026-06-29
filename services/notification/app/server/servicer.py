@@ -9,8 +9,8 @@ from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from opentelemetry import trace
 
-from app.celery_app import celery_app
-from app.grpc_gen import alert_pb2, alert_pb2_grpc
+from app.server.grpc_gen import alert_pb2, alert_pb2_grpc
+from app.shared.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer("alert.servicer")
@@ -34,17 +34,14 @@ class AlertServicer(alert_pb2_grpc.AlertServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> alert_pb2.SendAlertReply:
         alert_id = request.alert_id or "unknown"
-
         with tracer.start_as_current_span("alert.enqueue") as span:
             span.set_attribute("alert.id", alert_id)
             span.set_attribute("alert.severity", request.severity)
-
             payload = _alert_to_dict(request)
-
             try:
                 await asyncio.to_thread(
                     celery_app.send_task,
-                    "app.tasks.send_alert_task",
+                    "app.worker.tasks.send_alert_task",
                     args=[payload],
                 )
             except Exception as exc:
@@ -54,10 +51,8 @@ class AlertServicer(alert_pb2_grpc.AlertServiceServicer):
                     status=alert_pb2.STATUS_FAILED,
                     delivered_at=Timestamp(),
                 )
-
             span.set_attribute("alert.enqueued", True)
             logger.info("alert %s enqueued", alert_id)
-
             now = Timestamp()
             now.GetCurrentTime()
             return alert_pb2.SendAlertReply(
