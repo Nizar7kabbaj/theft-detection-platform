@@ -4,7 +4,6 @@ import asyncio
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import AsyncIterator
 
 import grpc
 from opentelemetry import trace
@@ -23,6 +22,7 @@ class InferenceServicer(inference_pb2_grpc.InferenceServiceServicer):
         self._executor = executor
         self._frames_counter = get_frames_counter()
         self._inference_histogram = get_inference_histogram()
+
     async def Analyze(
         self,
         request: inference_pb2.Frame,
@@ -30,20 +30,8 @@ class InferenceServicer(inference_pb2_grpc.InferenceServiceServicer):
     ) -> inference_pb2.Detection:
         result = await self._run_inference(request)
         if result is None:
-            return inference_pb2.Detection()
+            return inference_pb2.Detection(detection_present=False)
         return _to_proto(result)
-
-    async def AnalyzeStream(
-        self,
-        request_iterator: AsyncIterator[inference_pb2.Frame],
-        context: grpc.aio.ServicerContext,
-    ) -> AsyncIterator[inference_pb2.Detection]:
-        async for frame in request_iterator:
-            result = await self._run_inference(frame)
-            if result is None:
-                yield inference_pb2.Detection()
-                continue
-            yield _to_proto(result)
 
     async def _run_inference(self, frame: inference_pb2.Frame) -> DetectionResult | None:
         with tracer.start_as_current_span("inference.analyze_frame") as span:
@@ -86,4 +74,6 @@ def _to_proto(result: DetectionResult) -> inference_pb2.Detection:
         ],
         score=result.score,
         alert_type=result.alert_type,
+        track_id=result.track_id,
+        detection_present=True,
     )

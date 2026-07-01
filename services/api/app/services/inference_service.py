@@ -27,6 +27,8 @@ class InferenceResult:
     keypoints: list[dict[str, float]]
     score: float
     alert_type: str
+    track_id: int = 0
+    detection_present: bool = False
 
 
 class InferenceClient:
@@ -64,6 +66,8 @@ class InferenceClient:
                 raise
             span.set_attribute("detection.score", response.score)
             span.set_attribute("detection.alert_type", response.alert_type)
+            span.set_attribute("detection.track_id", response.track_id)
+            span.set_attribute("detection.present", response.detection_present)
             return _to_result(response)
 
 
@@ -77,4 +81,6 @@ def _to_result(response: pb.Detection) -> InferenceResult:
         ],
         score=response.score,
         alert_type=response.alert_type,
+        track_id=response.track_id,
+        detection_present=response.detection_present,
     )

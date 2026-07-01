@@ -57,6 +57,8 @@ class DetectionUseCase:
             "confidence": result.score,
             "bbox": result.bbox,
             "keypoints": result.keypoints,
+            "track_id": result.track_id,
+            "detection_present": result.detection_present,
             "created_at": now,
         }
         created = await self._repo.create(doc)
