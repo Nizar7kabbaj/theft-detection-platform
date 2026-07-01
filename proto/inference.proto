@@ -17,9 +17,10 @@ message Detection {
   repeated Keypoint keypoints = 2;
   float score = 3;
   string alert_type = 4;
+  int32 track_id = 5;
+  bool detection_present = 6;
 }
 
 service InferenceService {
   rpc Analyze(Frame) returns (Detection);
-  rpc AnalyzeStream(stream Frame) returns (stream Detection);
 }

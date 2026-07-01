@@ -14,6 +14,8 @@ class DetectionCreate(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     bbox: Bbox
     keypoints: list[Keypoint] | None = None
+    track_id: int = 0
+    detection_present: bool = False
 
 
 class DetectionResponse(MongoModel):
@@ -26,4 +28,6 @@ class DetectionResponse(MongoModel):
     confidence: float
     bbox: Bbox
     keypoints: list[Keypoint] | None = None
+    track_id: int
+    detection_present: bool
     created_at: datetime

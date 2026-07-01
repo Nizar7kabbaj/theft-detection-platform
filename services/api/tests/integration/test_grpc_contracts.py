@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import os
-from collections.abc import AsyncIterator
 
 import grpc
 import pytest
@@ -53,6 +52,10 @@ def _is_valid_detection(det: inf_pb.Detection) -> bool:
         return False
     if not isinstance(det.alert_type, str):
         return False
+    if not isinstance(det.track_id, int):
+        return False
+    if not isinstance(det.detection_present, bool):
+        return False
     return True
 
 
@@ -88,6 +91,7 @@ async def test_analyze_empty_frame_tolerated(
 
     assert _is_valid_detection(det)
     assert det.score == 0.0 or det.score < 0.1
+    assert det.detection_present is False
 
 
 async def test_analyze_malformed_bytes_tolerated(
@@ -107,36 +111,3 @@ async def test_analyze_malformed_bytes_tolerated(
 
     assert _is_valid_detection(det)
     assert det.score < 0.1
-
-
-async def test_analyze_stream_multi_frame(
-    inference_stub: InferenceServiceStub,
-) -> None:
-    payload = _tiny_jpeg()
-
-    async def frames() -> AsyncIterator[inf_pb.Frame]:
-        for i in range(3):
-            yield _build_frame(payload, session_id=42, frame_index=i)
-
-    detections: list[inf_pb.Detection] = []
-    async for det in inference_stub.AnalyzeStream(frames()):
-        detections.append(det)
-
-    assert len(detections) == 3
-    for det in detections:
-        assert _is_valid_detection(det)
-        assert 0.0 <= det.score <= 1.0
-
-
-async def test_analyze_stream_empty(
-    inference_stub: InferenceServiceStub,
-) -> None:
-    async def frames() -> AsyncIterator[inf_pb.Frame]:
-        if False:
-            yield
-
-    detections: list[inf_pb.Detection] = []
-    async for det in inference_stub.AnalyzeStream(frames()):
-        detections.append(det)
-
-    assert detections == []
