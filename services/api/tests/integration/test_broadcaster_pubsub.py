@@ -46,7 +46,7 @@ async def test_ws_connects_and_receives_alert_event(
     async with websockets.connect(f"{base_url}/ws/alerts") as ws:
         await asyncio.sleep(0.1)
 
-        payload = {"alert_id": "ws-1", "severity": "HIGH"}
+        payload = {"alert_id": "ws-1", "severity": "SEVERITY_WARNING"}
         await redis_client.publish("alerts:created", json.dumps(payload))
 
         envelope = await _recv_until_event(ws, "created")

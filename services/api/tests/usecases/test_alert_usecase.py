@@ -3,18 +3,24 @@ from datetime import datetime, timezone
 import pytest
 
 from app.core.errors import AlertUnavailable, NotFoundError
-from app.schemas.alert import AlertCreate, AlertResponse
+from app.schemas.alert import AlertCreate, AlertResponse, AlertType
 from app.usecases.alert_usecase import _to_response
+
+
+OCCURRED_AT = datetime(2026, 6, 12, 10, 0, 0, tzinfo=timezone.utc)
 
 
 VALID_PAYLOAD = {
     "alert_id": "a1",
     "session_id": 1,
     "frame_index": 42,
-    "timestamp": "2026-06-12T10:00:00Z",
-    "person": {"id": 1, "bbox": [0, 0, 100, 200]},
-    "severity": "HIGH",
-    "object": {"class_name": "phone", "confidence": 0.92},
+    "occurred_at": OCCURRED_AT,
+    "person": {
+        "track_id": 1,
+        "bbox": {"x1": 0.0, "y1": 0.0, "x2": 100.0, "y2": 200.0},
+    },
+    "severity": "SEVERITY_WARNING",
+    "object": {"class_name": "phone"},
 }
 
 
@@ -31,38 +37,48 @@ def patch_cache(mocker):
 
 
 class TestToResponse:
-    def test_object_present_uses_class_name_and_confidence(self, sample_alert_doc):
-        resp = _to_response(sample_alert_doc)
+    def test_object_present_uses_class_name_and_confidence(self):
+        doc = {
+            "_id": "oid-1",
+            "alert_id": "a1",
+            "session_id": 1,
+            "occurred_at": OCCURRED_AT,
+            "camera_id": "cam-1",
+            "severity": "SEVERITY_WARNING",
+            "object": {"class_name": "phone", "confidence": 0.92},
+            "alert_type": "ALERT_TYPE_OBJECT_PROXIMITY",
+        }
+        resp = _to_response(doc)
         assert resp.object_name == "phone"
         assert resp.confidence == 0.92
-        assert resp.alert_type == "object_proximity"
+        assert resp.alert_type == AlertType.ALERT_TYPE_OBJECT_PROXIMITY
 
-    def test_object_absent_with_bending_type_uses_person_bending(self):
+    def test_object_absent_with_bending_type_falls_back_to_readable_string(self):
         doc = {
             "_id": "oid-2",
             "alert_id": "a2",
             "session_id": 1,
-            "timestamp": "2026-06-12T10:00:00Z",
+            "occurred_at": OCCURRED_AT,
             "camera_id": "cam-1",
-            "severity": "MEDIUM",
+            "severity": "SEVERITY_NOTICE",
             "object": None,
-            "alert_type": "bending",
+            "alert_type": "ALERT_TYPE_BENDING",
         }
         resp = _to_response(doc)
-        assert resp.object_name == "person bending"
+        assert resp.object_name == "bending"
         assert resp.confidence is None
-        assert resp.alert_type == "bending"
+        assert resp.alert_type == AlertType.ALERT_TYPE_BENDING
 
     def test_object_absent_falls_back_to_alert_type_string(self):
         doc = {
             "_id": "oid-3",
             "alert_id": "a3",
             "session_id": 1,
-            "timestamp": "2026-06-12T10:00:00Z",
+            "occurred_at": OCCURRED_AT,
             "camera_id": "cam-1",
-            "severity": "LOW",
+            "severity": "SEVERITY_INFO",
             "object": None,
-            "alert_type": "loitering",
+            "alert_type": "ALERT_TYPE_LOITERING",
         }
         resp = _to_response(doc)
         assert resp.object_name == "loitering"
@@ -110,13 +126,13 @@ class TestList:
             "_id": "oid-1",
             "alert_id": "a1",
             "session_id": 1,
-            "timestamp": "2026-06-12T10:00:00Z",
+            "occurred_at": OCCURRED_AT.isoformat(),
             "camera_id": "cam-1",
-            "severity": "HIGH",
+            "severity": "SEVERITY_WARNING",
             "object_name": "phone",
             "confidence": 0.92,
             "snapshot_url": "snaps/a1.jpg",
-            "alert_type": "object_proximity",
+            "alert_type": "ALERT_TYPE_OBJECT_PROXIMITY",
         }
         mocker.patch(
             "app.usecases.alert_usecase.get_or_set",

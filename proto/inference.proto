@@ -12,11 +12,18 @@ message Frame {
   google.protobuf.Timestamp timestamp = 4;
 }
 
+enum InferenceState {
+  INFERENCE_STATE_UNSPECIFIED = 0;
+  INFERENCE_STATE_WARMING_UP = 1;
+  INFERENCE_STATE_NORMAL = 2;
+  INFERENCE_STATE_ANOMALY = 3;
+}
+
 message Detection {
   Bbox bbox = 1;
   repeated Keypoint keypoints = 2;
   float score = 3;
-  string alert_type = 4;
+  InferenceState inference_state = 4;
   int32 track_id = 5;
   bool detection_present = 6;
 }

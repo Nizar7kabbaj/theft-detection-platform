@@ -16,13 +16,15 @@ if _AI_MODEL_SCRIPTS.exists() and str(_AI_MODEL_SCRIPTS) not in sys.path:
 from predictor import ShoplifterPredictor
 from ultralytics import YOLO
 
+from app.grpc_gen.inference_pb2 import InferenceState
+
 
 @dataclass(frozen=True, slots=True)
 class DetectionResult:
     bbox: tuple[float, float, float, float]
     keypoints: list[tuple[float, float, float]]
     score: float
-    alert_type: str
+    inference_state: InferenceState.ValueType
     track_id: int
 
 
@@ -118,13 +120,13 @@ class LSTMDetector:
         )
 
         if p_anomaly is None:
-            alert_type = "warming_up"
+            inference_state = InferenceState.INFERENCE_STATE_WARMING_UP
             score = 0.0
         elif p_anomaly >= self._anomaly_threshold:
-            alert_type = "anomaly"
+            inference_state = InferenceState.INFERENCE_STATE_ANOMALY
             score = float(p_anomaly)
         else:
-            alert_type = "normal"
+            inference_state = InferenceState.INFERENCE_STATE_NORMAL
             score = float(p_anomaly)
 
         keypoints_out = [
@@ -136,7 +138,7 @@ class LSTMDetector:
             bbox=(float(coords[0]), float(coords[1]), float(coords[2]), float(coords[3])),
             keypoints=keypoints_out,
             score=score,
-            alert_type=alert_type,
+            inference_state=inference_state,
             track_id=track_id,
         )
 

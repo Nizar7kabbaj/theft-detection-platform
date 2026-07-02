@@ -156,7 +156,7 @@ async def _ensure_indexes(real_db: AsyncIOMotorDatabase, prefix: str) -> None:
         except Exception:
             pass
     await cameras_col.create_index("name", unique=True)
-    await detections_col.create_index([("session_id", 1), ("timestamp", -1)])
+    await detections_col.create_index([("session_id", 1), ("occurred_at", -1)])
     await alerts_col.create_index([("acknowledged", 1), ("created_at", -1)])
 
 

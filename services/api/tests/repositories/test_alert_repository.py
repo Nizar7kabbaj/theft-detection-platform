@@ -39,7 +39,7 @@ class TestCreate:
         mock_collection.insert_one.return_value = mocker.MagicMock(inserted_id=inserted_id)
         mock_collection.find_one.return_value = {"_id": inserted_id, "alert_id": "a1"}
 
-        data = {"alert_id": "a1", "severity": "HIGH"}
+        data = {"alert_id": "a1", "severity": "SEVERITY_WARNING"}
         result = await repo.create(data)
 
         mock_collection.insert_one.assert_awaited_once_with(data)
@@ -90,9 +90,14 @@ class TestList:
         cursor.to_list = mocker.AsyncMock(return_value=[])
         mock_collection.find.return_value = cursor
 
-        await repo.list(query={"severity": "HIGH"}, limit=10, skip=5, sort=[("created_at", -1)])
+        await repo.list(
+            query={"severity": "SEVERITY_WARNING"},
+            limit=10,
+            skip=5,
+            sort=[("created_at", -1)],
+        )
 
-        mock_collection.find.assert_called_once_with({"severity": "HIGH"})
+        mock_collection.find.assert_called_once_with({"severity": "SEVERITY_WARNING"})
         cursor.sort.assert_called_once_with([("created_at", -1)])
         cursor.skip.assert_called_once_with(5)
         cursor.limit.assert_called_once_with(10)
@@ -135,8 +140,10 @@ class TestCount:
 
     async def test_with_query(self, repo, mock_collection):
         mock_collection.count_documents.return_value = 3
-        await repo.count({"severity": "HIGH"})
-        mock_collection.count_documents.assert_awaited_once_with({"severity": "HIGH"})
+        await repo.count({"severity": "SEVERITY_WARNING"})
+        mock_collection.count_documents.assert_awaited_once_with(
+            {"severity": "SEVERITY_WARNING"}
+        )
 
 
 class TestListFiltered:
@@ -147,11 +154,14 @@ class TestListFiltered:
             query={}, limit=50, skip=0, sort=[("created_at", -1)]
         )
 
-    async def test_severity_uppercased_in_query(self, repo, mocker):
+    async def test_severity_passed_through_unchanged(self, repo, mocker):
         spy = mocker.patch.object(repo, "list", new=mocker.AsyncMock(return_value=[]))
-        await repo.list_filtered(severity="high", limit=10, skip=2)
+        await repo.list_filtered(severity="SEVERITY_WARNING", limit=10, skip=2)
         spy.assert_awaited_once_with(
-            query={"severity": "HIGH"}, limit=10, skip=2, sort=[("created_at", -1)]
+            query={"severity": "SEVERITY_WARNING"},
+            limit=10,
+            skip=2,
+            sort=[("created_at", -1)],
         )
 
 

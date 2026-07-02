@@ -1,20 +1,14 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
+COMPILER_SERVICE="ai"
+
 usage() {
   cat >&2 <<'EOF'
 usage: tools/scripts/gen_proto.sh <target>
   target: backend | ai-service | notification-service
 generates python grpc stubs from proto/ into the matching service grpc_gen path
 EOF
-}
-
-resolve_service() {
-  case "$1" in
-    backend)              echo "backend" ;;
-    ai-service)           echo "ai" ;;
-    notification-service) echo "notification-service" ;;
-  esac
 }
 
 resolve_outdir() {
@@ -35,30 +29,25 @@ resolve_protos() {
 generate() {
   local target="$1"
   local repo_root="$2"
-  local service outdir protos out_host
-
-  service="$(resolve_service "${target}")"
+  local outdir protos out_host
   outdir="$(resolve_outdir "${target}")"
   protos="$(resolve_protos "${target}")"
   out_host="${repo_root}/${outdir}"
-
   mkdir -p "${out_host}" || {
     echo "cannot create ${out_host}" >&2
     return 1
   }
-
   local proto_args=""
   local p
   for p in ${protos}; do
     proto_args="${proto_args} /proto/${p}"
   done
-
   docker compose run --rm --no-deps \
     --user "$(id -u):$(id -g)" \
     -v "${repo_root}/proto:/proto:ro" \
     -v "${out_host}:/out" \
     -w /app \
-    "${service}" \
+    "${COMPILER_SERVICE}" \
     python -m grpc_tools.protoc \
       -I /proto \
       --python_out=/out \
@@ -67,13 +56,11 @@ generate() {
     echo "protoc failed for ${target}" >&2
     return 1
   }
-
   local f
   for f in "${out_host}"/*_pb2.py "${out_host}"/*_pb2_grpc.py; do
     [[ -e "${f}" ]] || continue
     sed -i 's/^import \(common\|inference\|alert\)_pb2 as/from . import \1_pb2 as/' "${f}"
   done
-
   echo "generated in ${outdir}:"
   ls -1 "${out_host}"
 }
@@ -83,7 +70,6 @@ main() {
     usage
     exit 2
   fi
-
   case "$1" in
     -h|--help)
       usage
@@ -97,13 +83,11 @@ main() {
       exit 2
       ;;
   esac
-
   local repo_root
   repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" || {
     echo "cannot resolve repo root" >&2
     exit 1
   }
-
   generate "$1" "${repo_root}"
 }
 

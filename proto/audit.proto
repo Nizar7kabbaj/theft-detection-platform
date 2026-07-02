@@ -3,6 +3,7 @@ syntax = "proto3";
 package theftdetection.v1;
 
 import "google/protobuf/timestamp.proto";
+import "common.proto";
 
 message LoginSuccess {
   string user_id = 1;
@@ -31,7 +32,7 @@ message DetectionWritten {
   int64 session_id = 2;
   int32 frame_index = 3;
   string camera_id = 4;
-  string alert_type = 5;
+  AlertType alert_type = 5;
   float score = 6;
   int32 track_id = 7;
 }
@@ -40,8 +41,8 @@ message AlertDispatched {
   string alert_id = 1;
   int64 session_id = 2;
   string camera_id = 3;
-  string severity = 4;
-  string alert_type = 5;
+  Severity severity = 4;
+  AlertType alert_type = 5;
   string channel = 6;
   bool delivered = 7;
   int32 attempt_count = 8;
@@ -91,14 +92,6 @@ message ServiceLifecycleEvent {
   string event_kind = 2;
   string version = 3;
   string hostname = 4;
-}
-
-enum Severity {
-  SEVERITY_UNSPECIFIED = 0;
-  SEVERITY_INFO = 1;
-  SEVERITY_NOTICE = 2;
-  SEVERITY_WARNING = 3;
-  SEVERITY_CRITICAL = 4;
 }
 
 message AuditEvent {

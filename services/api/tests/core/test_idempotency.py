@@ -58,7 +58,7 @@ async def test_store_is_noop_when_not_tracked(mocker) -> None:
 async def test_store_writes_envelope_with_ttl(mocker) -> None:
     redis = mocker.AsyncMock()
     state = IdempotencyState(None, "idem:POST:/x:k1", "bodyhash", redis)
-    body = {"alert_id": "a1", "severity": "HIGH"}
+    body = {"alert_id": "a1", "severity": "SEVERITY_WARNING"}
 
     await state.store(body)
 

@@ -23,7 +23,7 @@ class FakeAlertRepo:
     ) -> list[dict[str, Any]]:
         docs = list(self.store.values())
         if severity:
-            docs = [d for d in docs if d.get("severity") == severity.upper()]
+            docs = [d for d in docs if d.get("severity") == severity]
         docs.sort(key=lambda d: d.get("created_at"), reverse=True)
         return docs[skip : skip + limit]
 
@@ -68,15 +68,17 @@ def alert_usecase(fake_alert_repo, mock_redis, mock_alert_client):
 
 @pytest.fixture
 def sample_alert_doc() -> dict[str, Any]:
+    from datetime import datetime, timezone
+
     return {
         "_id": "oid-1",
         "alert_id": "a1",
         "session_id": 1,
-        "timestamp": "2026-06-12T10:00:00Z",
+        "occurred_at": datetime(2026, 6, 12, 10, 0, tzinfo=timezone.utc),
         "camera_id": "cam-1",
-        "severity": "HIGH",
+        "severity": "SEVERITY_WARNING",
         "object": {"class_name": "phone", "confidence": 0.92},
-        "alert_type": "object_proximity",
+        "alert_type": "ALERT_TYPE_OBJECT_PROXIMITY",
         "snapshot_path": "snaps/a1.jpg",
     }
 
@@ -146,8 +148,8 @@ class FakeStatsRepo:
             "detections": 0,
             "cameras": 0,
             "alerts_today": 0,
-            "HIGH": 0,
-            "MEDIUM": 0,
+            "SEVERITY_WARNING": 0,
+            "SEVERITY_NOTICE": 0,
         }
         self.top: list[dict[str, Any]] = []
 

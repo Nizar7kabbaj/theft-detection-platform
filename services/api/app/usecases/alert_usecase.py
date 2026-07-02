@@ -9,21 +9,27 @@ from redis.asyncio import Redis
 from app.core.cache import get_or_set, invalidate_prefix, make_list_key
 from app.core.errors import AlertUnavailable, NotFoundError
 from app.repositories.alert_repository import AlertRepository
-from app.schemas.alert import AlertCreate, AlertResponse
+from app.schemas.alert import AlertCreate, AlertResponse, AlertType, Severity
 from app.services.alert_service import AlertClient
 
 logger = logging.getLogger(__name__)
 
 
+def _readable_alert_type(alert_type: str | None) -> str:
+    if alert_type is None:
+        return "unspecified"
+    return alert_type.replace("ALERT_TYPE_", "").lower().replace("_", " ")
+
+
 def _to_response(doc: dict[str, Any]) -> AlertResponse:
     obj = doc.get("object") or {}
-    alert_type = doc.get("alert_type", "object_proximity")
+    alert_type = doc.get("alert_type") or AlertType.ALERT_TYPE_UNSPECIFIED.value
 
     if obj:
         object_name = obj.get("class_name", "unknown")
         confidence = obj.get("confidence")
     else:
-        object_name = "person bending" if alert_type == "bending" else alert_type
+        object_name = _readable_alert_type(alert_type)
         confidence = None
 
     return AlertResponse.model_validate(
@@ -31,7 +37,7 @@ def _to_response(doc: dict[str, Any]) -> AlertResponse:
             "_id": doc["_id"],
             "alert_id": doc["alert_id"],
             "session_id": doc["session_id"],
-            "timestamp": doc["timestamp"],
+            "occurred_at": doc["occurred_at"],
             "camera_id": doc["camera_id"],
             "severity": doc["severity"],
             "object_name": object_name,
@@ -64,7 +70,8 @@ class AlertUseCase:
             logger.warning("pubsub publish failed event=%s: %s", event, exc)
 
     async def create(self, payload: AlertCreate) -> AlertResponse:
-        doc = payload.model_dump()
+        doc = payload.model_dump(mode="json")
+        doc["occurred_at"] = payload.occurred_at
         doc["created_at"] = datetime.now(timezone.utc)
         doc["acknowledged"] = False
         created = await self._repo.create(doc)
@@ -80,13 +87,17 @@ class AlertUseCase:
         return response
 
     async def list(
-        self, severity: str | None = None, limit: int = 50, skip: int = 0
+        self, severity: Severity | None = None, limit: int = 50, skip: int = 0
     ) -> list[AlertResponse]:
-        params = {"severity": severity, "limit": limit, "skip": skip}
+        params = {"severity": severity.value if severity else None, "limit": limit, "skip": skip}
         key = make_list_key("alerts", params)
 
         async def loader() -> list[dict]:
-            docs = await self._repo.list_filtered(severity=severity, limit=limit, skip=skip)
+            docs = await self._repo.list_filtered(
+                severity=severity.value if severity else None,
+                limit=limit,
+                skip=skip,
+            )
             return [_to_response(d).model_dump(mode="json") for d in docs]
 
         cached = await get_or_set(self._redis, key, self.TTL, loader)

@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package theftdetection.v1;
 
-import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 import "common.proto";
 
@@ -10,15 +9,13 @@ message Alert {
   string alert_id = 1;
   int64 session_id = 2;
   int32 frame_index = 3;
-  string timestamp = 4;
+  google.protobuf.Timestamp occurred_at = 4;
   optional string camera_id = 5;
-  google.protobuf.Struct person = 6;
-  google.protobuf.Struct object = 7;
-  string severity = 8;
-  optional string snapshot_path = 9;
-  optional string alert_type = 10;
-  repeated Keypoint keypoints = 11;
-  optional float torso_angle = 12;
+  Person person = 6;
+  Object object = 7;
+  Severity severity = 8;
+  AlertType alert_type = 9;
+  optional string snapshot_path = 10;
 }
 
 enum Status {

@@ -44,7 +44,7 @@ def _detection_payload(session_id: int = 1, frame_index: int = 0) -> dict[str, A
     return {
         "session_id": session_id,
         "frame_index": frame_index,
-        "timestamp": "2026-06-12T10:00:00Z",
+        "occurred_at": "2026-06-12T10:00:00Z",
         "camera_id": "cam-1",
         "class_name": "person",
         "confidence": 0.87,
@@ -232,7 +232,6 @@ async def test_stats_on_empty_db_returns_zeros(client: httpx.AsyncClient) -> Non
 async def test_stats_counts_reflect_seeded_data(
     client: httpx.AsyncClient, test_db
 ) -> None:
-    # seed two cameras, three detections, four alerts directly into mongo
     await test_db.cameras.insert_many(
         [{"name": "c1"}, {"name": "c2"}]
     )
@@ -242,10 +241,10 @@ async def test_stats_counts_reflect_seeded_data(
     today = datetime.now(timezone.utc)
     await test_db.alerts.insert_many(
         [
-            {"severity": "HIGH", "created_at": today, "object": {"class_name": "phone"}},
-            {"severity": "HIGH", "created_at": today, "object": {"class_name": "phone"}},
-            {"severity": "MEDIUM", "created_at": today, "object": {"class_name": "bag"}},
-            {"severity": "LOW", "created_at": today, "object": {"class_name": "bag"}},
+            {"severity": "SEVERITY_WARNING", "created_at": today, "object": {"class_name": "phone"}},
+            {"severity": "SEVERITY_WARNING", "created_at": today, "object": {"class_name": "phone"}},
+            {"severity": "SEVERITY_NOTICE", "created_at": today, "object": {"class_name": "bag"}},
+            {"severity": "SEVERITY_INFO", "created_at": today, "object": {"class_name": "bag"}},
         ]
     )
 
@@ -267,9 +266,9 @@ async def test_stats_alerts_today_counts_only_today(
     old = datetime(2020, 1, 1, tzinfo=timezone.utc)
     await test_db.alerts.insert_many(
         [
-            {"severity": "HIGH", "created_at": today},
-            {"severity": "HIGH", "created_at": today},
-            {"severity": "LOW", "created_at": old},
+            {"severity": "SEVERITY_WARNING", "created_at": today},
+            {"severity": "SEVERITY_WARNING", "created_at": today},
+            {"severity": "SEVERITY_INFO", "created_at": old},
         ]
     )
 

@@ -15,8 +15,10 @@ class AlertRepository(BaseRepository[dict[str, Any]]):
     ) -> list[dict[str, Any]]:
         query: dict[str, Any] = {}
         if severity:
-            query["severity"] = severity.upper()
-        return await self.list(query=query, limit=limit, skip=skip, sort=[("created_at", -1)])
+            query["severity"] = severity
+        return await self.list(
+            query=query, limit=limit, skip=skip, sort=[("created_at", -1)]
+        )
 
     async def acknowledge(self, id_: str) -> dict[str, Any] | None:
         return await self.update(
