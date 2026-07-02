@@ -12,7 +12,7 @@ from app.api.v1.alerts import router as alerts_router
 from app.core.errors import NotFoundError
 from app.core.idempotency import IdempotencyState, idempotency
 from app.dependencies import get_alert_usecase
-from app.schemas.alert import AlertCreate, AlertResponse
+from app.schemas.alert import AlertCreate, AlertResponse, Severity
 
 
 def _sample_response(alert_id: str = "a1") -> AlertResponse:
@@ -21,13 +21,13 @@ def _sample_response(alert_id: str = "a1") -> AlertResponse:
             "_id": "65f1a2b3c4d5e6f7a8b9c0d1",
             "alert_id": alert_id,
             "session_id": 1,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "occurred_at": datetime.now(timezone.utc),
             "camera_id": "cam-1",
-            "severity": "HIGH",
+            "severity": "SEVERITY_WARNING",
             "object_name": "person",
             "confidence": 0.9,
             "snapshot_url": None,
-            "alert_type": "object_proximity",
+            "alert_type": "ALERT_TYPE_OBJECT_PROXIMITY",
         }
     )
 
@@ -65,7 +65,7 @@ class FakeAlertUseCase:
         return self._create_result
 
     async def list(
-        self, severity: str | None = None, limit: int = 50, skip: int = 0
+        self, severity: Severity | None = None, limit: int = 50, skip: int = 0
     ) -> list[AlertResponse]:
         self.list_calls.append({"severity": severity, "limit": limit, "skip": skip})
         return self._list_result
@@ -138,10 +138,10 @@ def _alert_create_body() -> dict[str, Any]:
         "frame_index": 0,
         "person": {},
         "session_id": 1,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "occurred_at": datetime.now(timezone.utc).isoformat(),
         "camera_id": "cam-1",
-        "severity": "HIGH",
-        "alert_type": "object_proximity",
+        "severity": "SEVERITY_WARNING",
+        "alert_type": "ALERT_TYPE_OBJECT_PROXIMITY",
     }
 
 
@@ -197,10 +197,12 @@ class TestList:
     ) -> None:
         fake_usecase.set_list_result([])
 
-        resp = await client.get("/api/v1/alerts?severity=HIGH&limit=10&skip=5")
+        resp = await client.get("/api/v1/alerts?severity=SEVERITY_WARNING&limit=10&skip=5")
 
         assert resp.status_code == 200
-        assert fake_usecase.list_calls == [{"severity": "HIGH", "limit": 10, "skip": 5}]
+        assert fake_usecase.list_calls == [
+            {"severity": Severity.SEVERITY_WARNING, "limit": 10, "skip": 5}
+        ]
 
 
 class TestAcknowledge:

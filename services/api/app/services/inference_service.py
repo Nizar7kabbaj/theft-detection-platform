@@ -1,40 +1,30 @@
 from __future__ import annotations
-
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-
 import grpc
 from google.protobuf.timestamp_pb2 import Timestamp
 from opentelemetry import trace
-
 from app.core.errors import InferenceUnavailable
 from app.grpc_gen import inference_pb2 as pb
 from app.grpc_gen.inference_pb2_grpc import InferenceServiceStub
-
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
-
 _TRANSIENT_CODES = {
     grpc.StatusCode.UNAVAILABLE,
     grpc.StatusCode.DEADLINE_EXCEEDED,
 }
-
-
 @dataclass(frozen=True, slots=True)
 class InferenceResult:
     bbox: dict[str, float]
     keypoints: list[dict[str, float]]
     score: float
-    alert_type: str
+    inference_state: int
     track_id: int = 0
     detection_present: bool = False
-
-
 class InferenceClient:
     def __init__(self, stub: InferenceServiceStub) -> None:
         self._stub = stub
-
     async def analyze(
         self,
         payload: bytes,
@@ -65,12 +55,10 @@ class InferenceClient:
                     raise InferenceUnavailable("inference service unavailable") from exc
                 raise
             span.set_attribute("detection.score", response.score)
-            span.set_attribute("detection.alert_type", response.alert_type)
+            span.set_attribute("detection.inference_state", pb.InferenceState.Name(response.inference_state))
             span.set_attribute("detection.track_id", response.track_id)
             span.set_attribute("detection.present", response.detection_present)
             return _to_result(response)
-
-
 def _to_result(response: pb.Detection) -> InferenceResult:
     bbox = response.bbox
     return InferenceResult(
@@ -80,7 +68,7 @@ def _to_result(response: pb.Detection) -> InferenceResult:
             for kp in response.keypoints
         ],
         score=response.score,
-        alert_type=response.alert_type,
+        inference_state=response.inference_state,
         track_id=response.track_id,
         detection_present=response.detection_present,
     )

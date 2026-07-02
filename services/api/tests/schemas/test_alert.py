@@ -1,16 +1,20 @@
+from datetime import datetime, timezone
+
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.alert import AlertCreate, AlertResponse
+from app.schemas.alert import AlertCreate, AlertResponse, AlertType, Severity
+
+
+OCCURRED_AT = datetime(2026, 6, 12, 10, 0, 0, tzinfo=timezone.utc)
 
 
 VALID_PAYLOAD = {
     "alert_id": "a1",
     "session_id": 1,
     "frame_index": 42,
-    "timestamp": "2026-06-12T10:00:00Z",
-    "person": {"id": 1, "bbox": [0, 0, 100, 200]},
-    "severity": "high",
+    "occurred_at": OCCURRED_AT,
+    "severity": "SEVERITY_WARNING",
 }
 
 
@@ -18,9 +22,9 @@ VALID_RESPONSE_DOC = {
     "_id": "65f1a2b3c4d5e6f7a8b9c0d1",
     "alert_id": "a1",
     "session_id": 1,
-    "timestamp": "2026-06-12T10:00:00Z",
+    "occurred_at": OCCURRED_AT,
     "camera_id": "cam-1",
-    "severity": "high",
+    "severity": "SEVERITY_WARNING",
     "object_name": "phone",
 }
 
@@ -31,15 +35,15 @@ class TestAlertCreate:
         assert alert.alert_id == "a1"
         assert alert.session_id == 1
         assert alert.frame_index == 42
+        assert alert.severity == Severity.SEVERITY_WARNING
 
     def test_defaults_applied_when_optional_fields_missing(self):
         alert = AlertCreate(**VALID_PAYLOAD)
         assert alert.camera_id == "default"
-        assert alert.alert_type == "object_proximity"
+        assert alert.alert_type == AlertType.ALERT_TYPE_OBJECT_PROXIMITY
+        assert alert.person is None
         assert alert.object is None
         assert alert.snapshot_path is None
-        assert alert.keypoints is None
-        assert alert.torso_angle is None
 
     def test_session_id_must_be_int(self):
         payload = {**VALID_PAYLOAD, "session_id": "not-an-int"}
@@ -60,22 +64,20 @@ class TestAlertCreate:
     def test_optional_fields_accepted_when_provided(self):
         payload = {
             **VALID_PAYLOAD,
-            "object": {"class_name": "phone", "confidence": 0.92},
+            "person": {
+                "track_id": 1,
+                "bbox": {"x1": 0.0, "y1": 0.0, "x2": 100.0, "y2": 200.0},
+            },
+            "object": {"class_name": "phone"},
             "snapshot_path": "snaps/a1.jpg",
-            "alert_type": "bending",
-            "torso_angle": 75.4,
-            "keypoints": [{"x": 1.0, "y": 2.0, "confidence": 0.9}],
+            "alert_type": "ALERT_TYPE_BENDING",
         }
         alert = AlertCreate(**payload)
-        assert alert.object == {"class_name": "phone", "confidence": 0.92}
-        assert alert.alert_type == "bending"
-        assert alert.torso_angle == 75.4
-
-    def test_person_field_is_required(self):
-        payload = {k: v for k, v in VALID_PAYLOAD.items() if k != "person"}
-        with pytest.raises(ValidationError) as exc:
-            AlertCreate(**payload)
-        assert "person" in str(exc.value)
+        assert alert.person.track_id == 1
+        assert alert.person.bbox.x2 == 100.0
+        assert alert.object.class_name == "phone"
+        assert alert.snapshot_path == "snaps/a1.jpg"
+        assert alert.alert_type == AlertType.ALERT_TYPE_BENDING
 
 
 class TestAlertResponse:
@@ -83,6 +85,7 @@ class TestAlertResponse:
         resp = AlertResponse.model_validate(VALID_RESPONSE_DOC)
         assert resp.id == "65f1a2b3c4d5e6f7a8b9c0d1"
         assert resp.object_name == "phone"
+        assert resp.severity == Severity.SEVERITY_WARNING
 
     def test_accepts_id_field_name_directly(self):
         doc = {k: v for k, v in VALID_RESPONSE_DOC.items() if k != "_id"}
@@ -106,12 +109,12 @@ class TestAlertResponse:
             **VALID_RESPONSE_DOC,
             "confidence": 0.87,
             "snapshot_url": "snaps/a1.jpg",
-            "alert_type": "bending",
+            "alert_type": "ALERT_TYPE_BENDING",
         }
         resp = AlertResponse.model_validate(doc)
         assert resp.confidence == 0.87
         assert resp.snapshot_url == "snaps/a1.jpg"
-        assert resp.alert_type == "bending"
+        assert resp.alert_type == AlertType.ALERT_TYPE_BENDING
 
     def test_missing_required_field_rejected(self):
         doc = {k: v for k, v in VALID_RESPONSE_DOC.items() if k != "object_name"}

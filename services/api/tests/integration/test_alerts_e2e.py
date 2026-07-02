@@ -16,19 +16,23 @@ pytestmark = [
 ]
 
 
-def _alert_payload(alert_id: str = "test-a-1", severity: str = "HIGH") -> dict[str, Any]:
+def _alert_payload(
+    alert_id: str = "test-a-1", severity: str = "SEVERITY_WARNING"
+) -> dict[str, Any]:
     return {
         "alert_id": alert_id,
         "session_id": 1,
         "frame_index": 42,
-        "timestamp": "2026-06-12T10:00:00Z",
+        "occurred_at": "2026-06-12T10:00:00Z",
         "camera_id": "cam-1",
-        "person": {"track_id": 7, "confidence": 0.91},
-        "object": {"class_name": "phone", "confidence": 0.88},
+        "person": {
+            "track_id": 7,
+            "keypoints": [{"x": 0.5, "y": 0.5, "confidence": 0.9}],
+        },
+        "object": {"class_name": "phone"},
         "severity": severity,
         "snapshot_path": "snaps/a-1.jpg",
-        "alert_type": "object_proximity",
-        "keypoints": [{"x": 0.5, "y": 0.5, "confidence": 0.9}],
+        "alert_type": "ALERT_TYPE_OBJECT_PROXIMITY",
     }
 
 
@@ -64,9 +68,9 @@ async def test_create_alert_persists_and_returns_201(
     assert resp.status_code == 201
     body = resp.json()
     assert body["alert_id"] == "test-a-1"
-    assert body["severity"] == "HIGH"
+    assert body["severity"] == "SEVERITY_WARNING"
     assert body["object_name"] == "phone"
-    assert body["confidence"] == 0.88
+    assert body["confidence"] is None
     assert "_id" in body
 
     stored = await test_db.alerts.find_one({"alert_id": "test-a-1"})
@@ -93,18 +97,18 @@ async def test_create_alert_publishes_to_pubsub(
 async def test_list_alerts_filters_by_severity(
     client: httpx.AsyncClient,
 ) -> None:
-    await client.post("/api/v1/alerts", json=_alert_payload("test-a-h1", "HIGH"))
-    await client.post("/api/v1/alerts", json=_alert_payload("test-a-h2", "HIGH"))
-    await client.post("/api/v1/alerts", json=_alert_payload("test-a-l1", "LOW"))
+    await client.post("/api/v1/alerts", json=_alert_payload("test-a-h1", "SEVERITY_WARNING"))
+    await client.post("/api/v1/alerts", json=_alert_payload("test-a-h2", "SEVERITY_WARNING"))
+    await client.post("/api/v1/alerts", json=_alert_payload("test-a-l1", "SEVERITY_NOTICE"))
 
-    high = await client.get("/api/v1/alerts", params={"severity": "HIGH"})
-    low = await client.get("/api/v1/alerts", params={"severity": "LOW"})
+    warning = await client.get("/api/v1/alerts", params={"severity": "SEVERITY_WARNING"})
+    notice = await client.get("/api/v1/alerts", params={"severity": "SEVERITY_NOTICE"})
 
-    assert high.status_code == 200
-    assert low.status_code == 200
-    assert len(high.json()) == 2
-    assert len(low.json()) == 1
-    assert all(item["severity"] == "HIGH" for item in high.json())
+    assert warning.status_code == 200
+    assert notice.status_code == 200
+    assert len(warning.json()) == 2
+    assert len(notice.json()) == 1
+    assert all(item["severity"] == "SEVERITY_WARNING" for item in warning.json())
 
 
 async def test_list_alerts_uses_redis_cache(

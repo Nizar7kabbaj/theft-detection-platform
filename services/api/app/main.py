@@ -41,7 +41,7 @@ _GRPC_CHANNEL_OPTIONS = [
 async def _create_indexes() -> None:
     db = get_database()
     await db.cameras.create_index("name", unique=True)
-    await db.detections.create_index([("session_id", 1), ("timestamp", -1)])
+    await db.detections.create_index([("session_id", 1), ("occurred_at", -1)])
     await db.alerts.create_index([("acknowledged", 1), ("created_at", -1)])
     logger.info("startup indexes ready")
 

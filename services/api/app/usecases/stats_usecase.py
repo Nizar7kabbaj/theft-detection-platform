@@ -32,8 +32,8 @@ class StatsUseCase:
                 self._repo.count_detections(),
                 self._repo.count_cameras(),
                 self._repo.count_alerts_today(),
-                self._repo.count_by_severity("HIGH"),
-                self._repo.count_by_severity("MEDIUM"),
+                self._repo.count_by_severity("SEVERITY_WARNING"),
+                self._repo.count_by_severity("SEVERITY_NOTICE"),
                 self._repo.top_objects(),
             )
             return StatsResponse(

@@ -6,8 +6,9 @@ from uuid import uuid4
 
 from app.core.config import settings
 from app.core.errors import NotFoundError
+from app.grpc_gen import inference_pb2 as pb
 from app.repositories.detection_repository import DetectionRepository
-from app.schemas.alert import AlertCreate
+from app.schemas.alert import AlertCreate, AlertType, Severity
 from app.schemas.detection import DetectionCreate, DetectionResponse
 from app.services.inference_service import InferenceClient, InferenceResult
 from app.usecases.alert_usecase import AlertUseCase
@@ -15,10 +16,19 @@ from app.usecases.alert_usecase import AlertUseCase
 logger = logging.getLogger(__name__)
 
 
-def _severity_from_score(score: float) -> str:
+_INFERENCE_TO_ALERT_TYPE: dict[int, AlertType] = {
+    pb.InferenceState.INFERENCE_STATE_ANOMALY: AlertType.ALERT_TYPE_OBJECT_PROXIMITY,
+}
+
+
+def _severity_from_score(score: float) -> Severity:
     if score >= 0.9:
-        return "HIGH"
-    return "MEDIUM"
+        return Severity.SEVERITY_WARNING
+    return Severity.SEVERITY_NOTICE
+
+
+def _alert_type_from_state(state: int) -> AlertType:
+    return _INFERENCE_TO_ALERT_TYPE.get(state, AlertType.ALERT_TYPE_UNSPECIFIED)
 
 
 class DetectionUseCase:
@@ -46,14 +56,13 @@ class DetectionUseCase:
             frame_index=frame_index,
         )
         now = datetime.now(timezone.utc)
-        timestamp = now.isoformat()
 
         doc = {
             "session_id": session_id,
             "frame_index": frame_index,
-            "timestamp": timestamp,
+            "occurred_at": now,
             "camera_id": camera_id,
-            "class_name": result.alert_type,
+            "class_name": pb.InferenceState.Name(result.inference_state),
             "confidence": result.score,
             "bbox": result.bbox,
             "keypoints": result.keypoints,
@@ -70,7 +79,7 @@ class DetectionUseCase:
                 session_id=session_id,
                 frame_index=frame_index,
                 camera_id=camera_id,
-                timestamp=timestamp,
+                occurred_at=now,
             )
 
         return response
@@ -81,19 +90,18 @@ class DetectionUseCase:
         session_id: int,
         frame_index: int,
         camera_id: str,
-        timestamp: str,
+        occurred_at: datetime,
     ) -> None:
         try:
             payload = AlertCreate(
                 alert_id=uuid4().hex,
                 session_id=session_id,
                 frame_index=frame_index,
-                timestamp=timestamp,
+                occurred_at=occurred_at,
                 camera_id=camera_id,
-                person={},
+                person=None,
                 severity=_severity_from_score(result.score),
-                alert_type=result.alert_type,
-                keypoints=result.keypoints,
+                alert_type=_alert_type_from_state(result.inference_state),
             )
             await self._alert_usecase.create(payload)
         except Exception as exc:

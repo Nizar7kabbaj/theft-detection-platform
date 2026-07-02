@@ -50,7 +50,7 @@ def _build_frame(
 def _is_valid_detection(det: inf_pb.Detection) -> bool:
     if not isinstance(det.score, float):
         return False
-    if not isinstance(det.alert_type, str):
+    if not isinstance(det.inference_state, int):
         return False
     if not isinstance(det.track_id, int):
         return False

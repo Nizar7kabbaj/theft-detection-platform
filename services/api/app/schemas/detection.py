@@ -8,7 +8,7 @@ from app.schemas.common import Bbox, Keypoint, MongoModel
 class DetectionCreate(BaseModel):
     session_id: int
     frame_index: int
-    timestamp: str
+    occurred_at: datetime
     camera_id: str | None = "default"
     class_name: str
     confidence: float = Field(ge=0.0, le=1.0)
@@ -22,7 +22,7 @@ class DetectionResponse(MongoModel):
     id: str = Field(alias="_id")
     session_id: int
     frame_index: int
-    timestamp: str
+    occurred_at: datetime
     camera_id: str
     class_name: str
     confidence: float

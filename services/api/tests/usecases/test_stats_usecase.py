@@ -38,7 +38,7 @@ class TestOverview:
     ):
         mock_redis.get.return_value = None
         fake_stats_repo.counts.update(
-            {"alerts": 7, "detections": 30, "cameras": 2, "alerts_today": 1, "HIGH": 3, "MEDIUM": 4}
+            {"alerts": 7, "detections": 30, "cameras": 2, "alerts_today": 1, "SEVERITY_WARNING": 3, "SEVERITY_NOTICE": 4}
         )
         fake_stats_repo.top = [{"object": "knife", "count": 3}]
 
