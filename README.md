@@ -2,19 +2,26 @@
 
 # Theft Detection Platform
 
-**Real-time pose-based theft detection for retail. A behavior classifier and an explainable rule run on a laptop GPU, alerts ship to a secure messaging channel, and the infrastructure ships as code.**
+**Real-time theft detection for retail, built as a distributed system.
+A behavior classifier reads skeletal motion from the video feed and flags
+theft as it happens, alerts reach security staff in under half a second,
+and everything from the host OS to the cloud footprint ships as code.**
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![gRPC](https://img.shields.io/badge/gRPC-Protobuf-244C5A?style=flat)](https://grpc.io/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-7-47A248?style=flat&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
 [![Terraform](https://img.shields.io/badge/Terraform-1.10+-7B42BC?style=flat&logo=terraform&logoColor=white)](https://www.terraform.io/)
-[![Ubuntu](https://img.shields.io/badge/Ubuntu-26.04-E95420?style=flat&logo=ubuntu&logoColor=white)](https://ubuntu.com/)
+[![Azure](https://img.shields.io/badge/Microsoft%20Azure-0078D4?style=flat&logo=microsoftazure&logoColor=white)](https://azure.microsoft.com/)
+[![Grafana](https://img.shields.io/badge/Grafana-F46800?style=flat&logo=grafana&logoColor=white)](https://grafana.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-</div>
-
-<div align="center">
-
-**Status — academic project, work in progress.**
-Final-year engineering project (PFE) at **Digital Capital**, in partnership with **ISGA × Aivancity**, 2025–2026 cycle. Not production-ready. Not for commercial use.
+**Status — academic project, under active development.**
+Final-year engineering project (PFE) at **Digital Capital**, in partnership with **ISGA × Aivancity**, 2025–2026 cycle. Not for commercial use.
 
 </div>
 
@@ -25,18 +32,12 @@ Final-year engineering project (PFE) at **Digital Capital**, in partnership with
 - [Theft Detection Platform](#theft-detection-platform)
   - [Contents](#contents)
   - [What this platform is](#what-this-platform-is)
-  - [Tech stack](#tech-stack)
-  - [Build status](#build-status)
-    - [Working today](#working-today)
-    - [Planned across the remaining sprints](#planned-across-the-remaining-sprints)
-  - [Target architecture](#target-architecture)
-  - [Local development](#local-development)
-    - [Prerequisites](#prerequisites)
-    - [First-time setup](#first-time-setup)
-    - [Run the stack](#run-the-stack)
-    - [Stop the stack](#stop-the-stack)
-    - [Infrastructure (optional, costs Azure credit)](#infrastructure-optional-costs-azure-credit)
+  - [Architecture](#architecture)
+  - [Detection pipeline](#detection-pipeline)
+  - [Platform engineering](#platform-engineering)
+  - [Getting started](#getting-started)
   - [Repository layout](#repository-layout)
+  - [Documentation](#documentation)
   - [License](#license)
   - [Acknowledgments](#acknowledgments)
 
@@ -44,181 +45,150 @@ Final-year engineering project (PFE) at **Digital Capital**, in partnership with
 
 ## What this platform is
 
-A surveillance system that watches a video feed, detects suspicious posture using pose estimation plus a learned behavior classifier, and delivers alerts to security staff over a secure channel.
+A surveillance system that recognizes theft behavior from body motion. Pose estimation turns each person in the video feed into a skeletal keypoint sequence, a tracker follows that skeleton across frames, and a learned action classifier decides whether the motion pattern matches theft. When it does, security staff get an alert on Telegram within a 500ms end-to-end budget.
 
-The detection logic is hybrid by intent. One human-readable rule catches the easy cases, like a person bending toward shelves for an unusually long time. A machine-learned classifier catches the patterns the rule misses. Two signals together cut both false alarms and missed events compared to either alone.
+Working on skeletons instead of raw pixels is a deliberate choice. It makes the classifier privacy-friendlier, cheaper to run at the edge, and independent of clothing, lighting, and camera brand. The classifier is trained on shoplifting datasets and sits behind a stable interface, so a stronger model drops in without touching the rest of the system — the detection quality ceiling rises with each training cycle instead of being fixed at design time.
 
-Around that core sits a full engineering build: a hardened Linux host, Terraform-managed Azure infrastructure, container orchestration, an MLOps pipeline, a security stack, observability, big-data analytics, and explainability tooling.
+A rule engine runs alongside the classifier as an explainable second signal. Simple human-readable rules catch unambiguous cases (a person bent toward shelves far longer than shopping takes, for example) and give store managers alerts they can reason about directly. Two signals together produce fewer false alarms and fewer missed events than either one alone, and every alert carries its explanation: the rule states why it fired, and the classifier's confidence decomposes into contributing factors.
 
----
-
-## Tech stack
-
-The full technology surface of the platform. Some pieces run today, others land in later sprints (see [Build status](#build-status) for what's working now).
-
-**Languages and runtimes**
-
-[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-20%20LTS-5FA04E?style=flat&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-
-**AI and ML**
-
-[![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![CUDA](https://img.shields.io/badge/CUDA-12.1-76B900?style=flat&logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
-[![ONNX](https://img.shields.io/badge/ONNX-005CED?style=flat&logo=onnx&logoColor=white)](https://onnx.ai/)
-[![MLflow](https://img.shields.io/badge/MLflow-0194E2?style=flat&logo=mlflow&logoColor=white)](https://mlflow.org/)
-
-**Backend**
-
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Pydantic](https://img.shields.io/badge/Pydantic-E92063?style=flat&logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
-
-**Frontend**
-
-[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=flat&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-
-**Data and messaging**
-
-[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=flat&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
-[![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io/)
-[![Apache Spark](https://img.shields.io/badge/Apache%20Spark-E25A1C?style=flat&logo=apachespark&logoColor=white)](https://spark.apache.org/)
-[![Telegram](https://img.shields.io/badge/Telegram-Bot-26A5E4?style=flat&logo=telegram&logoColor=white)](https://core.telegram.org/bots)
-
-**Containers and orchestration**
-
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=flat&logo=kubernetes&logoColor=white)](https://kubernetes.io/)
-[![Helm](https://img.shields.io/badge/Helm-0F1689?style=flat&logo=helm&logoColor=white)](https://helm.sh/)
-[![Istio](https://img.shields.io/badge/Istio-466BB0?style=flat&logo=istio&logoColor=white)](https://istio.io/)
-[![Argo CD](https://img.shields.io/badge/Argo%20CD-EF7B4D?style=flat&logo=argo&logoColor=white)](https://argo-cd.readthedocs.io/)
-
-**Infrastructure and cloud**
-
-[![Terraform](https://img.shields.io/badge/Terraform-1.10+-7B42BC?style=flat&logo=terraform&logoColor=white)](https://www.terraform.io/)
-[![Azure](https://img.shields.io/badge/Microsoft%20Azure-0078D4?style=flat&logo=microsoftazure&logoColor=white)](https://azure.microsoft.com/)
-[![Traefik](https://img.shields.io/badge/Traefik-24A1C1?style=flat&logo=traefikproxy&logoColor=white)](https://traefik.io/)
-
-**Observability**
-
-[![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=flat&logo=prometheus&logoColor=white)](https://prometheus.io/)
-[![Grafana](https://img.shields.io/badge/Grafana-F46800?style=flat&logo=grafana&logoColor=white)](https://grafana.com/)
-[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-425CC7?style=flat&logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
-
-**CI/CD and OS**
-
-[![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat&logo=githubactions&logoColor=white)](https://github.com/features/actions)
-[![Ubuntu](https://img.shields.io/badge/Ubuntu-26.04-E95420?style=flat&logo=ubuntu&logoColor=white)](https://ubuntu.com/)
+Around that core sits the rest of the platform: gRPC service contracts, a hardened Linux edge host, Terraform-managed Azure infrastructure, an observability stack with distributed tracing, and an ML pipeline built for retraining, not a frozen checkpoint.
 
 ---
 
-## Build status
+## Architecture
 
-### Working today
+The platform is organized into five planes. Each service boundary is a protobuf contract under [`proto/`](proto/), so a service can be rewritten, moved to another host, or scaled out without touching its neighbors.
 
-**Operating system.** Ubuntu 26.04 LTS dual-boot, hardened with `ufw`, `fail2ban`, `AppArmor`, `auditd`, `unattended-upgrades`, and `logrotate`.
+**Inference plane.** Camera capture, pose estimation (YOLOv8-pose), person tracking, and action classification run close to the camera on a GPU host. A presence gate keeps a lightweight detector always on and wakes the full pipeline only when someone enters the frame, which keeps GPU load proportional to actual store traffic.
 
-**Runtime.** Docker Engine native plus NVIDIA container toolkit and CUDA 12.1, `pyenv` with Python 3.11.9, `nvm` with Node 20 LTS.
+**Data plane.** MongoDB stores alerts, detections, and delivery records. Redis backs caching, task queues, and pub/sub fan-out. Alert events flow onward to Spark-based analytics for store-level reporting: peak hours, zone heatmaps, false-alarm trends.
 
-**Infrastructure as code.** Terraform 1.10+ with three Azure modules (resource group, networking, security). AAD-only auth, no storage keys, remote state backend that survives `terraform destroy`.
+**Identity, security, and compliance plane.** JWT auth with refresh rotation and RBAC, a hash-chained append-only audit log, and privacy controls designed for GDPR: face blurring on stored snapshots, timed retention, and a right-to-erasure endpoint.
 
-**Policy as code.** Three OPA Rego policies (cost control, security baseline, naming conventions) plus Sentinel reference specs.
+**ML platform plane.** Dataset versioning, experiment tracking, a model registry with staged promotion, drift detection on keypoint distributions, and an active-learning loop that turns rejected alerts into labeled training data. This plane is what lets the classifier keep improving on real store footage after deployment.
 
-**Pre-commit scanners.** `terraform fmt`, `tflint`, `tfsec`, `checkov`, `conftest`.
-
-**Disaster recovery.** `restic`-based backup script with USB and Azure Blob targets, full DR runbook, restore drill executed end to end.
-
-**Application baseline.** YOLOv8 pose detection, bend-rule alert, LSTM classifier overlay, FastAPI backend, MongoDB Atlas storage, Telegram delivery. Carried over from the pre-Linux era. Runs on the new host unchanged.
-
-### Planned across the remaining sprints
-
-**Platform services and observability.** Prometheus, Grafana, Loki, OpenTelemetry-instrumented FastAPI, GPU exporter, Alertmanager.
-
-**MLOps pipeline.** DVC dataset versioning on Azure Blob, MLflow tracking server with Model Registry, reproducible training pipeline, data validation with Great Expectations.
-
-**ML rebuild.** Cross-dataset evaluation on UCF-Crime, data augmentation, transformer baselines (VideoMAE, TimeSformer, PoseFormer), comparative study, confidence calibration, drift detection, Model Card. ST-GCN promoted to primary classifier. ONNX export, NTU RGB+D 120 pretraining, knowledge distillation, federated-learning prototype with Flower.
-
-**Backend microservices split.** FastAPI Backend, gRPC AI Service on `:50051`, Alert Service with Celery, Traefik gateway. Motor async MongoDB driver, Pydantic v2, Redis cache, WebSocket fan-out, offline mode. Sub-500ms end-to-end latency gate enforced in CI.
-
-**Frontend rebuild.** Next.js 15 with App Router, TypeScript strict mode, Tailwind 4, shadcn/ui. Security headers, HttpOnly cookie auth, accessibility. Full test pyramid. Progressive Web App with push notifications. Three-language i18n (French, Arabic with RTL, English).
-
-**Security hardening.** JWT with refresh rotation, RBAC, failed-login lockout, rate limiting, OWASP security headers middleware. Hash-chained audit log. Model weights moved to Azure Blob with SAS and SHA256 verify. Key Vault with Managed Identity. Container supply chain (Trivy, Cosign, SBOM). Adversarial ML defense, signed Telegram webhooks, face blurring, GDPR retention, right-to-erasure endpoint, AI Act compliance docs.
-
-**Containers and orchestration.** Multi-stage Dockerfiles, local Kubernetes via kind, Helm chart, Horizontal Pod Autoscaler, Istio mTLS, NetworkPolicies, probes.
-
-**CI/CD and GitOps.** GitHub Actions (lint, test, build, scan, sign), ArgoCD app-of-apps, Argo Rollouts canary.
-
-**Azure deployment.** Terraform modules for ACR, AKS with GPU node pool, Azure Cache for Redis, Event Hub, Storage, Key Vault, Front Door plus WAF, private endpoints, budget alerts.
-
-**SRE.** Locust load test, chaos engineering, SLOs, error budgets, incident response runbook.
-
-**Big data and analytics.** PySpark and Delta Lake ETL, synthetic multi-store dataset, K-Means behavior clustering, auto-generated weekly business report.
-
-**Linux performance and remote control.** Low-latency kernel, WireGuard VPN mesh, Netdata, Portainer, camera calibration, adaptive frame rate, CUDA persistence.
-
-**Explainability.** Skeleton replay viewer, confidence decomposition, false-alarm feedback loop into active learning.
-
----
-
-## Target architecture
+**Frontend plane.** A Next.js 15 console for security staff: live alert feed over WebSocket, skeleton replay of the pose sequence that triggered each alert, and acknowledge/reject actions that feed the learning loop.
 
 ```mermaid
 flowchart TB
-    cam[Camera] --> ai[AI Service<br/>gRPC :50051]
-    ai --> be[FastAPI Backend<br/>JWT + RBAC]
-    be --> redis[(Redis)]
-    be --> mongo[(MongoDB)]
-    be --> eh[(Event Hub)]
-    be --> alert[Alert Service]
-    alert --> tg[Telegram]
-    be --> traefik[Traefik Gateway]
-    traefik --> fe[Next.js 15]
-    eh --> spark[PySpark]
-    spark --> bi[Power BI]
+    subgraph edge["Inference plane — edge GPU host"]
+        cam[Camera<br/>V4L2, adaptive fps] --> pose[Pose estimation<br/>YOLOv8-pose]
+        pose --> track[Tracking<br/>ByteTrack]
+        track --> clf[Action classifier<br/>+ rule engine]
+    end
 
-    classDef planned stroke-dasharray: 5 5,opacity:0.7
-    class ai,redis,eh,alert,traefik,fe,spark,bi planned
+    subgraph data["Data plane"]
+        mongo[(MongoDB<br/>alerts · detections · deliveries)]
+        redis[(Redis<br/>cache · queues · pub/sub)]
+        spark[Spark analytics<br/>store reporting]
+    end
+
+    subgraph core["API and delivery"]
+        api[API Service<br/>FastAPI · gRPC · WebSocket]
+        notif[Notification Service<br/>Celery · retries · DLQ]
+    end
+
+    subgraph sec["Identity, security, compliance plane"]
+        auth[JWT + RBAC]
+        audit[Hash-chained audit log]
+        gdpr[GDPR controls<br/>blurring · retention · erasure]
+    end
+
+    subgraph mlp["ML platform plane"]
+        registry[Model registry<br/>staged promotion]
+        drift[Drift detection]
+        active[Active learning<br/>rejected alerts → labels]
+    end
+
+    subgraph front["Frontend plane"]
+        web[Web Console<br/>Next.js 15 · live feed · skeleton replay]
+    end
+
+    clf -- gRPC --> api
+    api --> mongo
+    api --> redis
+    api --> notif
+    notif --> tg[Telegram]
+    mongo --> spark
+    traefik[Traefik Gateway<br/>TLS] --> api
+    traefik --> web
+    web -- ack / reject --> active
+    active --> registry
+    registry -. model promotion .-> clf
+    sec -.-> api
+    api -. traces · metrics · logs .-> otel[OpenTelemetry<br/>Prometheus · Grafana · Loki · Tempo]
 ```
 
-Solid lines run today. Dashed lines are planned across the next twelve sprints.
+The full component and deployment views live in [`docs/00-architecture.md`](docs/00-architecture.md), with PlantUML sources under [`docs/diagrams/`](docs/diagrams/).
 
 ---
 
-## Local development
+## Detection pipeline
 
-This stack runs on **Ubuntu 26.04 LTS only**. The Windows configuration from the project's early days is no longer maintained.
+A frame travels through five stages between the lens and the guard's phone.
 
-### Prerequisites
+1. **Capture.** V4L2 device handling with automatic recovery on USB disconnect. Frame rate adapts to the scene: 15fps when the store area is empty, 60fps the moment a person enters.
+2. **Pose estimation.** YOLOv8-pose extracts skeletal keypoints per person per frame on the local GPU.
+3. **Tracking.** ByteTrack assigns stable identities across frames, so behavior is judged per person over time, not per frame.
+4. **Classification.** The action classifier scores each tracked pose sequence for theft behavior, with the rule engine running alongside as an independent explainable signal. Input validation on keypoints rejects adversarial or malformed sequences before they reach the model.
+5. **Delivery.** Alerts persist to MongoDB first, then ship through a Celery-backed delivery pipeline with retries, exponential backoff, and a dead-letter queue. A notification is never silently lost: it either arrives or leaves an inspectable record of why it didn't.
+
+---
+
+## Platform engineering
+
+**Observability.** Every service is instrumented with OpenTelemetry. Traces flow to Tempo, metrics to Prometheus, logs to Loki via Alloy, and all three meet in Grafana. Trace context survives process boundaries, including Celery task hops, so a single alert can be followed from frame capture to Telegram delivery. A GPU exporter tracks VRAM, temperature, and per-camera FPS. Alertmanager pages on high error rate, low FPS, and disk pressure.
+
+**Security.** The edge host runs hardened Ubuntu 26.04 LTS: ufw default-deny, fail2ban, AppArmor, auditd, unattended upgrades. MongoDB and Redis bind to loopback with auth and persistence configured. Remote access goes through a WireGuard mesh, not exposed ports. Pre-commit hooks run gitleaks, pip-audit, tflint, tfsec, checkov, and conftest on every commit.
+
+**Infrastructure as code.** Terraform 1.10+ with azurerm 4.x manages the Azure footprint from [`infra/terraform/`](infra/terraform/): modules for resource groups, networking, and Key Vault, separate dev and prod environments, and OPA Rego policies enforcing cost control, security baseline, and naming conventions before any plan applies. Auth is Azure AD only, no storage keys. Remote state lives in a backend that survives `terraform destroy`.
+
+**Disaster recovery.** restic-based backups target both external USB and Azure Blob. The restore procedure is a written runbook, drilled end to end against a measured RTO, not a hope.
+
+---
+
+## Getting started
+
+The stack runs on Ubuntu Linux with an NVIDIA GPU. Requirements:
 
 - NVIDIA GPU with CUDA 12.1-compatible drivers
-- Docker Engine 29+ (native, not Desktop) with `nvidia-container-toolkit` as the default runtime
-- Python 3.11.9 via `pyenv`
-- Node 20 LTS via `nvm`
-- External USB webcam (verified: Logitech C922 Pro)
+- Docker Engine (native, not Desktop) with `nvidia-container-toolkit`
+- Python 3.11 via `pyenv`, Node 20 LTS via `nvm`
+- USB webcam (verified with a Logitech C922 Pro)
 
-### First-time setup
+Clone and prepare local config from the committed examples:
 
 ```bash
 git clone https://github.com/Nizar7kabbaj/theft-detection-platform.git
 cd theft-detection-platform
 
-cp backend/.env.example backend/.env
-# Fill in MongoDB Atlas URL, Telegram bot token, etc.
+cp services/api/.env.example services/api/.env
+cp ml/.env.example ml/.env
+cp config/redis/redis.conf.example config/redis/redis.conf
+cp config/prometheus/prometheus.yml.example config/prometheus/prometheus.yml
+cp config/alertmanager/alertmanager.yml.example config/alertmanager/alertmanager.yml
+cp config/traefik/traefik.yml.example config/traefik/traefik.yml
+cp config/traefik/dynamic.yml.example config/traefik/dynamic.yml
+./tools/scripts/gen_traefik_certs.sh
+```
 
+Fill in the values in both `.env` files before starting the stack. Each variable is documented inline in its example file.
+
+Set up the Python environment for the ML tooling:
+
+```bash
 pyenv local 3.11.9
 python -m venv venv
 source venv/bin/activate
 pip install --upgrade pip setuptools wheel
-
-# CUDA 12.1 torch wheel must install BEFORE ultralytics,
-# otherwise ultralytics pulls the CPU-only torch.
 pip install torch torchvision torchaudio \
   --index-url https://download.pytorch.org/whl/cu121
-pip install -r ai-model/requirements.txt
+pip install -r ml/requirements.txt
 ```
 
-### Run the stack
+The CUDA torch wheel installs before the rest of the requirements. Installing in the other order pulls the CPU-only torch.
+
+Run the stack:
 
 ```bash
 docker compose \
@@ -226,14 +196,17 @@ docker compose \
   -f docker-compose.override.yml \
   -f docker-compose.linux.yml up -d
 
-curl http://localhost:8000/health
-
-# Live AI inference on the host (needs the GPU directly)
-source venv/bin/activate
-python ai-model/scripts/detect_alert.py --source <webcam-index>
+curl http://localhost:8001/health
 ```
 
-### Stop the stack
+Live inference runs on the host, where it has the GPU directly:
+
+```bash
+source venv/bin/activate
+python ml/scripts/detect_alert.py --source <webcam-index>
+```
+
+Stop everything:
 
 ```bash
 docker compose \
@@ -242,14 +215,13 @@ docker compose \
   -f docker-compose.linux.yml down
 ```
 
-### Infrastructure (optional, costs Azure credit)
+Azure infrastructure is optional for local work and costs credit while it exists:
 
 ```bash
-cd infrastructure/terraform/environments/dev
+cd infra/terraform/environments/dev
 ../../scripts/init.sh
 ../../scripts/plan.sh
 ../../scripts/apply.sh
-# When done demoing:
 ../../scripts/destroy.sh
 ```
 
@@ -259,27 +231,46 @@ cd infrastructure/terraform/environments/dev
 
 ```
 theft-detection-platform/
-├── ai-model/        pose detection, behavior classifier, evaluation
-├── backend/         FastAPI service (Dockerised)
-├── frontend/        Next.js 15 skeleton
-├── infrastructure/
-│   ├── terraform/   IaC: modules, environments, policies
-│   ├── backup/      restic backup script
-│   └── azure/       cost-discipline notes
-├── docs/
-│   ├── 01-linux-setup.md
-│   ├── 02-iac-foundation.md
-│   ├── 03-pre-commit.md
-│   ├── 04-disaster-recovery.md
-│   └── compliance/  privacy, limitations, bias
-├── docker-compose.yml
-├── docker-compose.override.yml
-├── docker-compose.linux.yml
-├── .pre-commit-config.yaml
-└── LICENSE
+├── apps/
+│   └── web/           Next.js 15 console (App Router, TypeScript)
+├── services/
+│   ├── ai/            inference service: pose estimation, tracking, classification
+│   ├── api/           FastAPI backend: alerts, auth, WebSocket fan-out
+│   └── notification/  Celery delivery pipeline: Telegram, retries, DLQ
+├── proto/             protobuf contracts for every service boundary
+├── ml/                models, training notebooks, evaluation, inference scripts
+├── config/            per-service config: mongo, redis, traefik, observability
+├── infra/
+│   └── terraform/     Azure IaC: modules, environments, OPA policies
+├── ops/
+│   └── backup/        restic backup script and excludes
+├── tools/
+│   ├── calibration/   camera calibration
+│   └── scripts/       proto generation, cert generation, smoke tests
+├── docs/              architecture and operations chapters, PlantUML diagrams
+└── docker-compose*.yml
 ```
 
-The `frontend/` tree is a skeleton today. Every leaf is a `.gitkeep`. Real code lands during the frontend rebuild sprint.
+---
+
+## Documentation
+
+The `docs/` tree reads as chapters, in order.
+
+| Chapter | Covers |
+|---|---|
+| [00-architecture](docs/00-architecture.md) | system design, planes, service contracts |
+| [01-linux-setup](docs/01-linux-setup.md) | edge host install and hardening |
+| [02-iac-foundation](docs/02-iac-foundation.md) | Terraform structure and Azure modules |
+| [03-pre-commit](docs/03-pre-commit.md) | scanner and hook configuration |
+| [04-disaster-recovery](docs/04-disaster-recovery.md) | backup strategy, restore runbook, RTO/RPO |
+| [05-data-services](docs/05-data-services.md) | MongoDB and Redis setup |
+| [06-secrets-management](docs/06-secrets-management.md) | secret storage and rotation |
+| [07-observability](docs/07-observability.md) | metrics, logs, traces, dashboards, alerting |
+| [08-remote-control](docs/08-remote-control.md) | WireGuard mesh and remote operation |
+| [09-camera-pipeline](docs/09-camera-pipeline.md) | capture, calibration, frame transport |
+
+Dataset and model evaluation notes live in [`ml/DATASET.md`](ml/DATASET.md) and [`ml/EVALUATION.md`](ml/EVALUATION.md).
 
 ---
 
@@ -293,5 +284,5 @@ MIT. See [LICENSE](LICENSE).
 
 - **Digital Capital** — host company for the final-year project
 - **ISGA** and **Aivancity** — academic supervision
-- **PoseLift** (TeCSAR-UNCC, WACV 2025) — baseline dataset used in the first training cycle. [Repository](https://github.com/TeCSAR-UNCC/PoseLift). [Paper](https://arxiv.org/abs/2501.06591).
+- **PoseLift** (TeCSAR-UNCC, WACV 2025) — baseline dataset for the first training cycle. [Repository](https://github.com/TeCSAR-UNCC/PoseLift) · [Paper](https://arxiv.org/abs/2501.06591)
 - **Ultralytics YOLOv8** — pose estimation backbone
