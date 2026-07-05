@@ -2,6 +2,7 @@ from celery import Celery
 
 from app.shared.config import settings
 
+
 celery_app = Celery(
     "alerts",
     broker=settings.REDIS_URL,

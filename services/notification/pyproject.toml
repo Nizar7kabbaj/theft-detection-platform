@@ -11,6 +11,7 @@ dependencies = [
     "celery==5.4.0",
     "redis==5.2.1",
     "requests==2.33.1",
+    "motor==3.7.1",
     "pydantic-settings==2.14.2",
     "python-json-logger==3.2.1",
     "prometheus-client>=0.21,<0.22",
@@ -20,6 +21,7 @@ dependencies = [
     "opentelemetry-exporter-prometheus==0.50b0",
     "opentelemetry-instrumentation-logging==0.50b0",
     "opentelemetry-instrumentation-celery==0.50b0",
+    "opentelemetry-instrumentation-pymongo==0.50b0",
 ]
 
 [project.optional-dependencies]

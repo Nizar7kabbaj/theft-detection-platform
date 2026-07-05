@@ -2,29 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
 
 import grpc
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from opentelemetry import trace
+from pydantic import ValidationError
 
 from app.server.grpc_gen import alert_pb2, alert_pb2_grpc
 from app.shared.celery_app import celery_app
+from app.shared.schemas.alert import AlertMessage
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer("alert.servicer")
-
-
-def _alert_to_dict(alert: alert_pb2.Alert) -> dict[str, Any]:
-    data = MessageToDict(
-        alert,
-        preserving_proto_field_name=True,
-        always_print_fields_with_no_presence=False,
-    )
-    if "session_id" in data and isinstance(data["session_id"], str):
-        data["session_id"] = int(data["session_id"])
-    return data
 
 
 class AlertServicer(alert_pb2_grpc.AlertServiceServicer):
@@ -37,12 +27,32 @@ class AlertServicer(alert_pb2_grpc.AlertServiceServicer):
         with tracer.start_as_current_span("alert.enqueue") as span:
             span.set_attribute("alert.id", alert_id)
             span.set_attribute("alert.severity", request.severity)
-            payload = _alert_to_dict(request)
+
+            raw = MessageToDict(
+                request,
+                preserving_proto_field_name=True,
+                always_print_fields_with_no_presence=False,
+            )
+            try:
+                payload = AlertMessage.model_validate(raw)
+            except ValidationError as exc:
+                logger.error(
+                    "alert %s failed validation: %s",
+                    alert_id,
+                    exc.errors(include_url=False),
+                )
+                span.set_attribute("alert.validated", False)
+                return alert_pb2.SendAlertReply(
+                    status=alert_pb2.STATUS_FAILED,
+                    delivered_at=Timestamp(),
+                )
+            span.set_attribute("alert.validated", True)
+
             try:
                 await asyncio.to_thread(
                     celery_app.send_task,
                     "app.worker.tasks.send_alert_task",
-                    args=[payload],
+                    args=[payload.model_dump(mode="json")],
                 )
             except Exception as exc:
                 logger.error("enqueue failed for alert %s: %s", alert_id, exc)
@@ -51,6 +61,7 @@ class AlertServicer(alert_pb2_grpc.AlertServiceServicer):
                     status=alert_pb2.STATUS_FAILED,
                     delivered_at=Timestamp(),
                 )
+
             span.set_attribute("alert.enqueued", True)
             logger.info("alert %s enqueued", alert_id)
             now = Timestamp()
