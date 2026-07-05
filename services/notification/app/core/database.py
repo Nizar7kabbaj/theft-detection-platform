@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
+from pymongo import ASCENDING
 
 from app.shared.config import settings
 
@@ -43,3 +44,18 @@ def get_database() -> AsyncIOMotorDatabase:
 
 def get_collection(name: str) -> AsyncIOMotorCollection:
     return get_database()[name]
+
+
+async def ensure_indexes() -> None:
+    intents = get_collection(settings.DELIVERY_INTENT_COLLECTION)
+    name = await intents.create_index(
+        [
+            ("source", ASCENDING),
+            ("source_ref", ASCENDING),
+            ("channel", ASCENDING),
+            ("recipient", ASCENDING),
+        ],
+        unique=True,
+        name="uniq_delivery_natural_key",
+    )
+    logger.info("ensured index %s", name)

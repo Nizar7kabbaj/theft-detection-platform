@@ -35,13 +35,13 @@ def send_message(text: str) -> bool:
             url, json=payload, timeout=settings.TELEGRAM_REQUEST_TIMEOUT_SEC
         )
         response.raise_for_status()
-        logger.info("telegram message sent chars=%d", len(text))
-        telegram_messages_total.add(1, {"method": "message", "result": "sent"})
-        return True
     except requests.exceptions.RequestException as exc:
         logger.error("telegram send failed: %s", exc)
         telegram_messages_total.add(1, {"method": "message", "result": "failed"})
-        return False
+        raise
+    logger.info("telegram message sent chars=%d", len(text))
+    telegram_messages_total.add(1, {"method": "message", "result": "sent"})
+    return True
 
 
 def send_photo(image_path: str, caption: str = "") -> bool:
@@ -69,14 +69,14 @@ def send_photo(image_path: str, caption: str = "") -> bool:
                 url, data=data, files=files, timeout=settings.TELEGRAM_PHOTO_TIMEOUT_SEC
             )
         response.raise_for_status()
-        logger.info("telegram photo sent file=%s", path.name)
-        telegram_messages_total.add(1, {"method": "photo", "result": "sent"})
-        return True
     except requests.exceptions.RequestException as exc:
         logger.error("telegram photo send failed: %s", exc)
         telegram_messages_total.add(1, {"method": "photo", "result": "failed"})
-        return False
+        raise
     except OSError as exc:
         logger.error("snapshot file read failed: %s", exc)
         telegram_messages_total.add(1, {"method": "photo", "result": "failed"})
         return False
+    logger.info("telegram photo sent file=%s", path.name)
+    telegram_messages_total.add(1, {"method": "photo", "result": "sent"})
+    return True

@@ -43,7 +43,7 @@ class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
         return DeliveryIntent.model_validate(doc)
 
     async def acquire(self, intent: DeliveryIntentCreate) -> DeliveryIntent:
-        doc = intent.model_dump(mode="json")
+        doc = intent.model_dump(mode="python")
         try:
             result = await self._col.insert_one(doc)
             fresh = await self._col.find_one({"_id": result.inserted_id})

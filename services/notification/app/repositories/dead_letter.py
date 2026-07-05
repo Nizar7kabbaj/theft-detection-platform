@@ -15,7 +15,7 @@ class DeadLetterRepository(BaseRepository[DeadLetter]):
         return DeadLetter.model_validate(doc)
 
     async def create(self, entry: DeadLetterCreate) -> DeadLetter:
-        doc = entry.model_dump(mode="json")
+        doc = entry.model_dump(mode="python")
         result = await self._col.insert_one(doc)
         fresh = await self._col.find_one({"_id": result.inserted_id})
         return self._to_model(fresh)
