@@ -48,6 +48,7 @@ class DeliveryIntentCreate(BaseModel):
     trace_carrier: dict[str, str] = Field(default_factory=dict)
     status: DeliveryStatus = DeliveryStatus.PENDING
     attempts: int = 0
+    requeue_count: int = 0
     attempt_started_at: datetime | None = None
     last_error: str | None = None
     created_at: datetime = Field(default_factory=_utcnow)
@@ -64,6 +65,7 @@ class DeliveryIntent(MongoModel):
     trace_carrier: dict[str, str] = Field(default_factory=dict)
     status: DeliveryStatus
     attempts: int
+    requeue_count: int = 0
     attempt_started_at: datetime | None = None
     last_error: str | None = None
     created_at: datetime

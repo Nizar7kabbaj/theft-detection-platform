@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import requests
+from opentelemetry import trace
+from opentelemetry.trace import Link
 from pydantic import ValidationError
 
 from app.core.database import (
@@ -16,11 +19,12 @@ from app.repositories.dead_letter import DeadLetterRepository
 from app.repositories.delivery_intent import DeliveryIntentRepository
 from app.shared.celery_app import celery_app
 from app.shared.config import settings
-from app.shared.observability import inject_context
+from app.shared.observability import extract_context, inject_context
 from app.shared.schemas.alert import AlertMessage, AlertType, Severity
 from app.shared.schemas.delivery import (
     Channel,
     DeadLetterCreate,
+    DeliveryIntent,
     DeliveryIntentCreate,
     DeliverySource,
     DeliveryStatus,
@@ -28,6 +32,7 @@ from app.shared.schemas.delivery import (
 from app.shared.telegram_service import send_message, send_photo
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer("notification.worker")
 
 _UNCONFIGURED_RECIPIENT = "unconfigured"
 
@@ -186,3 +191,114 @@ def send_alert_task(self, alert: dict[str, Any]) -> dict[str, Any]:
     final_attempt = self.request.retries >= self.max_retries
     logger.info("delivering alert %s attempt=%d", payload.alert_id, self.request.retries + 1)
     return asyncio.run(_deliver(payload, final_attempt))
+
+
+async def _retire_poison(
+    intent: DeliveryIntent,
+    intent_repo: DeliveryIntentRepository,
+    dlq_repo: DeadLetterRepository,
+) -> None:
+    reason = f"exceeded {settings.RECONCILER_MAX_REQUEUES} requeues"
+    await intent_repo.mark_dead(intent.id, reason)
+    await dlq_repo.create(
+        DeadLetterCreate(
+            source=intent.source,
+            source_ref=intent.source_ref,
+            channel=intent.channel,
+            recipient=intent.recipient,
+            payload=intent.payload,
+            trace_carrier=intent.trace_carrier,
+            attempts=intent.attempts,
+            last_error=reason,
+            intent_id=intent.id,
+        )
+    )
+    logger.error("intent %s dead, %s", intent.id, reason)
+
+
+async def _requeue_one(
+    intent: DeliveryIntent,
+    cutoff: datetime,
+    intent_repo: DeliveryIntentRepository,
+    dlq_repo: DeadLetterRepository,
+    sweep_span: trace.Span,
+) -> str:
+    if intent.requeue_count >= settings.RECONCILER_MAX_REQUEUES:
+        await _retire_poison(intent, intent_repo, dlq_repo)
+        return "poison"
+
+    requeued = await intent_repo.mark_requeued(intent.id, cutoff)
+    if requeued is None:
+        return "raced"
+
+    ctx = extract_context(intent.trace_carrier)
+    link = Link(sweep_span.get_span_context())
+    with tracer.start_as_current_span(
+        "reconcile_requeue", context=ctx, links=[link]
+    ) as span:
+        span.set_attribute("intent.id", intent.id)
+        span.set_attribute("intent.source_ref", intent.source_ref)
+        span.set_attribute("intent.requeue_count", requeued.requeue_count)
+        send_alert_task.apply_async(args=[intent.payload])
+    logger.info("intent %s requeued count=%d", intent.id, requeued.requeue_count)
+    return "requeued"
+
+
+async def _reconcile() -> dict[str, int]:
+    await connect_to_mongodb()
+    try:
+        intent_repo = DeliveryIntentRepository(
+            get_collection(settings.DELIVERY_INTENT_COLLECTION)
+        )
+        dlq_repo = DeadLetterRepository(
+            get_collection(settings.DEAD_LETTER_COLLECTION)
+        )
+
+        now = datetime.now(timezone.utc)
+        sending_cutoff = now - timedelta(
+            seconds=settings.DELIVERY_INTENT_SENDING_TIMEOUT_SEC
+        )
+        pending_cutoff = now - timedelta(
+            seconds=settings.DELIVERY_INTENT_PENDING_TIMEOUT_SEC
+        )
+
+        stale = await intent_repo.find_stale(DeliveryStatus.SENDING, sending_cutoff)
+        stale += await intent_repo.find_stale(DeliveryStatus.PENDING, pending_cutoff)
+
+        tally = {"requeued": 0, "poison": 0, "raced": 0}
+        if not stale:
+            return tally
+
+        with tracer.start_as_current_span("reconcile_sweep") as sweep_span:
+            sweep_span.set_attribute("stale.count", len(stale))
+            for intent in stale:
+                cutoff = (
+                    sending_cutoff
+                    if intent.status == DeliveryStatus.SENDING
+                    else pending_cutoff
+                )
+                outcome = await _requeue_one(
+                    intent, cutoff, intent_repo, dlq_repo, sweep_span
+                )
+                tally[outcome] += 1
+            sweep_span.set_attribute("reconcile.requeued", tally["requeued"])
+            sweep_span.set_attribute("reconcile.poison", tally["poison"])
+            sweep_span.set_attribute("reconcile.raced", tally["raced"])
+
+        logger.info(
+            "reconcile swept=%d requeued=%d poison=%d raced=%d",
+            len(stale),
+            tally["requeued"],
+            tally["poison"],
+            tally["raced"],
+        )
+        return tally
+    finally:
+        await close_mongodb_connection()
+
+
+@celery_app.task(name="app.worker.tasks.reconcile_intents_task")
+def reconcile_intents_task() -> dict[str, int]:
+    if not settings.RECONCILER_ENABLED:
+        return {"requeued": 0, "poison": 0, "raced": 0}
+    return asyncio.run(_reconcile())

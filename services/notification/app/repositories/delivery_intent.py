@@ -133,6 +133,33 @@ class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
         )
         return self._to_model(doc) if doc else None
 
+    async def mark_requeued(
+        self, intent_id: str, cutoff: datetime
+    ) -> DeliveryIntent | None:
+        now = _utcnow()
+        doc = await self._col.find_one_and_update(
+            {
+                "_id": self._oid(intent_id),
+                "status": {
+                    "$in": [
+                        DeliveryStatus.PENDING.value,
+                        DeliveryStatus.SENDING.value,
+                    ]
+                },
+                "updated_at": {"$lt": cutoff},
+            },
+            {
+                "$set": {
+                    "status": DeliveryStatus.PENDING.value,
+                    "attempt_started_at": None,
+                    "updated_at": now,
+                },
+                "$inc": {"requeue_count": 1},
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+        return self._to_model(doc) if doc else None
+
     async def find_stale(
         self, status: DeliveryStatus, cutoff: datetime, limit: int = 100
     ) -> list[DeliveryIntent]:
