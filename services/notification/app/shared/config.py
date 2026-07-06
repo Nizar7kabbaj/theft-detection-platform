@@ -9,9 +9,7 @@ class Settings(BaseSettings):
     HTTP_HOST: str = "0.0.0.0"
     HTTP_PORT: int = 8000
     REDIS_URL: str = "redis://theft-redis:6379/1"
-    MONGODB_URL: str = ""
     MONGODB_URL_LOCAL: str = "mongodb://theft-mongo:27017"
-    MONGODB_MODE: str = "local"
     DATABASE_NAME: str = "theft_detection_db"
     DELIVERY_INTENT_COLLECTION: str = "delivery_intents"
     DEAD_LETTER_COLLECTION: str = "dead_letters"

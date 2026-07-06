@@ -1,12 +1,11 @@
 from pathlib import Path
 
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    MONGODB_URL:       str
     MONGODB_URL_LOCAL: str
-    MONGODB_MODE:      str = "local"
     DATABASE_NAME:     str = "theft_detection_db"
     REDIS_URL:         str = ""
     REDIS_URL_LOCAL:   str
@@ -26,7 +25,6 @@ class Settings(BaseSettings):
     WS_MAX_CONNECTIONS:   int = 100
     WS_HEARTBEAT_SECONDS: int = 30
     ALERT_THRESHOLD:    float = 0.7
-
     model_config = SettingsConfigDict(env_file="backend/.env")
 
 
