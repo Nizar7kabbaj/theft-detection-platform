@@ -38,6 +38,7 @@ COPY --chown=app:app app/__init__.py /app/app/__init__.py
 COPY --chown=app:app app/shared /app/app/shared
 COPY --chown=app:app app/repositories /app/app/repositories
 COPY --chown=app:app app/core /app/app/core
+COPY --chown=app:app app/migrations /app/app/migrations
 COPY --chown=app:app app/server /app/app/server
 
 USER app
