@@ -12,7 +12,7 @@ def _send(alert_id: str) -> int:
     import grpc
     from google.protobuf.timestamp_pb2 import Timestamp
 
-    from app.grpc_gen import alert_pb2, alert_pb2_grpc, common_pb2
+    from app.server.grpc_gen import alert_pb2, alert_pb2_grpc, common_pb2
 
     occurred = Timestamp()
     occurred.GetCurrentTime()

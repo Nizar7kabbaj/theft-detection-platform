@@ -19,58 +19,29 @@ from app.repositories.dead_letter import DeadLetterRepository
 from app.repositories.delivery_intent import DeliveryIntentRepository
 from app.shared.celery_app import celery_app
 from app.shared.config import settings
-from app.shared.observability import extract_context, inject_context
-from app.shared.schemas.alert import AlertMessage, AlertType, Severity
+from app.shared.observability import extract_context
 from app.shared.schemas.delivery import (
-    Channel,
     DeadLetterCreate,
     DeliveryIntent,
-    DeliveryIntentCreate,
-    DeliverySource,
     DeliveryStatus,
 )
 from app.shared.telegram_service import send_message, send_photo
+from app.shared.recipient import UNCONFIGURED_RECIPIENT
+from app.worker.renderers import render
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer("notification.worker")
 
-_UNCONFIGURED_RECIPIENT = "unconfigured"
 
 
-def _readable_alert_type(value: AlertType) -> str:
-    return value.value.replace("ALERT_TYPE_", "").lower().replace("_", " ")
-
-
-def _readable_severity(value: Severity) -> str:
-    return value.value.replace("SEVERITY_", "").lower().replace("_", " ")
-
-
-def _build_text(payload: AlertMessage) -> str:
-    if payload.alert_type == AlertType.ALERT_TYPE_BENDING:
-        what = "person bending, possible concealment"
-    elif payload.object is not None:
-        what = f"person near {payload.object.class_name}"
-    else:
-        what = _readable_alert_type(payload.alert_type)
-    severity = _readable_severity(payload.severity)
-    camera_id = payload.camera_id or "default"
-    occurred_at = payload.occurred_at.isoformat()
-    return (
-        f"<b>theft-detection alert, {severity}</b>\n"
-        f"{what}\n"
-        f"camera: <code>{camera_id}</code>\n"
-        f"time: {occurred_at}"
-    )
-
-
-def _dispatch(payload: AlertMessage, text: str) -> bool:
-    if payload.snapshot_path:
-        if send_photo(payload.snapshot_path, text):
+def _dispatch(text: str, photo_path: str | None) -> bool:
+    if photo_path:
+        if send_photo(photo_path, text):
             return True
     return send_message(text)
 
 
-async def _deliver(payload: AlertMessage, final_attempt: bool) -> dict[str, Any]:
+async def _deliver(intent_id: str, final_attempt: bool) -> dict[str, Any]:
     await connect_to_mongodb()
     try:
         intent_repo = DeliveryIntentRepository(
@@ -80,23 +51,16 @@ async def _deliver(payload: AlertMessage, final_attempt: bool) -> dict[str, Any]
             get_collection(settings.DEAD_LETTER_COLLECTION)
         )
 
-        recipient = settings.TELEGRAM_CHAT_ID or _UNCONFIGURED_RECIPIENT
-        intent = await intent_repo.acquire(
-            DeliveryIntentCreate(
-                source=DeliverySource.ALERT,
-                source_ref=payload.alert_id,
-                channel=Channel.TELEGRAM,
-                recipient=recipient,
-                payload=payload.model_dump(mode="json"),
-                trace_carrier=inject_context(),
-            )
-        )
+        intent = await intent_repo.get_by_id(intent_id)
+        if intent is None:
+            logger.error("intent %s not found, dropping", intent_id)
+            return {"intent_id": intent_id, "delivered": False, "reason": "missing"}
 
         if intent.status == DeliveryStatus.SENT:
-            logger.info("alert %s already sent, skipping", payload.alert_id)
-            return {"alert_id": payload.alert_id, "delivered": True, "reason": "already_sent"}
+            logger.info("intent %s already sent, skipping", intent_id)
+            return {"intent_id": intent_id, "delivered": True, "reason": "already_sent"}
 
-        if recipient == _UNCONFIGURED_RECIPIENT:
+        if intent.recipient == UNCONFIGURED_RECIPIENT:
             await intent_repo.mark_dead(intent.id, "telegram not configured")
             await dlq_repo.create(
                 DeadLetterCreate(
@@ -111,17 +75,37 @@ async def _deliver(payload: AlertMessage, final_attempt: bool) -> dict[str, Any]
                     intent_id=intent.id,
                 )
             )
-            logger.error("alert %s dead, telegram not configured", payload.alert_id)
-            return {"alert_id": payload.alert_id, "delivered": False, "reason": "unconfigured"}
+            logger.error("intent %s dead, telegram not configured", intent_id)
+            return {"intent_id": intent_id, "delivered": False, "reason": "unconfigured"}
 
         claimed = await intent_repo.mark_sending(intent.id)
         if claimed is None:
-            logger.info("alert %s claimed elsewhere, skipping", payload.alert_id)
-            return {"alert_id": payload.alert_id, "delivered": False, "reason": "not_claimed"}
+            logger.info("intent %s claimed elsewhere, skipping", intent_id)
+            return {"intent_id": intent_id, "delivered": False, "reason": "not_claimed"}
 
-        text = _build_text(payload)
         try:
-            sent = await asyncio.to_thread(_dispatch, payload, text)
+            text, photo_path = render(intent.source, intent.payload)
+        except (ValidationError, ValueError) as exc:
+            error = f"render failed: {exc}"
+            await intent_repo.mark_dead(intent.id, error)
+            await dlq_repo.create(
+                DeadLetterCreate(
+                    source=intent.source,
+                    source_ref=intent.source_ref,
+                    channel=intent.channel,
+                    recipient=intent.recipient,
+                    payload=intent.payload,
+                    trace_carrier=intent.trace_carrier,
+                    attempts=claimed.attempts,
+                    last_error=error,
+                    intent_id=intent.id,
+                )
+            )
+            logger.error("intent %s dead, %s", intent_id, error)
+            return {"intent_id": intent_id, "delivered": False, "reason": "render"}
+
+        try:
+            sent = await asyncio.to_thread(_dispatch, text, photo_path)
         except requests.exceptions.RequestException as exc:
             error = str(exc)
             if final_attempt:
@@ -139,10 +123,10 @@ async def _deliver(payload: AlertMessage, final_attempt: bool) -> dict[str, Any]
                         intent_id=intent.id,
                     )
                 )
-                logger.error("alert %s dead after retries: %s", payload.alert_id, error)
-                return {"alert_id": payload.alert_id, "delivered": False, "reason": "dead"}
+                logger.error("intent %s dead after retries: %s", intent_id, error)
+                return {"intent_id": intent_id, "delivered": False, "reason": "dead"}
             await intent_repo.mark_failed(intent.id, error)
-            logger.warning("alert %s failed, will retry: %s", payload.alert_id, error)
+            logger.warning("intent %s failed, will retry: %s", intent_id, error)
             raise
 
         if not sent:
@@ -160,12 +144,12 @@ async def _deliver(payload: AlertMessage, final_attempt: bool) -> dict[str, Any]
                     intent_id=intent.id,
                 )
             )
-            logger.error("alert %s dead, telegram declined", payload.alert_id)
-            return {"alert_id": payload.alert_id, "delivered": False, "reason": "declined"}
+            logger.error("intent %s dead, telegram declined", intent_id)
+            return {"intent_id": intent_id, "delivered": False, "reason": "declined"}
 
         await intent_repo.mark_sent(intent.id)
-        logger.info("alert %s delivered", payload.alert_id)
-        return {"alert_id": payload.alert_id, "delivered": True}
+        logger.info("intent %s delivered", intent_id)
+        return {"intent_id": intent_id, "delivered": True}
     finally:
         await close_mongodb_connection()
 
@@ -181,16 +165,10 @@ async def _deliver(payload: AlertMessage, final_attempt: bool) -> dict[str, Any]
     retry_jitter=True,
     acks_late=True,
 )
-def send_alert_task(self, alert: dict[str, Any]) -> dict[str, Any]:
-    try:
-        payload = AlertMessage.model_validate(alert)
-    except ValidationError as exc:
-        logger.error("task received invalid payload: %s", exc.errors(include_url=False))
-        return {"alert_id": alert.get("alert_id", "unknown"), "delivered": False, "reason": "validation"}
-
+def send_alert_task(self, intent_id: str) -> dict[str, Any]:
     final_attempt = self.request.retries >= self.max_retries
-    logger.info("delivering alert %s attempt=%d", payload.alert_id, self.request.retries + 1)
-    return asyncio.run(_deliver(payload, final_attempt))
+    logger.info("delivering intent %s attempt=%d", intent_id, self.request.retries + 1)
+    return asyncio.run(_deliver(intent_id, final_attempt))
 
 
 async def _retire_poison(
@@ -239,7 +217,7 @@ async def _requeue_one(
         span.set_attribute("intent.id", intent.id)
         span.set_attribute("intent.source_ref", intent.source_ref)
         span.set_attribute("intent.requeue_count", requeued.requeue_count)
-        send_alert_task.apply_async(args=[intent.payload])
+        send_alert_task.apply_async(args=[intent.id])
     logger.info("intent %s requeued count=%d", intent.id, requeued.requeue_count)
     return "requeued"
 

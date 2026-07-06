@@ -11,6 +11,7 @@ from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 from app.server.grpc_gen import alert_pb2_grpc
 from app.server.http_app import create_app
 from app.server.observability import setup_server_observability
+from app.core.database import close_mongodb_connection, connect_to_mongodb
 from app.server.servicer import AlertServicer
 from app.shared.config import settings
 
@@ -93,10 +94,14 @@ async def _serve() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _on_signal, sig.name)
 
-    await asyncio.gather(
-        _run_grpc(stop_event, log),
-        _run_http(stop_event, log),
-    )
+    await connect_to_mongodb()
+    try:
+        await asyncio.gather(
+            _run_grpc(stop_event, log),
+            _run_http(stop_event, log),
+        )
+    finally:
+        await close_mongodb_connection()
 
     log.info("notification server stopped")
 
