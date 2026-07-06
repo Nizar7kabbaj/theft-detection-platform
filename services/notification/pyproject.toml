@@ -44,6 +44,7 @@ dev = [
     "grpcio-tools==1.71.2",
     "ruff>=0.8,<0.9",
     "mypy>=1.13,<1.14",
+    "testcontainers[mongodb]>=4.8,<5",
 ]
 
 [tool.hatch.build.targets.wheel]
