@@ -3,21 +3,18 @@ import logging
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
 from app.shared.config import settings
 
+
 logger = logging.getLogger(__name__)
 _client: AsyncIOMotorClient | None = None
 
 
 def _resolve_mongodb_url() -> str:
-    mode = (settings.MONGODB_MODE or "local").lower()
-    if mode == "atlas":
-        return settings.MONGODB_URL
     return settings.MONGODB_URL_LOCAL
 
 
 async def connect_to_mongodb() -> None:
     global _client
-    mode = (settings.MONGODB_MODE or "local").lower()
-    logger.info("connecting to mongodb mode=%s", mode)
+    logger.info("connecting to mongodb")
     _client = AsyncIOMotorClient(_resolve_mongodb_url())
     await _client.admin.command("ping")
     logger.info("connected to mongodb")

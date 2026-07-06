@@ -41,9 +41,7 @@ TEST_COLLECTION_PREFIX = "test_"
 
 
 def _mongo_url() -> str:
-    if settings.MONGODB_MODE == "local":
-        return settings.MONGODB_URL_LOCAL
-    return settings.MONGODB_URL
+    return settings.MONGODB_URL_LOCAL
 
 
 def _redis_url_for_test_db() -> str:

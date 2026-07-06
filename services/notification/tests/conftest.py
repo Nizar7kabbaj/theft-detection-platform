@@ -23,7 +23,6 @@ def mongo_uri() -> Iterator[str]:
 
 
 def _point_settings_at(mongo_uri: str, db_name: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "MONGODB_MODE", "local")
     monkeypatch.setattr(settings, "MONGODB_URL_LOCAL", mongo_uri)
     monkeypatch.setattr(settings, "DATABASE_NAME", db_name)
 
