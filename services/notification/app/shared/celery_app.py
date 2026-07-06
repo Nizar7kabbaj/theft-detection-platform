@@ -19,3 +19,11 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
 )
+
+if settings.RECONCILER_ENABLED:
+    celery_app.conf.beat_schedule = {
+        "reconcile-stale-intents": {
+            "task": "app.worker.tasks.reconcile_intents_task",
+            "schedule": float(settings.RECONCILER_INTERVAL_SEC),
+        },
+    }

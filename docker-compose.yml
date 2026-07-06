@@ -162,6 +162,27 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  notification-beat:
+    build:
+      context: ./services/notification
+      target: worker
+    image: notification-worker:dev
+    container_name: notification-beat
+    user: "1000:1000"
+    command: ["celery", "-A", "app.worker.bootstrap", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule", "--pidfile=/tmp/celerybeat.pid"]
+    env_file:
+      - ./services/api/.env
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: "notification-beat"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification-beat"
+      PROMETHEUS_EXPORTER_PORT: "9466"
+      REDIS_URL: "${NOTIFICATION_REDIS_URL}"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   mongo:
     image: mongo:7.0
     container_name: theft-mongo
