@@ -20,7 +20,13 @@ class AlertRepository(BaseRepository[dict[str, Any]]):
             query=query, limit=limit, skip=skip, sort=[("created_at", -1)]
         )
 
-    async def acknowledge(self, id_: str) -> dict[str, Any] | None:
-        return await self.update(
-            id_, {"acknowledged": True, "acknowledged_at": datetime.now(timezone.utc)}
+    async def acknowledge(self, id_: str) -> tuple[dict[str, Any] | None, bool]:
+        result = await self._col.update_one(
+            {"_id": self._oid(id_), "acknowledged": {"$ne": True}},
+            {"$set": {"acknowledged": True, "acknowledged_at": datetime.now(timezone.utc)}},
         )
+        if result.matched_count == 1:
+            doc = await self.get(id_)
+            return doc, True
+        doc = await self.get(id_)
+        return doc, False

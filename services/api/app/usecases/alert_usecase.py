@@ -104,12 +104,13 @@ class AlertUseCase:
         return [AlertResponse.model_validate(item) for item in cached]
 
     async def acknowledge(self, alert_id: str) -> AlertResponse:
-        updated = await self._repo.acknowledge(alert_id)
+        updated, acked_now = await self._repo.acknowledge(alert_id)
         if updated is None:
             raise NotFoundError(f"alert {alert_id} not found")
-        await invalidate_prefix(self._redis, self.LIST_PREFIX)
         response = _to_response(updated)
-        await self._publish("acknowledged", response)
+        if acked_now:
+            await invalidate_prefix(self._redis, self.LIST_PREFIX)
+            await self._publish("acknowledged", response)
         return response
 
     async def delete(self, alert_id: str) -> None:
