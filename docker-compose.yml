@@ -12,6 +12,10 @@ services:
     build: ./services/api
     image: theft-backend:dev
     container_name: theft-backend
+    networks:
+      - edge
+      - data
+      - observability
     ports:
       - "127.0.0.1:8001:8000"
     env_file:
@@ -50,6 +54,9 @@ services:
   traefik:
     image: traefik:v3.7.5
     container_name: theft-traefik
+    networks:
+      - edge
+      - observability
     user: "0:0"
     ports:
       - "127.0.0.1:80:80"
@@ -75,9 +82,9 @@ services:
     build: ./services/ai
     image: theft-ai:dev
     container_name: theft-ai
+    networks:
+      - observability
     user: "1000:1000"
-    ports:
-      - "127.0.0.1:50051:50051"
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: "theft-ai"
@@ -108,9 +115,10 @@ services:
       target: server
     image: notification-server:dev
     container_name: notification
+    networks:
+      - data
+      - observability
     user: "1000:1000"
-    ports:
-      - "127.0.0.1:50052:50052"
     env_file:
       - ./services/api/.env
     environment:
@@ -141,6 +149,9 @@ services:
       target: worker
     image: notification-worker:dev
     container_name: notification-worker
+    networks:
+      - data
+      - observability
     user: "1000:1000"
     command: ["celery", "-A", "app.worker.bootstrap", "worker", "--loglevel=INFO", "--pool=solo", "--concurrency=1"]
     env_file:
@@ -174,6 +185,9 @@ services:
       target: worker
     image: notification-worker:dev
     container_name: notification-beat
+    networks:
+      - data
+      - observability
     user: "1000:1000"
     command: ["celery", "-A", "app.worker.bootstrap", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule", "--pidfile=/tmp/celerybeat.pid"]
     env_file:
@@ -195,12 +209,12 @@ services:
   mongo:
     image: mongo:7.0
     container_name: theft-mongo
+    networks:
+      - data
     command: ["mongod", "--config", "/etc/mongo/mongod.conf"]
     user: "999:999"
     group_add:
       - "972"
-    ports:
-      - "127.0.0.1:27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: "root"
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
@@ -235,12 +249,12 @@ services:
   redis:
     image: redis:7.2-alpine
     container_name: theft-redis
+    networks:
+      - data
     user: "999:999"
     group_add:
       - "971"
     command: ["redis-server", "/etc/redis/redis.conf"]
-    ports:
-      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
       - ./config/redis/redis.conf:/etc/redis/redis.conf:ro
@@ -256,6 +270,8 @@ services:
     profiles: ["observability"]
     image: prom/prometheus:v3.12.0
     container_name: theft-prometheus
+    networks:
+      - observability
     user: "65534:65534"
     group_add:
       - "1971"
@@ -291,13 +307,13 @@ services:
     profiles: ["observability"]
     image: prom/node-exporter:v1.8.2
     container_name: theft-node-exporter
+    networks:
+      - observability
     command:
       - "--path.procfs=/host/proc"
       - "--path.rootfs=/rootfs"
       - "--path.sysfs=/host/sys"
       - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
-    ports:
-      - "127.0.0.1:9100:9100"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -314,12 +330,13 @@ services:
     profiles: ["observability"]
     image: percona/mongodb_exporter:0.40
     container_name: theft-mongodb-exporter
+    networks:
+      - data
+      - observability
     command:
       - "--mongodb.uri=mongodb://${MONGO_EXPORTER_USERNAME}:${MONGO_EXPORTER_PASSWORD}@theft-mongo:27017/admin?tls=true&tlsInsecure=true"
       - "--collect-all"
       - "--compatible-mode"
-    ports:
-      - "127.0.0.1:9216:9216"
     depends_on:
       mongo:
         condition: service_healthy
@@ -329,11 +346,12 @@ services:
     profiles: ["observability"]
     image: oliver006/redis_exporter:v1.65.0
     container_name: theft-redis-exporter
+    networks:
+      - data
+      - observability
     environment:
       REDIS_ADDR: "redis://theft-redis:6379"
       REDIS_PASSWORD: "${REDIS_PASSWORD_LOCAL}"
-    ports:
-      - "127.0.0.1:9121:9121"
     depends_on:
       redis:
         condition: service_healthy
@@ -343,8 +361,8 @@ services:
     profiles: ["observability"]
     image: utkuozdemir/nvidia_gpu_exporter:1.4.1
     container_name: theft-nvidia-gpu-exporter
-    ports:
-      - "127.0.0.1:9835:9835"
+    networks:
+      - observability
     group_add:
       - "44"
       - "990"
@@ -366,6 +384,8 @@ services:
       profiles: ["observability"]
       image: netdata/netdata:stable
       container_name: theft-netdata
+      networks:
+        - observability
       hostname: legion-5
       pid: host
       ports:
@@ -405,6 +425,8 @@ services:
     profiles: ["observability"]
     image: portainer/portainer-ce:lts
     container_name: theft-portainer
+    networks:
+      - observability
     restart: unless-stopped
     command: -H unix:///var/run/docker.sock
     ports:
@@ -417,6 +439,8 @@ services:
     profiles: ["observability"]
     image: grafana/grafana:12.4.4
     container_name: theft-grafana
+    networks:
+      - observability
     user: "472:472"
     group_add:
       - "1972"
@@ -453,6 +477,8 @@ services:
     profiles: ["observability"]
     image: grafana/loki:3.3.2
     container_name: theft-loki
+    networks:
+      - observability
     user: "10001:10001"
     command: ["-config.file=/etc/loki/loki-config.yml"]
     ports:
@@ -472,6 +498,8 @@ services:
     profiles: ["observability"]
     image: prom/alertmanager:v0.28.1
     container_name: theft-alertmanager
+    networks:
+      - observability
     user: "65534:65534"
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
@@ -495,6 +523,8 @@ services:
     profiles: ["observability"]
     image: grafana/alloy:v1.5.1
     container_name: theft-alloy
+    networks:
+      - observability
     user: "0:0"
     command:
       - "run"
@@ -517,14 +547,12 @@ services:
     profiles: ["observability"]
     image: grafana/tempo:2.6.1
     container_name: theft-tempo
+    networks:
+      - observability
     user: "10001:10001"
     group_add:
       - "1973"
     command: ["-config.file=/etc/tempo/tempo.yml"]
-    ports:
-      - "127.0.0.1:3200:3200"
-      - "127.0.0.1:4317:4317"
-      - "127.0.0.1:4318:4318"
     volumes:
       - tempo_data:/var/tempo
       - ./config/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
@@ -535,6 +563,15 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
+
+networks:
+  edge:
+    driver: bridge
+  data:
+    driver: bridge
+    internal: true
+  observability:
+    driver: bridge
 
 volumes:
   mongo_data:
