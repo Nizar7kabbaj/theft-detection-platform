@@ -68,3 +68,14 @@ config/alertmanager/webhook_token
 tools/calibration/output/
 .venv/
 .restructure/
+
+config/mongodb/tls/*.key
+config/mongodb/tls/*.pem
+config/mongodb/tls/*.csr
+config/mongodb/tls/*.srl
+
+config/mongodb/secrets/
+
+config/mongodb/tls/*.crt
+!config/mongodb/tls/ca.crt
+config/mongodb/tls/*.ext

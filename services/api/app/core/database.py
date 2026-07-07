@@ -1,14 +1,41 @@
 import logging
-from motor.motor_asyncio import AsyncIOMotorClient
-from .config import settings
+from functools import lru_cache
+from urllib.parse import quote_plus
 
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from .config import settings
 
 logger = logging.getLogger(__name__)
 client: AsyncIOMotorClient = None
 
 
+@lru_cache(maxsize=1)
+def _load_mongodb_password() -> str:
+    path = settings.MONGODB_PASSWORD_FILE
+    try:
+        password = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        logger.error("mongodb password file missing at %s", path)
+        return ""
+    except OSError as exc:
+        logger.error("mongodb password file unreadable at %s: %s", path, exc)
+        return ""
+    if not password:
+        logger.error("mongodb password file empty at %s", path)
+    return password
+
+
 def _resolve_mongodb_url() -> str:
-    return settings.MONGODB_URL_LOCAL
+    user = quote_plus(settings.MONGODB_USER)
+    password = quote_plus(_load_mongodb_password())
+    ca_file = settings.MONGODB_CA_FILE
+    return (
+        f"mongodb://{user}:{password}@{settings.MONGODB_HOST}"
+        f"/{settings.DATABASE_NAME}"
+        f"?tls=true&tlsCAFile={ca_file}&authSource={settings.DATABASE_NAME}"
+    )
+
 
 async def connect_to_mongodb():
     global client

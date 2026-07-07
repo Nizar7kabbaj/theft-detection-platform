@@ -43,6 +43,8 @@ services:
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
     volumes:
       - ./services/api/tests:/app/tests
+      - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
+      - ./config/mongodb/secrets/mongo_api_password:/run/secrets/mongo_password:ro
     restart: unless-stopped
 
   traefik:
@@ -120,6 +122,8 @@ services:
     volumes:
       - ./ml:/app/ai-model:ro
       - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
+      - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
+      - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -149,6 +153,8 @@ services:
       REDIS_URL: "${NOTIFICATION_REDIS_URL}"
     volumes:
       - ./ml:/app/ai-model:ro
+      - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
+      - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -178,6 +184,9 @@ services:
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification-beat"
       PROMETHEUS_EXPORTER_PORT: "9466"
       REDIS_URL: "${NOTIFICATION_REDIS_URL}"
+    volumes:
+      - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
+      - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -192,16 +201,28 @@ services:
       - "972"
     ports:
       - "127.0.0.1:27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "root"
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
     volumes:
       - mongo_data:/data/db
       - ./config/mongodb/mongod.conf:/etc/mongo/mongod.conf:ro
-      - /etc/mongod-tls/mongod.pem:/etc/mongo/tls/mongod.pem:ro
+      - ./config/mongodb/tls/mongod.pem:/etc/mongo/tls/mongod.pem:ro
+      - ./config/mongodb/tls/ca.crt:/etc/mongo/tls/ca.crt:ro
+      - ./config/mongodb/init:/docker-entrypoint-initdb.d:ro
+      - ./config/mongodb/secrets/mongo_root_password:/run/secrets/mongo_root_password:ro
+      - ./config/mongodb/secrets/mongo_api_password:/run/secrets/mongo_api_password:ro
+      - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_notification_password:ro
+      - ./config/mongodb/secrets/mongo_monitor_password:/run/secrets/mongo_monitor_password:ro
     healthcheck:
       test:
         - CMD
         - mongosh
         - --tls
-        - --tlsAllowInvalidCertificates
+        - --tlsCAFile
+        - /etc/mongo/tls/ca.crt
+        - --host
+        - mongo
         - --quiet
         - --eval
         - "db.adminCommand('ping').ok"
