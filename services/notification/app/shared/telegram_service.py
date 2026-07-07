@@ -5,19 +5,30 @@ import requests
 
 from app.shared.config import settings
 from app.shared.metrics import telegram_messages_total
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
-
 TELEGRAM_API_URL = "https://api.telegram.org/bot{token}/{method}"
 
 
-def is_configured() -> bool:
-    return bool(settings.TELEGRAM_BOT_TOKEN) and bool(settings.TELEGRAM_CHAT_ID)
-
-
+@lru_cache(maxsize=1)
 def _token() -> str:
-    return settings.TELEGRAM_BOT_TOKEN.get_secret_value()
+    path = settings.TELEGRAM_BOT_TOKEN_FILE
+    try:
+        token = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        logger.error("telegram token file missing at %s", path)
+        return ""
+    except OSError as exc:
+        logger.error("telegram token file unreadable at %s: %s", path, exc)
+        return ""
+    if not token:
+        logger.error("telegram token file empty at %s", path)
+    return token
 
+
+def is_configured() -> bool:
+    return bool(_token()) and bool(settings.TELEGRAM_CHAT_ID)
 
 def send_message(text: str) -> bool:
     if not is_configured():
