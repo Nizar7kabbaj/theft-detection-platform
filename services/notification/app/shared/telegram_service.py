@@ -1,22 +1,38 @@
 import logging
+import re
+from functools import lru_cache
 from pathlib import Path
-
 import requests
-
 from app.shared.config import settings
 from app.shared.metrics import telegram_messages_total
-
 logger = logging.getLogger(__name__)
-
 TELEGRAM_API_URL = "https://api.telegram.org/bot{token}/{method}"
+_TELEGRAM_TOKEN_URL = re.compile(r"/bot[^/]+/")
+
+
+def _sanitized(exc: requests.exceptions.RequestException) -> requests.exceptions.RequestException:
+    scrubbed = _TELEGRAM_TOKEN_URL.sub("/bot<redacted>/", str(exc))
+    return type(exc)(scrubbed)
+
+
+@lru_cache(maxsize=1)
+def _token() -> str:
+    path = settings.TELEGRAM_BOT_TOKEN_FILE
+    try:
+        token = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        logger.error("telegram token file missing at %s", path)
+        return ""
+    except OSError as exc:
+        logger.error("telegram token file unreadable at %s: %s", path, exc)
+        return ""
+    if not token:
+        logger.error("telegram token file empty at %s", path)
+    return token
 
 
 def is_configured() -> bool:
-    return bool(settings.TELEGRAM_BOT_TOKEN) and bool(settings.TELEGRAM_CHAT_ID)
-
-
-def _token() -> str:
-    return settings.TELEGRAM_BOT_TOKEN.get_secret_value()
+    return bool(_token()) and bool(settings.TELEGRAM_CHAT_ID)
 
 
 def send_message(text: str) -> bool:
@@ -36,9 +52,10 @@ def send_message(text: str) -> bool:
         )
         response.raise_for_status()
     except requests.exceptions.RequestException as exc:
-        logger.error("telegram send failed: %s", exc)
+        clean = _sanitized(exc)
+        logger.error("telegram send failed: %s", clean)
         telegram_messages_total.add(1, {"method": "message", "result": "failed"})
-        raise
+        raise clean from None
     logger.info("telegram message sent chars=%d", len(text))
     telegram_messages_total.add(1, {"method": "message", "result": "sent"})
     return True
@@ -70,9 +87,10 @@ def send_photo(image_path: str, caption: str = "") -> bool:
             )
         response.raise_for_status()
     except requests.exceptions.RequestException as exc:
-        logger.error("telegram photo send failed: %s", exc)
+        clean = _sanitized(exc)
+        logger.error("telegram photo send failed: %s", clean)
         telegram_messages_total.add(1, {"method": "photo", "result": "failed"})
-        raise
+        raise clean from None
     except OSError as exc:
         logger.error("snapshot file read failed: %s", exc)
         telegram_messages_total.add(1, {"method": "photo", "result": "failed"})

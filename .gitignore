@@ -64,6 +64,7 @@ config/traefik/dynamic.yml
 config/traefik/certs/*
 config/alertmanager/alertmanager.yml
 config/alertmanager/webhook_token
+config/telegram/bot_token
 !config/traefik/certs/.gitkeep
 tools/calibration/output/
 .venv/

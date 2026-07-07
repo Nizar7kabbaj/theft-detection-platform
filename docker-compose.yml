@@ -166,6 +166,7 @@ services:
       - ./ml:/app/ai-model:ro
       - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
+      - ./config/telegram/bot_token:/run/secrets/telegram_bot_token:ro
     depends_on:
       redis:
         condition: service_healthy

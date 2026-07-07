@@ -1,5 +1,4 @@
 from pathlib import Path
-from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,7 +15,7 @@ class Settings(BaseSettings):
     DATABASE_NAME: str = "theft_detection_db"
     DELIVERY_INTENT_COLLECTION: str = "delivery_intents"
     DEAD_LETTER_COLLECTION: str = "dead_letters"
-    TELEGRAM_BOT_TOKEN: SecretStr | None = None
+    TELEGRAM_BOT_TOKEN_FILE: Path = Path("/run/secrets/telegram_bot_token")
     TELEGRAM_CHAT_ID: str | None = None
     TELEGRAM_REQUEST_TIMEOUT_SEC: int = 5
     TELEGRAM_PHOTO_TIMEOUT_SEC: int = 15

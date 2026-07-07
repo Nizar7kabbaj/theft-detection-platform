@@ -19,8 +19,6 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     SNAPSHOTS_DIR:     str = "ai-model/outputs/snapshots"
     ALERTS_DIR:        str = "ai-model/outputs/alerts"
-    TELEGRAM_BOT_TOKEN: str | None = None
-    TELEGRAM_CHAT_ID:   str | None = None
     INFERENCE_TARGET:   str = "ai:50051"
     NOTIFICATION_TARGET: str = "notification-service:50052"
     WS_MAX_CONNECTIONS:   int = 100
