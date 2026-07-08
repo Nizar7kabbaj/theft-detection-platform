@@ -40,6 +40,7 @@ services:
       start_period: 15s
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=theft-detection-platform_edge"
       - "traefik.http.routers.backend.rule=Host(`localhost`) && (PathPrefix(`/api`) || PathPrefix(`/ws`) || Path(`/health`))"
       - "traefik.http.routers.backend.entrypoints=websecure"
       - "traefik.http.routers.backend.tls=true"
