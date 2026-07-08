@@ -5,6 +5,7 @@ protected-mode yes
 
 # Security
 requirepass __REDIS_PASSWORD_PLACEHOLDER__
+user ai on >SET_PASSWORD ~ai:track:* resetchannels +@connection +xadd +xrange +xlen +expire +del +ping
 
 # Persistence
 appendonly yes

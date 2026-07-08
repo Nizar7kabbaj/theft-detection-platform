@@ -1,7 +1,5 @@
 syntax = "proto3";
-
 package theftdetection.v1;
-
 import "google/protobuf/timestamp.proto";
 import "common.proto";
 
@@ -10,6 +8,7 @@ message Frame {
   int64 session_id = 2;
   int32 frame_index = 3;
   google.protobuf.Timestamp timestamp = 4;
+  string camera_id = 5;
 }
 
 enum InferenceState {

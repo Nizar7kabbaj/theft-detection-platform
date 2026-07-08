@@ -86,6 +86,7 @@ async def _serve() -> None:
     health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
     await server.stop(grace=5)
     executor.shutdown(wait=True)
+    detector.close()
     log.info("ai service stopped")
 
 

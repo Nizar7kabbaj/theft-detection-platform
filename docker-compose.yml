@@ -84,6 +84,7 @@ services:
     container_name: theft-ai
     networks:
       - observability
+      - data
     user: "1000:1000"
     environment:
       <<: *otel-env
@@ -93,6 +94,7 @@ services:
     volumes:
       - ./ml:/app/ai-model:ro
       - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
+      - ./config/redis/ai_redis_password:/run/secrets/ai_redis_password:ro
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=:50051"]
       interval: 30s
