@@ -28,6 +28,7 @@ class InferenceServicer(inference_pb2_grpc.InferenceServiceServicer):
     async def _run_inference(self, frame: inference_pb2.Frame) -> DetectionResult | None:
         with tracer.start_as_current_span("inference.analyze_frame") as span:
             span.set_attribute("session_id", frame.session_id)
+            span.set_attribute("camera_id", frame.camera_id)
             span.set_attribute("frame_index", frame.frame_index)
             span.set_attribute("payload_bytes", len(frame.payload))
             loop = asyncio.get_running_loop()
@@ -38,10 +39,11 @@ class InferenceServicer(inference_pb2_grpc.InferenceServiceServicer):
                 frame.payload,
                 frame.session_id,
                 frame.frame_index,
+                frame.camera_id,
             )
             elapsed_ms = (time.perf_counter() - started) * 1000
-            self._frames_counter.add(1, {"session_id": str(frame.session_id)})
-            self._inference_histogram.record(elapsed_ms, {"session_id": str(frame.session_id)})
+            self._frames_counter.add(1, {"camera_id": frame.camera_id})
+            self._inference_histogram.record(elapsed_ms, {"camera_id": frame.camera_id})
             if result is not None:
                 span.set_attribute("inference_state", inference_pb2.InferenceState.Name(result.inference_state))
                 span.set_attribute("score", result.score)

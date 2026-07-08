@@ -1,4 +1,14 @@
+from functools import lru_cache
+from pathlib import Path
+from urllib.parse import quote
+
+from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+@lru_cache
+def _read_secret(path: str) -> str:
+    return Path(path).read_text().strip()
 
 
 class Settings(BaseSettings):
@@ -11,7 +21,21 @@ class Settings(BaseSettings):
     DEBUG:           bool = False
     ANOMALY_THRESHOLD:   float = 0.6
     YOLO_PERSON_CLASS:   int = 0
-    model_config = SettingsConfigDict(env_file="ai-service/.env", extra="ignore")
+
+    REDIS_HOST:          str = "theft-redis"
+    REDIS_PORT:          int = 6379
+    REDIS_DB:            int = 2
+    REDIS_USER:          str = "ai"
+    REDIS_PASSWORD_FILE: str = "/run/secrets/ai_redis_password"
+    TRACKER_TTL_SECONDS: int = 60
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+    @computed_field
+    @property
+    def REDIS_URL(self) -> str:
+        password = quote(_read_secret(self.REDIS_PASSWORD_FILE), safe="")
+        return f"redis://{self.REDIS_USER}:{password}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
 
 settings = Settings()
