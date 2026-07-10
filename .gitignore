@@ -54,7 +54,7 @@ infra/terraform/environments/*/terraform.tfvars
 infra/terraform/environments/*/*.auto.tfvars
 .pre-commit-cache/
 config/redis/redis.conf
-config/redis/ai_redis_password
+config/redis/*_redis_password
 config/prometheus/prometheus.yml
 config/grafana/provisioning/datasources/prometheus.yml
 config/grafana/provisioning/datasources/loki.yml

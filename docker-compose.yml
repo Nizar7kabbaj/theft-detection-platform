@@ -50,6 +50,7 @@ services:
       - ./services/api/tests:/app/tests
       - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
       - ./config/mongodb/secrets/mongo_api_password:/run/secrets/mongo_password:ro
+      - ./config/redis/api_redis_password:/run/secrets/api_redis_password:ro
     restart: unless-stopped
 
   traefik:
