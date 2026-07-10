@@ -9,8 +9,13 @@ class Settings(BaseSettings):
     MONGODB_CA_FILE:   Path = Path("/run/secrets/mongo_ca.crt")
     DATABASE_NAME:     str = "theft_detection_db"
     REDIS_URL:         str = ""
-    REDIS_URL_LOCAL:   str
+    REDIS_URL_LOCAL:   str = ""
     REDIS_MODE:        str = "local"
+    REDIS_HOST:        str = "redis"
+    REDIS_PORT:        int = 6379
+    REDIS_DB:          int = 0
+    REDIS_USER:        str = "api"
+    REDIS_PASSWORD_FILE: Path = Path("/run/secrets/api_redis_password")
     API_HOST:          str = "0.0.0.0"
     API_PORT:          int = 8000
     DEBUG:             bool = True
