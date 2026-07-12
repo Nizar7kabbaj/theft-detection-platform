@@ -6,7 +6,7 @@ COMPILER_SERVICE="ai"
 usage() {
   cat >&2 <<'EOF'
 usage: tools/scripts/gen_proto.sh <target>
-  target: backend | ai-service | notification-service
+  target: backend | ai-service | notification-service | camera-service
 generates python grpc stubs from proto/ into the matching service grpc_gen path
 EOF
 }
@@ -16,6 +16,7 @@ resolve_outdir() {
     backend)              echo "services/api/app/grpc_gen" ;;
     ai-service)           echo "services/ai/app/grpc_gen" ;;
     notification-service) echo "services/notification/app/server/grpc_gen" ;;
+    camera-service)       echo "services/camera/app/grpc_gen" ;;
   esac
 }
 
@@ -23,6 +24,7 @@ resolve_protos() {
   case "$1" in
     backend|ai-service)   echo "common.proto inference.proto alert.proto" ;;
     notification-service) echo "common.proto alert.proto" ;;
+    camera-service)       echo "common.proto inference.proto" ;;
   esac
 }
 
@@ -75,7 +77,7 @@ main() {
       usage
       exit 0
       ;;
-    backend|ai-service|notification-service)
+    backend|ai-service|notification-service|camera-service)
       ;;
     *)
       echo "unknown target: $1" >&2

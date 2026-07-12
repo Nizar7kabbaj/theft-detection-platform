@@ -113,6 +113,41 @@ services:
     profiles: ["ai"]
     restart: unless-stopped
 
+  camera:
+    build: ./services/camera
+    image: theft-camera:dev
+    container_name: theft-camera
+    networks:
+      - observability
+      - data
+    user: "1000:1000"
+    group_add:
+      - "44"
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: "theft-camera"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-camera"
+      PROMETHEUS_EXPORTER_PORT: "9464"
+      CAMERA_ID: "cam-01"
+      DEVICE_PATH: "/dev/video0"
+      FRAME_WIDTH: "1280"
+      FRAME_HEIGHT: "720"
+      AI_HOST: "ai"
+      AI_PORT: "50051"
+    devices:
+      - /dev/video0:/dev/video0
+    depends_on:
+      ai:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9464/metrics"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    profiles: ["ai"]
+    restart: unless-stopped
+
   notification-service:
     build:
       context: ./services/notification
