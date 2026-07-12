@@ -1,0 +1,5 @@
+.coverage
+coverage.xml
+.venv/
+.pytest_cache/
+camera_heartbeat
