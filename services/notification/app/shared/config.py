@@ -1,10 +1,9 @@
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-
-
     GRPC_HOST: str = "0.0.0.0"
     GRPC_PORT: int = 50052
     HTTP_HOST: str = "0.0.0.0"
@@ -13,6 +12,12 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_USER: str = "broker"
     REDIS_PASSWORD_FILE: Path = Path("/run/secrets/broker_redis_password")
+    NOTIFY_REDIS_USER: str = "notify"
+    NOTIFY_REDIS_PASSWORD_FILE: Path = Path("/run/secrets/notify_redis_password")
+    GATE_KEY: str = "notify:telegram:gate"
+    GATE_TTL_SEC: int = 180
+    GATE_PROBE_INTERVAL_SEC: int = 30
+    GATE_DRAIN_BATCH: int = 100
     MONGODB_HOST: str = "mongo:27017"
     MONGODB_USER: str = "notification_svc"
     MONGODB_PASSWORD_FILE: Path = Path("/run/secrets/mongo_password")
@@ -37,15 +42,26 @@ class Settings(BaseSettings):
     ALERTMANAGER_WEBHOOK_TOKEN_FILE: Path = Path("/run/secrets/webhook_token")
     LOG_LEVEL: str = "INFO"
     model_config = SettingsConfigDict(extra="ignore")
+
     @property
     def _redis_password(self) -> str:
         return self.REDIS_PASSWORD_FILE.read_text().strip()
+
     @property
     def REDIS_URL(self) -> str:
         return f"redis://{self.REDIS_USER}:{self._redis_password}@{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+
     @property
     def RESULT_BACKEND_URL(self) -> str:
         return f"redis://{self.REDIS_USER}:{self._redis_password}@{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+
+    @property
+    def _notify_redis_password(self) -> str:
+        return self.NOTIFY_REDIS_PASSWORD_FILE.read_text().strip()
+
+    @property
+    def NOTIFY_REDIS_URL(self) -> str:
+        return f"redis://{self.NOTIFY_REDIS_USER}:{self._notify_redis_password}@{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
 
 settings = Settings()
