@@ -31,6 +31,20 @@ scrape_configs:
     static_configs:
       - targets:
           - redis-exporter:9121
+        labels:
+          instance: redis-cache
+  - job_name: redis-broker
+    static_configs:
+      - targets:
+          - redis-broker-exporter:9121
+        labels:
+          instance: redis-broker
+  - job_name: redis-stream
+    static_configs:
+      - targets:
+          - redis-stream-exporter:9121
+        labels:
+          instance: redis-stream
   - job_name: backend
     metrics_path: /metrics
     static_configs:

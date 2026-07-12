@@ -1,0 +1,24 @@
+bind 0.0.0.0
+port 6379
+protected-mode yes
+
+requirepass CHANGE_ME
+
+user default on #CHANGE_ME_SHA256 ~* &* -@all +ping +@connection
+user broker on #CHANGE_ME_SHA256 ~celery* ~_kombu* ~unacked* ~results:* ~*pidbox* ~*.reply.celery* ~kombu* allchannels -@all +@connection +@list +@set +@sortedset +@string +@hash +@transaction +@pubsub +@scripting +client +ttl +expire +persist +del +exists +type +scan +info +unlink +dump +restore
+user exporter on #CHANGE_ME_SHA256 resetchannels ~* -@all +@connection +info +client +ping +latency +slowlog
+
+appendonly yes
+appendfsync everysec
+save ""
+
+maxmemory-policy noeviction
+
+rename-command FLUSHALL ""
+rename-command FLUSHDB ""
+rename-command DEBUG ""
+
+loglevel notice
+logfile ""
+
+databases 1

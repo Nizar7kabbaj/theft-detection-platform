@@ -1,13 +1,14 @@
 from celery import Celery
-
 from app.shared.config import settings
+
 
 celery_app = Celery(
     "alerts",
     broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
+    backend=settings.RESULT_BACKEND_URL,
     include=["app.worker.tasks"],
 )
+
 
 celery_app.conf.update(
     task_serializer="json",
@@ -18,7 +19,9 @@ celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
+    result_backend_transport_options={"global_keyprefix": "results:"},
 )
+
 
 if settings.RECONCILER_ENABLED:
     celery_app.conf.beat_schedule = {

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     ANOMALY_THRESHOLD:   float = 0.6
     YOLO_PERSON_CLASS:   int = 0
 
-    REDIS_HOST:          str = "theft-redis"
+    REDIS_HOST:          str = "redis-stream"
     REDIS_PORT:          int = 6379
     REDIS_DB:            int = 2
     REDIS_USER:          str = "ai"

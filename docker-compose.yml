@@ -130,14 +130,14 @@ services:
       OTEL_SERVICE_NAME: "notification"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification"
       PROMETHEUS_EXPORTER_PORT: "9464"
-      REDIS_URL: "${NOTIFICATION_REDIS_URL}"
     volumes:
       - ./ml:/app/ai-model:ro
       - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
       - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
+      - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
     depends_on:
-      redis:
+      redis-broker:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=:50052"]
@@ -165,14 +165,14 @@ services:
       OTEL_SERVICE_NAME: "notification-worker"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification-worker"
       PROMETHEUS_EXPORTER_PORT: "9465"
-      REDIS_URL: "${NOTIFICATION_REDIS_URL}"
     volumes:
       - ./ml:/app/ai-model:ro
       - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
       - ./config/telegram/bot_token:/run/secrets/telegram_bot_token:ro
+      - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
     depends_on:
-      redis:
+      redis-broker:
         condition: service_healthy
       notification-service:
         condition: service_healthy
@@ -202,12 +202,12 @@ services:
       OTEL_SERVICE_NAME: "notification-beat"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification-beat"
       PROMETHEUS_EXPORTER_PORT: "9466"
-      REDIS_URL: "${NOTIFICATION_REDIS_URL}"
     volumes:
       - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
+      - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
     depends_on:
-      redis:
+      redis-broker:
         condition: service_healthy
     restart: unless-stopped
 
@@ -270,6 +270,44 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
+
+  redis-broker:
+    image: redis:7.2-alpine
+    container_name: theft-redis-broker
+    networks:
+      - data
+    user: "999:999"
+    group_add:
+      - "971"
+    command: ["redis-server", "/etc/redis/redis-broker.conf"]
+    volumes:
+      - redis_broker_data:/data
+      - ./config/redis/redis-broker.conf:/etc/redis/redis-broker.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-broker.conf)\" ping | grep -q PONG"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  redis-stream:
+    image: redis:7.2-alpine
+    container_name: theft-redis-stream
+    restart: unless-stopped
+    networks:
+      - data
+    user: "999:999"
+    group_add:
+      - "971"
+    command: ["redis-server", "/etc/redis/redis-stream.conf"]
+    volumes:
+      - ./config/redis/redis-stream.conf:/etc/redis/redis-stream.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-stream.conf)\" ping | grep -q PONG"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   prometheus:
     profiles: ["observability"]
@@ -355,10 +393,49 @@ services:
       - data
       - observability
     environment:
+      REDIS_USER: "exporter"
       REDIS_ADDR: "redis://theft-redis:6379"
-      REDIS_PASSWORD: "${REDIS_PASSWORD_LOCAL}"
+      REDIS_PASSWORD_FILE: "/run/secrets/exporter_pw"
+    volumes:
+      - ./config/redis/exporter_redis_password:/run/secrets/exporter_pw:ro
     depends_on:
       redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis-broker-exporter:
+    profiles: ["observability"]
+    image: oliver006/redis_exporter:v1.65.0
+    container_name: theft-redis-broker-exporter
+    networks:
+      - data
+      - observability
+    environment:
+      REDIS_USER: "exporter"
+      REDIS_ADDR: "redis://theft-redis-broker:6379"
+      REDIS_PASSWORD_FILE: "/run/secrets/broker_exporter_pw"
+    volumes:
+      - ./config/redis/broker_exporter_redis_password:/run/secrets/broker_exporter_pw:ro
+    depends_on:
+      redis-broker:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis-stream-exporter:
+    profiles: ["observability"]
+    image: oliver006/redis_exporter:v1.65.0
+    container_name: theft-redis-stream-exporter
+    networks:
+      - data
+      - observability
+    environment:
+      REDIS_USER: "exporter"
+      REDIS_ADDR: "redis://theft-redis-stream:6379"
+      REDIS_PASSWORD_FILE: "/run/secrets/stream_exporter_pw"
+    volumes:
+      - ./config/redis/stream_exporter_redis_password:/run/secrets/stream_exporter_pw:ro
+    depends_on:
+      redis-stream:
         condition: service_healthy
     restart: unless-stopped
 
@@ -581,6 +658,7 @@ networks:
 volumes:
   mongo_data:
   redis_data:
+  redis_broker_data:
   prometheus_data:
   grafana_data:
   loki_data:
