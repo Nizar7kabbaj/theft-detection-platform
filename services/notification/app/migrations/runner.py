@@ -10,8 +10,12 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from app.shared.config import settings
 from app.core.database import _resolve_mongodb_url
 from app.migrations import versions
+
+
 logger = logging.getLogger("migrations")
 _TRACKING_COLLECTION = "_notification_migrations"
+
+
 def _discover_versions() -> list[tuple[int, str, object]]:
     found: list[tuple[int, str, object]] = []
     for module_info in pkgutil.iter_modules(versions.__path__):
@@ -24,9 +28,13 @@ def _discover_versions() -> list[tuple[int, str, object]]:
         found.append((version, name, module))
     found.sort(key=lambda item: item[0])
     return found
+
+
 async def _applied_versions(db: AsyncIOMotorDatabase) -> set[int]:
     cursor = db[_TRACKING_COLLECTION].find({}, {"version": 1})
     return {doc["version"] async for doc in cursor}
+
+
 async def _record(db: AsyncIOMotorDatabase, version: int, name: str, direction: str) -> None:
     if direction == "up":
         await db[_TRACKING_COLLECTION].insert_one({
@@ -76,6 +84,8 @@ async def _run(direction: str, target: int | None) -> int:
         return 2
     finally:
         client.close()
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s", force=True)
     parser = argparse.ArgumentParser(prog="migrations")
@@ -85,6 +95,8 @@ def main() -> int:
     if args.direction == "status":
         return asyncio.run(_status())
     return asyncio.run(_run(args.direction, args.target))
+
+
 async def _status() -> int:
     client: AsyncIOMotorClient = AsyncIOMotorClient(_resolve_mongodb_url())
     db: AsyncIOMotorDatabase = client[settings.DATABASE_NAME]
@@ -100,3 +112,7 @@ async def _status() -> int:
         return 0
     finally:
         client.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

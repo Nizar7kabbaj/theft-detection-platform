@@ -30,3 +30,11 @@ if settings.RECONCILER_ENABLED:
             "schedule": float(settings.RECONCILER_INTERVAL_SEC),
         },
     }
+
+celery_app.conf.beat_schedule = {
+    **getattr(celery_app.conf, "beat_schedule", {}),
+    "probe-delivery-gate": {
+        "task": "app.worker.tasks.probe_gate_task",
+        "schedule": float(settings.GATE_PROBE_INTERVAL_SEC),
+    },
+}

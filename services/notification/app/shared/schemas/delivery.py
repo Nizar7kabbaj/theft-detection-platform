@@ -13,6 +13,7 @@ class DeliveryStatus(str, Enum):
     SENT = "sent"
     FAILED = "failed"
     DEAD = "dead"
+    BUFFERED = "buffered"
 
 
 class Channel(str, Enum):

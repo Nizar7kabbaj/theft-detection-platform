@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from motor.motor_asyncio import AsyncIOMotorCollection
-from pymongo import ReturnDocument
+from pymongo import ASCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from app.repositories.base import BaseRepository
@@ -132,6 +132,49 @@ class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
             return_document=ReturnDocument.AFTER,
         )
         return self._to_model(doc) if doc else None
+
+    async def mark_buffered(
+        self, intent_id: str, last_error: str
+    ) -> DeliveryIntent | None:
+        now = _utcnow()
+        doc = await self._col.find_one_and_update(
+            {
+                "_id": self._oid(intent_id),
+                "status": {
+                    "$nin": [DeliveryStatus.SENT.value, DeliveryStatus.DEAD.value]
+                },
+            },
+            {
+                "$set": {
+                    "status": DeliveryStatus.BUFFERED.value,
+                    "attempt_started_at": None,
+                    "last_error": last_error,
+                    "updated_at": now,
+                }
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+        return self._to_model(doc) if doc else None
+
+    async def release_buffered(self, limit: int = 100) -> list[DeliveryIntent]:
+        released: list[DeliveryIntent] = []
+        for _ in range(limit):
+            now = _utcnow()
+            doc = await self._col.find_one_and_update(
+                {"status": DeliveryStatus.BUFFERED.value},
+                {
+                    "$set": {
+                        "status": DeliveryStatus.PENDING.value,
+                        "updated_at": now,
+                    }
+                },
+                sort=[("created_at", ASCENDING)],
+                return_document=ReturnDocument.AFTER,
+            )
+            if doc is None:
+                break
+            released.append(self._to_model(doc))
+        return released
 
     async def mark_requeued(
         self, intent_id: str, cutoff: datetime

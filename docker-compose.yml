@@ -136,6 +136,7 @@ services:
       - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
       - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
+      - ./config/redis/notify_redis_password:/run/secrets/notify_redis_password:ro
     depends_on:
       redis-broker:
         condition: service_healthy
@@ -171,6 +172,7 @@ services:
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
       - ./config/telegram/bot_token:/run/secrets/telegram_bot_token:ro
       - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
+      - ./config/redis/notify_redis_password:/run/secrets/notify_redis_password:ro
     depends_on:
       redis-broker:
         condition: service_healthy
@@ -206,6 +208,7 @@ services:
       - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
       - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
+      - ./config/redis/notify_redis_password:/run/secrets/notify_redis_password:ro
     depends_on:
       redis-broker:
         condition: service_healthy
