@@ -6,7 +6,7 @@ python-multipart==0.0.31
 aiofiles==25.1.0
 pydantic-settings==2.14.2
 python-dotenv==1.2.2
-Pillow==12.2.0
+Pillow==12.3.0
 redis==5.2.1
 
 opentelemetry-api==1.29.0
