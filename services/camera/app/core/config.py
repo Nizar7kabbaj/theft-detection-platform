@@ -1,6 +1,6 @@
 from functools import lru_cache
-from typing import Annotated
-from pydantic import Field, field_validator
+from typing import Annotated, Self
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,30 +11,28 @@ class Settings(BaseSettings):
         extra="ignore",
         case_sensitive=False,
     )
-
     CAMERA_ID: str
     DEVICE_PATH: str = "/dev/video0"
-
     FRAME_WIDTH: int = 1920
     FRAME_HEIGHT: int = 1080
-    TARGET_FPS: Annotated[int, Field(ge=1, le=60)] = 15
+    IDLE_FPS: Annotated[int, Field(ge=1, le=60)] = 15
+    ACTIVE_FPS: Annotated[int, Field(ge=1, le=60)] = 30
+    DWELL_SECONDS: Annotated[float, Field(gt=0)] = 3.0
     JPEG_QUALITY: Annotated[int, Field(ge=1, le=100)] = 80
-
     AI_HOST: str = "ai"
     AI_PORT: int = 50051
-
     BUFFER_MAX_DEPTH: Annotated[int, Field(ge=1)] = 30
     BUFFER_MAX_AGE_SECONDS: Annotated[float, Field(gt=0)] = 2.0
-
     DEVICE_REOPEN_BACKOFF_SECONDS: Annotated[float, Field(gt=0)] = 1.0
     DEVICE_REOPEN_BACKOFF_MAX_SECONDS: Annotated[float, Field(gt=0)] = 30.0
     HEARTBEAT_PATH: str = "/tmp/camera_heartbeat"
     HEARTBEAT_MAX_AGE_SECONDS: Annotated[float, Field(gt=0)] = 10.0
     FORWARD_RETRY_BACKOFF_SECONDS: Annotated[float, Field(gt=0)] = 0.5
     FORWARD_RETRY_BACKOFF_MAX_SECONDS: Annotated[float, Field(gt=0)] = 10.0
-
     LOG_LEVEL: str = "INFO"
     DEBUG: bool = False
+
+
 
     @field_validator("CAMERA_ID")
     @classmethod
@@ -43,12 +41,14 @@ class Settings(BaseSettings):
         if not v:
             raise ValueError("CAMERA_ID must not be empty")
         return v
-
+    @model_validator(mode="after")
+    def _idle_le_active(self) -> Self:
+        if self.IDLE_FPS > self.ACTIVE_FPS:
+            raise ValueError("IDLE_FPS must be less than or equal to ACTIVE_FPS")
+        return self
     @property
     def ai_target(self) -> str:
         return f"{self.AI_HOST}:{self.AI_PORT}"
-
-
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
