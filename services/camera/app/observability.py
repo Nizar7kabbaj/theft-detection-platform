@@ -2,6 +2,7 @@ import logging
 import os
 from collections.abc import Callable
 
+
 from prometheus_client import start_http_server
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -36,42 +37,34 @@ def setup_observability(service_name: str) -> None:
     root.addHandler(handler)
     root.setLevel(logging.INFO)
     GrpcAioInstrumentorClient().instrument()
-
-
 def register_capture_metrics(
     camera_id: str,
     buffer_counters: Callable[[], dict[str, int]],
     forward_counters: Callable[[], dict[str, int]],
     buffer_depth: Callable[[], int],
+    target_fps: Callable[[], int],
 ) -> None:
     meter = metrics.get_meter("theft.camera")
     attrs = {"camera_id": camera_id}
-
     def _captured(options: CallbackOptions):
         yield Observation(buffer_counters()["captured_total"], attrs)
-
     def _dropped_overflow(options: CallbackOptions):
         yield Observation(buffer_counters()["dropped_overflow_total"], attrs)
-
     def _dropped_stale(options: CallbackOptions):
         yield Observation(buffer_counters()["dropped_stale_total"], attrs)
-
     def _forwarded(options: CallbackOptions):
         yield Observation(forward_counters()["forwarded_total"], attrs)
-
     def _failed(options: CallbackOptions):
         yield Observation(forward_counters()["failed_total"], attrs)
-
     def _depth(options: CallbackOptions):
         yield Observation(buffer_depth(), attrs)
-
+    def _target_fps(options: CallbackOptions):
+        yield Observation(target_fps(), attrs)
     meter.create_observable_counter("theft_camera_frames_captured", callbacks=[_captured], unit="1")
     meter.create_observable_counter("theft_camera_frames_dropped_overflow", callbacks=[_dropped_overflow], unit="1")
     meter.create_observable_counter("theft_camera_frames_dropped_stale", callbacks=[_dropped_stale], unit="1")
     meter.create_observable_counter("theft_camera_frames_forwarded", callbacks=[_forwarded], unit="1")
     meter.create_observable_counter("theft_camera_frames_failed", callbacks=[_failed], unit="1")
     meter.create_observable_gauge("theft_camera_buffer_depth", callbacks=[_depth], unit="1")
-
-
-def get_meter():
-    return metrics.get_meter("theft.camera")
+    meter.create_observable_gauge("theft_camera_target_fps", callbacks=[_target_fps], unit="1")
+    GrpcAioInstrumentorClient().instrument()
