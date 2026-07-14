@@ -148,6 +148,40 @@ services:
     profiles: ["ai"]
     restart: unless-stopped
 
+  detect-gate:
+    build: ./services/detect-gate
+    image: theft-detect-gate:dev
+    container_name: theft-detect-gate
+    networks:
+      - observability
+      - data
+    user: "1000:1000"
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: "theft-detect-gate"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-detect-gate"
+      PROMETHEUS_EXPORTER_PORT: "9464"
+      CAMERA_ID: "cam-01"
+      SESSION_ID: "1"
+      EXIT_DEBOUNCE_FRAMES: "15"
+      CLIP_PATH: "/app/fixtures/presence.mp4"
+      AI_HOST: "ai"
+      AI_PORT: "50051"
+    volumes:
+      - ./fixtures:/app/fixtures:ro
+    depends_on:
+      ai:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles: ["ai"]
+    restart: unless-stopped
+
   notification-service:
     build:
       context: ./services/notification
