@@ -1,30 +1,31 @@
 #!/usr/bin/env bash
 set -uo pipefail
-
 COMPILER_SERVICE="ai"
 
 usage() {
   cat >&2 <<'EOF'
 usage: tools/scripts/gen_proto.sh <target>
-  target: backend | ai-service | notification-service | camera-service
+  target: backend | ai-service | notification-service | camera-service | detect-gate-service
 generates python grpc stubs from proto/ into the matching service grpc_gen path
 EOF
 }
-
 resolve_outdir() {
   case "$1" in
     backend)              echo "services/api/app/grpc_gen" ;;
     ai-service)           echo "services/ai/app/grpc_gen" ;;
     notification-service) echo "services/notification/app/server/grpc_gen" ;;
     camera-service)       echo "services/camera/app/grpc_gen" ;;
+    detect-gate-service)  echo "services/detect-gate/app/grpc_gen" ;;
   esac
 }
 
 resolve_protos() {
   case "$1" in
-    backend|ai-service)   echo "common.proto inference.proto alert.proto" ;;
+    backend)              echo "common.proto inference.proto alert.proto" ;;
+    ai-service)           echo "common.proto inference.proto alert.proto presence.proto" ;;
     notification-service) echo "common.proto alert.proto" ;;
     camera-service)       echo "common.proto inference.proto" ;;
+    detect-gate-service)  echo "common.proto presence.proto" ;;
   esac
 }
 
@@ -39,6 +40,7 @@ generate() {
     echo "cannot create ${out_host}" >&2
     return 1
   }
+
   local proto_args=""
   local p
   for p in ${protos}; do
@@ -58,10 +60,11 @@ generate() {
     echo "protoc failed for ${target}" >&2
     return 1
   }
+
   local f
   for f in "${out_host}"/*_pb2.py "${out_host}"/*_pb2_grpc.py; do
     [[ -e "${f}" ]] || continue
-    sed -i 's/^import \(common\|inference\|alert\)_pb2 as/from . import \1_pb2 as/' "${f}"
+    sed -i 's/^import \(common\|inference\|alert\|presence\)_pb2 as/from . import \1_pb2 as/' "${f}"
   done
   echo "generated in ${outdir}:"
   ls -1 "${out_host}"
@@ -77,7 +80,7 @@ main() {
       usage
       exit 0
       ;;
-    backend|ai-service|notification-service|camera-service)
+    backend|ai-service|notification-service|camera-service|detect-gate-service)
       ;;
     *)
       echo "unknown target: $1" >&2

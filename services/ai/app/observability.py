@@ -49,3 +49,24 @@ def get_inference_histogram():
         unit="ms",
         description="time spent running the detector on a single frame",
     )
+
+def get_presence_events_counter():
+    meter = metrics.get_meter("theft.ai")
+    return meter.create_counter(
+        "theft_ai_presence_events",
+        unit="1",
+        description="presence events received from the detect gate",
+    )
+
+def register_presence_gauge(servicer) -> None:
+    from opentelemetry.metrics import CallbackOptions, Observation
+    meter = metrics.get_meter("theft.ai")
+    def _presence(options: CallbackOptions):
+        for camera_id in servicer.cameras():
+            yield Observation(servicer.presence_value(camera_id), {"camera_id": camera_id})
+    meter.create_observable_gauge(
+        "theft_ai_presence_state",
+        callbacks=[_presence],
+        unit="1",
+        description="last known presence state per camera from the gate",
+    )
