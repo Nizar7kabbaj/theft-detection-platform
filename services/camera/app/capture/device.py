@@ -80,9 +80,11 @@ class CameraDevice:
         if not ok or frame is None:
             return None
         return frame
-    def reopen_with_backoff(self) -> None:
+    def reopen_with_backoff(self, on_retry=None) -> None:
         delay = self._reopen_backoff
         while True:
+            if on_retry is not None:
+                on_retry()
             logger.warning("device reopen in %.1fs", delay)
             time.sleep(delay)
             if self.open():

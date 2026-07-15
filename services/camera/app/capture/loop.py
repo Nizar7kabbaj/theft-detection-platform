@@ -41,7 +41,7 @@ class CaptureLoop:
     def start(self) -> None:
         self._touch_heartbeat()
         if not self._device.open():
-            self._device.reopen_with_backoff()
+            self._device.reopen_with_backoff(on_retry=self._touch_heartbeat)
         self._running.set()
         self._thread = threading.Thread(target=self._run, name="capture", daemon=True)
         self._thread.start()
@@ -71,7 +71,7 @@ class CaptureLoop:
             frame = self._device.read()
             if frame is None:
                 logger.warning("grab failed camera=%s, reopening", self._camera_id)
-                self._device.reopen_with_backoff()
+                self._device.reopen_with_backoff(on_retry=self._touch_heartbeat)
                 self._frame_index = 0
                 continue
             record = self._encode(frame)

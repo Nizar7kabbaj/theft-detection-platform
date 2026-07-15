@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     BUFFER_MAX_DEPTH: Annotated[int, Field(ge=1)] = 30
     BUFFER_MAX_AGE_SECONDS: Annotated[float, Field(gt=0)] = 2.0
     DEVICE_REOPEN_BACKOFF_SECONDS: Annotated[float, Field(gt=0)] = 1.0
-    DEVICE_REOPEN_BACKOFF_MAX_SECONDS: Annotated[float, Field(gt=0)] = 30.0
+    DEVICE_REOPEN_BACKOFF_MAX_SECONDS: Annotated[float, Field(gt=0)] = 8.0
     HEARTBEAT_PATH: str = "/tmp/camera_heartbeat"
     HEARTBEAT_MAX_AGE_SECONDS: Annotated[float, Field(gt=0)] = 10.0
     FORWARD_RETRY_BACKOFF_SECONDS: Annotated[float, Field(gt=0)] = 0.5
