@@ -142,12 +142,6 @@ services:
     depends_on:
       ai:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:9464/metrics"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 15s
     profiles: ["ai"]
     restart: unless-stopped
 
