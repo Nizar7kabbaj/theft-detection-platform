@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+
 import asyncio
 import logging
 import signal
@@ -8,6 +10,7 @@ from app.capture.buffer import ForwardBuffer
 from app.capture.device import CameraDevice
 from app.capture.forwarder import Forwarder
 from app.capture.loop import CaptureLoop
+from app.capture.publisher import FramePublisher
 from app.capture.rate import RateController
 
 
@@ -29,9 +32,18 @@ async def _serve() -> None:
         max_depth=settings.BUFFER_MAX_DEPTH,
         max_age_seconds=settings.BUFFER_MAX_AGE_SECONDS,
     )
+    publisher = FramePublisher(
+        redis_url=settings.REDIS_URL,
+        stream_key=settings.frame_stream_key,
+        maxlen=settings.FRAME_STREAM_MAXLEN,
+        queue_depth=settings.PUBLISH_QUEUE_DEPTH,
+        retry_backoff_seconds=settings.PUBLISH_RETRY_BACKOFF_SECONDS,
+        retry_backoff_max_seconds=settings.PUBLISH_RETRY_BACKOFF_MAX_SECONDS,
+    )
     loop = CaptureLoop(
         device=device,
         buffer=buffer,
+        publisher=publisher,
         camera_id=settings.CAMERA_ID,
         target_fps=settings.IDLE_FPS,
         jpeg_quality=settings.JPEG_QUALITY,
@@ -54,6 +66,7 @@ async def _serve() -> None:
         camera_id=settings.CAMERA_ID,
         buffer_counters=lambda: buffer.counters,
         forward_counters=lambda: forwarder.counters,
+        publish_counters=lambda: publisher.counters,
         buffer_depth=lambda: buffer.depth,
         target_fps=lambda: rate_controller.current_fps,
     )
@@ -61,6 +74,7 @@ async def _serve() -> None:
     running_loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         running_loop.add_signal_handler(sig, stop_event.set)
+    publisher.start()
     loop.start()
     forward_task = asyncio.create_task(forwarder.run())
     log.info("camera service running")
@@ -73,6 +87,7 @@ async def _serve() -> None:
     except asyncio.CancelledError:
         pass
     loop.stop()
+    publisher.stop()
     log.info("camera service stopped")
 def main() -> None:
     asyncio.run(_serve())
