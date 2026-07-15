@@ -123,6 +123,8 @@ services:
     user: "1000:1000"
     group_add:
       - "44"
+    volumes:
+      - ./config/redis/camera_redis_password:/run/secrets/camera_redis_password:ro
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: "theft-camera"
@@ -163,12 +165,10 @@ services:
       PROMETHEUS_EXPORTER_PORT: "9464"
       CAMERA_ID: "cam-01"
       SESSION_ID: "1"
-      EXIT_DEBOUNCE_FRAMES: "15"
-      CLIP_PATH: "/app/fixtures/presence.mp4"
       AI_HOST: "ai"
       AI_PORT: "50051"
     volumes:
-      - ./fixtures:/app/fixtures:ro
+      - ./config/redis/gate_redis_password:/run/secrets/gate_redis_password:ro
     depends_on:
       ai:
         condition: service_healthy

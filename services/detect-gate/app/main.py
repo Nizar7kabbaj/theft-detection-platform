@@ -6,7 +6,8 @@ import signal
 from concurrent.futures import ThreadPoolExecutor
 from app.core.config import get_settings
 from app.observability import register_gate_metrics, setup_observability
-from app.capture.frame_source import ClipFrameSource
+from app.capture.camera_source import CameraFrameSource
+from app.capture.frame_source import ClipFrameSource, FrameSource
 from app.capture.detector import PersonDetector
 from app.capture.presence import PresenceEdge, PresenceState, PresenceStateMachine
 from app.capture.presence_client import PresenceClient
@@ -17,8 +18,6 @@ _STATE_TO_GAUGE = {
     PresenceState.ABSENT: 0,
     PresenceState.PRESENT: 1,
 }
-
-
 class GateCounters:
     def __init__(self) -> None:
         self.frames_processed_total = 0
@@ -32,8 +31,10 @@ class GateCounters:
             "entries_total": self.entries_total,
             "exits_total": self.exits_total,
         }
+def _touch(path: str) -> None:
+    os.utime(path, None) if os.path.exists(path) else open(path, "w").close()
 async def _frame_loop(
-    source: ClipFrameSource,
+    source: FrameSource,
     detector: PersonDetector,
     machine: PresenceStateMachine,
     client: PresenceClient,
@@ -47,6 +48,7 @@ async def _frame_loop(
     frame_index = 0
     log = logging.getLogger("app.gate")
     while not stop_event.is_set():
+        _touch(heartbeat_path)
         frame = await source.read()
         if frame is None:
             continue
@@ -64,14 +66,25 @@ async def _frame_loop(
             counters.exits_total += 1
             client.submit(edge, result.top_confidence, frame_index)
             log.info("person left camera=%s frame=%d", camera_id, frame_index)
-        os.utime(heartbeat_path, None) if os.path.exists(heartbeat_path) else open(heartbeat_path, "w").close()
 async def _serve() -> None:
     setup_observability(service_name="theft-detect-gate")
     settings = get_settings()
     logging.getLogger().setLevel(settings.LOG_LEVEL)
     log = logging.getLogger("app.main")
     log.info("starting detect-gate camera=%s", settings.CAMERA_ID)
-    source = ClipFrameSource(clip_path=settings.CLIP_PATH, target_fps=settings.GATE_FPS)
+    source: FrameSource
+    if settings.FRAME_SOURCE == "camera":
+        source = CameraFrameSource(
+            redis_url=settings.REDIS_URL,
+            stream_key=settings.frame_stream_key,
+            read_block_ms=settings.FRAME_READ_BLOCK_MS,
+            retry_backoff_seconds=settings.FRAME_RETRY_BACKOFF_SECONDS,
+            retry_backoff_max_seconds=settings.FRAME_RETRY_BACKOFF_MAX_SECONDS,
+        )
+        log.info("frame source camera stream=%s", settings.frame_stream_key)
+    else:
+        source = ClipFrameSource(clip_path=settings.CLIP_PATH, target_fps=settings.GATE_FPS)
+        log.info("frame source clip path=%s", settings.CLIP_PATH)
     detector = PersonDetector(
         model_name=settings.MODEL_NAME,
         device=settings.MODEL_DEVICE,
