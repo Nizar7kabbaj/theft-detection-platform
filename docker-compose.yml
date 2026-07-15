@@ -123,21 +123,22 @@ services:
     user: "1000:1000"
     group_add:
       - "44"
+    device_cgroup_rules:
+      - "c 81:* rmw"
     volumes:
       - ./config/redis/camera_redis_password:/run/secrets/camera_redis_password:ro
+      - /dev:/dev
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: "theft-camera"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-camera"
       PROMETHEUS_EXPORTER_PORT: "9464"
       CAMERA_ID: "cam-01"
-      DEVICE_PATH: "/dev/video0"
+      DEVICE_PATH: "/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_3521BF9F-video-index0"
       FRAME_WIDTH: "1920"
       FRAME_HEIGHT: "1080"
       AI_HOST: "ai"
       AI_PORT: "50051"
-    devices:
-      - /dev/video2:/dev/video0
     depends_on:
       ai:
         condition: service_healthy
