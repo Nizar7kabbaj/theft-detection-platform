@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package theftdetection.v1;
+
+import "google/protobuf/timestamp.proto";
+
+message LocalTrackRef {
+  string camera_id = 1;
+  int32 track_id = 2;
+  int64 session_id = 3;
+}
+
+message TrackBinding {
+  string global_track_id = 1;
+  LocalTrackRef local = 2;
+  google.protobuf.Timestamp bound_at = 3;
+}
+
+enum IncidentStateKind {
+  INCIDENT_STATE_KIND_UNSPECIFIED = 0;
+  INCIDENT_STATE_KIND_CLEAR = 1;
+  INCIDENT_STATE_KIND_FLAGGED = 2;
+}
+
+message IncidentState {
+  string global_track_id = 1;
+  IncidentStateKind kind = 2;
+  google.protobuf.Timestamp updated_at = 3;
+}
+
+message HandoffNotice {
+  string global_track_id = 1;
+  LocalTrackRef arriving = 2;
+  IncidentState carried_state = 3;
+}
+
+service CoordinationService {
+  rpc BindTrack(LocalTrackRef) returns (TrackBinding);
+  rpc PushIncidentState(IncidentState) returns (IncidentState);
+  rpc StreamHandoffs(stream LocalTrackRef) returns (stream HandoffNotice);
+}
