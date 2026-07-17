@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     IDLE_FPS: Annotated[int, Field(ge=1, le=60)] = 15
     ACTIVE_FPS: Annotated[int, Field(ge=1, le=60)] = 30
     DWELL_SECONDS: Annotated[float, Field(gt=0)] = 3.0
-    JPEG_QUALITY: Annotated[int, Field(ge=1, le=100)] = 80
     AI_HOST: str = "ai"
     AI_PORT: int = 50051
     BUFFER_MAX_DEPTH: Annotated[int, Field(ge=1)] = 30
@@ -42,7 +41,7 @@ class Settings(BaseSettings):
     REDIS_USER: str = "camera"
     REDIS_PASSWORD_FILE: str = "/run/secrets/camera_redis_password"
     FRAME_STREAM_PREFIX: str = "frame"
-    FRAME_STREAM_MAXLEN: Annotated[int, Field(ge=1)] = 300
+    FRAME_STREAM_MAXLEN: Annotated[int, Field(ge=1)] = 900
     PUBLISH_QUEUE_DEPTH: Annotated[int, Field(ge=1)] = 30
     PUBLISH_RETRY_BACKOFF_SECONDS: Annotated[float, Field(gt=0)] = 0.5
     PUBLISH_RETRY_BACKOFF_MAX_SECONDS: Annotated[float, Field(gt=0)] = 10.0

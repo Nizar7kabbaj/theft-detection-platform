@@ -9,8 +9,8 @@ user gate on #<password> ~frame:* resetchannels -@all +@connection +xread +xlen 
 user exporter on #CHANGEME resetchannels ~* -@all +@connection +info +client +ping +latency +slowlog
 appendonly no
 save ""
-maxmemory 160mb
-maxmemory-policy noeviction
+maxmemory 1500mb
+maxmemory-policy allkeys-lru
 rename-command FLUSHALL ""
 rename-command FLUSHDB ""
 rename-command DEBUG ""

@@ -3,10 +3,7 @@ import logging
 import time
 import cv2
 from numpy import ndarray
-
-
 logger = logging.getLogger(__name__)
-
 class CameraDevice:
     def __init__(
         self,
@@ -53,6 +50,7 @@ class CameraDevice:
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self._frame_height)
         capture.set(cv2.CAP_PROP_FPS, self._target_fps)
         capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        capture.set(cv2.CAP_PROP_CONVERT_RGB, 0)
         self._actual_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         self._actual_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self._actual_fps = capture.get(cv2.CAP_PROP_FPS)
