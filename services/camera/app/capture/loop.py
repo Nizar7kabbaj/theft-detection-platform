@@ -1,19 +1,12 @@
 from __future__ import annotations
-
-
 import os
 import logging
 import threading
 import time
-import cv2
 from app.capture.buffer import CapturedFrame, ForwardBuffer
 from app.capture.device import CameraDevice
 from app.capture.publisher import FramePublisher
-
-
 logger = logging.getLogger(__name__)
-
-
 class CaptureLoop:
     def __init__(
         self,
@@ -22,7 +15,6 @@ class CaptureLoop:
         publisher: FramePublisher,
         camera_id: str,
         target_fps: int,
-        jpeg_quality: int,
         heartbeat_path: str,
     ) -> None:
         self._device = device
@@ -31,7 +23,6 @@ class CaptureLoop:
         self._camera_id = camera_id
         self._heartbeat_path = heartbeat_path
         self._frame_interval = 1.0 / target_fps
-        self._encode_params = [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
         self._thread: threading.Thread | None = None
         self._running = threading.Event()
         self._paused = threading.Event()
@@ -74,22 +65,22 @@ class CaptureLoop:
                 self._device.reopen_with_backoff(on_retry=self._touch_heartbeat)
                 self._frame_index = 0
                 continue
-            record = self._encode(frame)
+            record = self._build_record(frame)
             if record is not None:
                 self._buffer.push(record)
                 self._publisher.push(record)
             self._pace(started)
-    def _encode(self, frame) -> CapturedFrame | None:
-        ok, encoded = cv2.imencode(".jpg", frame, self._encode_params)
-        if not ok:
-            logger.warning("encode failed camera=%s", self._camera_id)
+    def _build_record(self, frame) -> CapturedFrame | None:
+        payload = frame.tobytes()
+        if not payload:
+            logger.warning("empty frame camera=%s", self._camera_id)
             return None
         now = time.monotonic()
         with self._lock:
             self._last_grab_monotonic = now
         self._touch_heartbeat()
         record = CapturedFrame(
-            payload=encoded.tobytes(),
+            payload=payload,
             session_id=self._device.session_id,
             frame_index=self._frame_index,
             camera_id=self._camera_id,

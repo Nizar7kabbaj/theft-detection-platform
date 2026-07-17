@@ -46,7 +46,6 @@ async def _serve() -> None:
         publisher=publisher,
         camera_id=settings.CAMERA_ID,
         target_fps=settings.IDLE_FPS,
-        jpeg_quality=settings.JPEG_QUALITY,
         heartbeat_path=settings.HEARTBEAT_PATH,
     )
     rate_controller = RateController(
