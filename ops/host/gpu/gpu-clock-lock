@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SM_CLOCK=2100
+MEM_CLOCK=7001
+
+if ! command -v nvidia-smi >/dev/null 2>&1; then
+    echo "nvidia-smi not found" >&2
+    exit 1
+fi
+
+nvidia-smi -pm 1 >/dev/null
+nvidia-smi -lgc "${SM_CLOCK},${SM_CLOCK}" >/dev/null
+nvidia-smi -lmc "${MEM_CLOCK},${MEM_CLOCK}" >/dev/null
+
+pm_state=$(nvidia-smi --query-gpu=persistence_mode --format=csv,noheader | tr -d ' ')
+if [[ "${pm_state}" != "Enabled" ]]; then
+    echo "persistence mode not enabled after -pm 1" >&2
+    exit 1
+fi
+
+echo "gpu clocks locked at ${SM_CLOCK}/${MEM_CLOCK} mhz, persistence enabled"
