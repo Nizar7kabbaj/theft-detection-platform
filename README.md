@@ -123,6 +123,11 @@ flowchart TB
         human[Operator tap<br/>confirm · dismiss · unsure]
     end
 
+    subgraph core["API and delivery"]
+        api[API Service<br/>FastAPI · gRPC · WebSocket]
+        notif[Notification Service<br/>Celery · retries · DLQ]
+    end
+
     subgraph flywheel["ML platform plane"]
         dvc[DVC dataset<br/>Azure Blob remote]
         mlf[MLflow on Postgres]
@@ -135,15 +140,26 @@ flowchart TB
         doctor --> ops[Engineer channel]
     end
 
+    subgraph sec["Identity, security, compliance"]
+        auth[JWT + RBAC]
+        audit[Hash-chained audit log]
+        gdpr[GDPR controls<br/>blur · retention · erasure]
+    end
+
     incident --> router
     router -- precedent --> resolved[Resolved from memory<br/>logged · sampled]
     router -- no precedent --> vlm
-    vlm --> tg[Telegram alert] --> human
+    stream -. clip on trigger .-> vlm
+    vlm --> api
+    api --> notif --> tg[Telegram]
+    tg --> human
     human -- label --> cases
     vlm -- verdict --> cases
-    cases --> dvc --> p3d --> gate
+    cases --> dvc --> mlf --> p3d --> gate
     gate -. promotion: pre-VLM filter .-> rules
-    stream -. clip on trigger .-> vlm
+    traefik[Traefik Gateway<br/>TLS] --> api
+    sec -.-> api
+    api -. traces · metrics · logs .-> otel[OpenTelemetry<br/>Prometheus · Grafana · Loki · Tempo]
 ```
 
 The full component and deployment views live in [`docs/00-architecture.md`](docs/00-architecture.md), with PlantUML sources under [`docs/diagrams/`](docs/diagrams/).
