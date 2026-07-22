@@ -327,6 +327,7 @@ The `docs/` tree reads as chapters, in order.
 | [11-detect-gate](docs/11-detect-gate.md) | presence gate design and stream consumption |
 | [12-multi-camera-coordination](docs/12-multi-camera-coordination.md) | camera identity and zone ownership |
 | [13-gpu-baseline](docs/13-gpu-baseline.md) | GPU measurement, persistence, clock locking |
+| [14-vlm-judge-spike](docs/14-vlm-judge-spike.md) | VLM judge probe, composite tile input, measured scope |
 
 Dataset and model evaluation notes live in [`ml/DATASET.md`](ml/DATASET.md) and [`ml/EVALUATION.md`](ml/EVALUATION.md).
 
