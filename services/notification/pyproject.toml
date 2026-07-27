@@ -1,12 +1,11 @@
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
 [project]
 name = "notification"
 version = "0.1.0"
 description = "notification gRPC server and Celery worker for the theft-detection-platform"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "celery==5.4.0",
     "redis==5.2.1",
@@ -23,7 +22,6 @@ dependencies = [
     "opentelemetry-instrumentation-celery==0.50b0",
     "opentelemetry-instrumentation-pymongo==0.50b0",
 ]
-
 [project.optional-dependencies]
 server = [
     "fastapi==0.115.6",
@@ -46,37 +44,29 @@ dev = [
     "mypy>=1.13,<1.14",
     "testcontainers[mongodb]>=4.8,<5",
 ]
-
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
-
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "N", "UP", "B", "A", "C4", "DTZ", "PT", "SIM", "PTH", "ASYNC", "RUF", "PL"]
 ignore = ["E501", "PLR0913"]
-
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "PLR2004"]
 "app/server/grpc_gen/**/*.py" = ["ALL"]
-
 [tool.mypy]
 python_version = "3.11"
 strict = true
 warn_unreachable = true
 warn_redundant_casts = true
 warn_unused_ignores = true
-
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
-
 [[tool.mypy.overrides]]
 module = "app.server.grpc_gen.*"
 ignore_errors = true
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
@@ -94,7 +84,6 @@ markers = [
 filterwarnings = [
     "ignore:.*alias.*has no effect.*:UserWarning:pydantic",
 ]
-
 [tool.coverage.run]
 source = ["app"]
 branch = true
@@ -103,7 +92,6 @@ omit = [
     "app/__pycache__/*",
     "app/server/main.py",
 ]
-
 [tool.coverage.report]
 show_missing = true
 skip_covered = false

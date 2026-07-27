@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "camera"
+version = "0.1.0"
+description = "camera capture and frame publisher for the theft-detection-platform"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "grpcio==1.71.2",
+    "protobuf==5.29.5",
+    "pydantic-settings==2.14.2",
+    "python-dotenv==1.2.2",
+    "opencv-python-headless==4.10.0.84",
+    "numpy==1.26.4",
+    "redis==5.2.1",
+    "python-json-logger==3.2.1",
+    "opentelemetry-api==1.29.0",
+    "opentelemetry-sdk==1.29.0",
+    "opentelemetry-exporter-otlp-proto-http==1.29.0",
+    "opentelemetry-exporter-prometheus==0.50b0",
+    "opentelemetry-instrumentation-grpc==0.50b0",
+    "opentelemetry-instrumentation-logging==0.50b0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
