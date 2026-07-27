@@ -1,3 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "api"
+version = "0.1.0"
+description = "public api gateway for the theft-detection-platform"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "fastapi==0.136.1",
+    "uvicorn[standard]==0.46.0",
+    "motor==3.7.1",
+    "pymongo==4.17.0",
+    "python-multipart==0.0.31",
+    "aiofiles==25.1.0",
+    "pydantic-settings==2.14.2",
+    "python-dotenv==1.2.2",
+    "Pillow==12.3.0",
+    "redis==5.2.1",
+    "grpcio==1.71.2",
+    "python-json-logger==3.2.1",
+    "opentelemetry-api==1.29.0",
+    "opentelemetry-sdk==1.29.0",
+    "opentelemetry-instrumentation-fastapi==0.50b0",
+    "opentelemetry-instrumentation-pymongo==0.50b0",
+    "opentelemetry-instrumentation-logging==0.50b0",
+    "opentelemetry-instrumentation-grpc==0.50b0",
+    "opentelemetry-exporter-otlp-proto-http==1.29.0",
+    "opentelemetry-exporter-prometheus==0.50b0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+    "pytest-cov==6.0.0",
+    "pytest-mock==3.14.0",
+    "httpx==0.28.1",
+    "grpcio-tools==1.71.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
