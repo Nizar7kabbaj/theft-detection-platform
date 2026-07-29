@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,6 +19,15 @@ class Settings(BaseSettings):
     grpc_port: int = 50051
     grpc_max_workers: int = 8
     log_level: str = "info"
+
+    postgres_host: str = "postgres"
+    postgres_port: int = 5432
+    postgres_user: str = "auth"
+    postgres_db: str = "authdb"
+    postgres_password_file: Path = Path("/run/secrets/postgres_password")
+    argon2_time_cost: int = 3
+    argon2_memory_cost: int = 65536
+    argon2_parallelism: int = 1
 
 
 @lru_cache
