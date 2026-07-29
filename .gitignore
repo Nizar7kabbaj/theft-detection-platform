@@ -56,6 +56,7 @@ infra/terraform/environments/*/*.auto.tfvars
 config/redis/redis.conf
 config/redis/redis-*.conf
 config/redis/*_redis_password
+config/postgres/*_postgres_password
 config/prometheus/prometheus.yml
 config/grafana/provisioning/datasources/prometheus.yml
 config/grafana/provisioning/datasources/loki.yml
@@ -82,3 +83,4 @@ config/mongodb/secrets/
 config/mongodb/tls/*.crt
 !config/mongodb/tls/ca.crt
 config/mongodb/tls/*.ext
+services/auth/.env

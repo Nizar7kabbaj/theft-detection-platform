@@ -30,6 +30,9 @@ ENV PATH=/opt/venv/bin:$PATH
 COPY --from=builder --chown=auth:auth /opt/venv /opt/venv
 COPY --from=probe /usr/local/bin/grpc_health_probe /usr/local/bin/grpc_health_probe
 COPY --chown=auth:auth app /app/app
+COPY --chown=auth:auth alembic.ini /app/alembic.ini
+COPY --chown=auth:auth migrations /app/migrations
+COPY --chown=auth:auth scripts /app/scripts
 USER auth
 EXPOSE 8000
 EXPOSE 50053

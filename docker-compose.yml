@@ -178,27 +178,52 @@ services:
     restart: unless-stopped
 
   auth-service:
-    build:
-      context: ./services/auth
-    image: auth:dev
-    container_name: auth
+      build:
+        context: ./services/auth
+      image: auth:dev
+      container_name: auth
+      networks:
+        - data
+        - observability
+      user: "1000:1000"
+      env_file:
+        - ./services/auth/.env
+      environment:
+        AUTH_HTTP_PORT: "8000"
+        AUTH_GRPC_PORT: "50053"
+      ports:
+        - "127.0.0.1:8002:8000"
+      volumes:
+        - ./config/postgres/auth_postgres_password:/run/secrets/postgres_password:ro
+      depends_on:
+        postgres:
+          condition: service_healthy
+      healthcheck:
+        test: ["CMD", "grpc_health_probe", "-addr=:50053"]
+        interval: 30s
+        timeout: 5s
+        retries: 5
+        start_period: 15s
+      restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: theft-postgres
     networks:
       - data
-      - observability
-    user: "1000:1000"
-    env_file:
-      - ./services/api/.env
     environment:
-      AUTH_HTTP_PORT: "8000"
-      AUTH_GRPC_PORT: "50053"
-    ports:
-      - "127.0.0.1:8002:8000"
+      POSTGRES_USER: "auth"
+      POSTGRES_DB: "authdb"
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./config/postgres/auth_postgres_password:/run/secrets/postgres_password:ro
     healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=:50053"]
+      test: ["CMD-SHELL", "pg_isready -U auth -d authdb"]
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 10s
     restart: unless-stopped
 
   notification-service:
@@ -750,6 +775,7 @@ volumes:
   mongo_data:
   redis_data:
   redis_broker_data:
+  postgres_data:
   prometheus_data:
   grafana_data:
   loki_data:
