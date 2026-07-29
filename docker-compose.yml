@@ -177,6 +177,30 @@ services:
     profiles: ["ai"]
     restart: unless-stopped
 
+  auth-service:
+    build:
+      context: ./services/auth
+    image: auth:dev
+    container_name: auth
+    networks:
+      - data
+      - observability
+    user: "1000:1000"
+    env_file:
+      - ./services/api/.env
+    environment:
+      AUTH_HTTP_PORT: "8000"
+      AUTH_GRPC_PORT: "50053"
+    ports:
+      - "127.0.0.1:8002:8000"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:50053"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
   notification-service:
     build:
       context: ./services/notification

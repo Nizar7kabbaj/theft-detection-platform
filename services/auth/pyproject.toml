@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "auth"
+version = "0.1.0"
+description = "identity and token verification service for the theft-detection-platform"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi==0.136.1",
+    "uvicorn[standard]==0.46.0",
+    "grpcio==1.71.2",
+    "grpcio-health-checking==1.71.2",
+    "grpcio-reflection==1.71.2",
+    "protobuf==5.29.5",
+    "pydantic-settings==2.14.2",
+    "python-json-logger==3.2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+    "httpx==0.28.1",
+    "grpcio-tools==1.71.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "unit: pure unit tests, no external services",
+    "integration: tests against a running grpc or http server",
+]
