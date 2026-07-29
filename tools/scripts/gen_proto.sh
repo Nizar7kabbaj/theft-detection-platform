@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 set -uo pipefail
 COMPILER_SERVICE="ai"
-
 usage() {
   cat >&2 <<'EOF'
 usage: tools/scripts/gen_proto.sh <target>
-  target: backend | ai-service | notification-service | camera-service | detect-gate-service
+  target: backend | ai-service | notification-service | camera-service | detect-gate-service | auth-service
 generates python grpc stubs from proto/ into the matching service grpc_gen path
 EOF
 }
@@ -16,9 +15,9 @@ resolve_outdir() {
     notification-service) echo "services/notification/app/server/grpc_gen" ;;
     camera-service)       echo "services/camera/app/grpc_gen" ;;
     detect-gate-service)  echo "services/detect-gate/app/grpc_gen" ;;
+    auth-service)         echo "services/auth/app/server/grpc_gen" ;;
   esac
 }
-
 resolve_protos() {
   case "$1" in
     backend)              echo "common.proto inference.proto alert.proto" ;;
@@ -26,9 +25,9 @@ resolve_protos() {
     notification-service) echo "common.proto alert.proto" ;;
     camera-service)       echo "common.proto inference.proto" ;;
     detect-gate-service)  echo "common.proto presence.proto" ;;
+    auth-service)         echo "auth.proto" ;;
   esac
 }
-
 generate() {
   local target="$1"
   local repo_root="$2"
@@ -40,36 +39,36 @@ generate() {
     echo "cannot create ${out_host}" >&2
     return 1
   }
-
   local proto_args=""
   local p
   for p in ${protos}; do
     proto_args="${proto_args} /proto/${p}"
   done
-  docker compose run --rm --no-deps \
+  docker run --rm \
     --user "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
     -v "${repo_root}/proto:/proto:ro" \
     -v "${out_host}:/out" \
-    -w /app \
-    "${COMPILER_SERVICE}" \
-    python -m grpc_tools.protoc \
-      -I /proto \
-      --python_out=/out \
-      --grpc_python_out=/out \
-      ${proto_args} || {
+    -v "${PROTOC_CACHE:-${HOME}/.cache/theft-protoc}:/tmp/.cache" \
+    -w /out \
+    python:3.12-slim \
+    sh -c "pip install --quiet --cache-dir /tmp/.cache/pip grpcio-tools==1.71.2 \
+      && python -m grpc_tools.protoc \
+        -I /proto \
+        --python_out=/out \
+        --grpc_python_out=/out \
+        ${proto_args}" || {
     echo "protoc failed for ${target}" >&2
     return 1
   }
-
   local f
   for f in "${out_host}"/*_pb2.py "${out_host}"/*_pb2_grpc.py; do
     [[ -e "${f}" ]] || continue
-    sed -i 's/^import \(common\|inference\|alert\|presence\)_pb2 as/from . import \1_pb2 as/' "${f}"
+    sed -i -E 's/^import ([a-z_][a-z0-9_]*)_pb2 as/from . import \1_pb2 as/' "${f}"
   done
   echo "generated in ${outdir}:"
   ls -1 "${out_host}"
 }
-
 main() {
   if [[ $# -ne 1 ]]; then
     usage
@@ -80,7 +79,7 @@ main() {
       usage
       exit 0
       ;;
-    backend|ai-service|notification-service|camera-service|detect-gate-service)
+    backend|ai-service|notification-service|camera-service|detect-gate-service|auth-service)
       ;;
     *)
       echo "unknown target: $1" >&2
@@ -95,7 +94,6 @@ main() {
   }
   generate "$1" "${repo_root}"
 }
-
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   main "$@"
   exit 0
