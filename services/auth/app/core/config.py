@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     grpc_port: int = 50051
     grpc_max_workers: int = 8
     log_level: str = "info"
-
     postgres_host: str = "postgres"
     postgres_port: int = 5432
     postgres_user: str = "auth"
@@ -28,7 +27,17 @@ class Settings(BaseSettings):
     argon2_time_cost: int = 3
     argon2_memory_cost: int = 65536
     argon2_parallelism: int = 1
-
+    jwt_private_key_file: Path = Path("/run/secrets/jwt_private_key")
+    jwt_public_key_file: Path = Path("/run/secrets/jwt_public_key")
+    jwt_issuer: str = "auth"
+    jwt_audience: str = "theft-detection-platform"
+    redis_host: str = "redis"
+    redis_port: int = 6379
+    redis_user: str = "auth"
+    redis_db: int = 0
+    redis_password_file: Path = Path("/run/secrets/auth_redis_password")
+    access_token_ttl_seconds: int = 900
+    refresh_token_ttl_seconds: int = 1209600
 
 @lru_cache
 def get_settings() -> Settings:

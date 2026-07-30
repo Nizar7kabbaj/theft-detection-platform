@@ -21,8 +21,10 @@ dependencies = [
     "asyncpg==0.30.0",
     "alembic==1.14.0",
     "argon2-cffi==23.1.0",
+    "pyjwt==2.13.0",
+    "cryptography==49.0.0",
+    "redis==5.2.1",
 ]
-
 [project.optional-dependencies]
 dev = [
     "pytest==8.3.4",
@@ -33,7 +35,6 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
