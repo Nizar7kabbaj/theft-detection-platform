@@ -84,3 +84,6 @@ config/mongodb/tls/*.crt
 !config/mongodb/tls/ca.crt
 config/mongodb/tls/*.ext
 services/auth/.env
+
+config/auth/jwt_private.pem
+!config/auth/jwt_public.pem

@@ -195,9 +195,14 @@ services:
         - "127.0.0.1:8002:8000"
       volumes:
         - ./config/postgres/auth_postgres_password:/run/secrets/postgres_password:ro
+        - ./config/redis/auth_redis_password:/run/secrets/auth_redis_password:ro
+        - ./config/auth/jwt_private.pem:/run/secrets/jwt_private_key:ro
+        - ./config/auth/jwt_public.pem:/run/secrets/jwt_public_key:ro
       depends_on:
         postgres:
           condition: service_healthy
+        redis:
+          condition: service_started
       healthcheck:
         test: ["CMD", "grpc_health_probe", "-addr=:50053"]
         interval: 30s

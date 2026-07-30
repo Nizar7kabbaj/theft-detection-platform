@@ -1,26 +1,23 @@
 from __future__ import annotations
-
 import logging
-
 import grpc
 from google.protobuf.timestamp_pb2 import Timestamp
-
+from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
+from app.core.database import get_sessionmaker
+from app.core.redis import is_revoked
+from app.core.tokens import TokenError, TokenFailure, decode_access_token
+from app.repositories.session_repository import SessionRepository
 from app.server.grpc_gen import auth_pb2, auth_pb2_grpc
 
 logger = logging.getLogger(__name__)
 
-_STUB_USER_ID = "stub-user-id"
-_STUB_USERNAME = "stub-user"
-_STUB_ROLES = ("viewer",)
-_STUB_SESSION_ID = "stub-session-id"
-_STUB_EXPIRES_IN_SECONDS = 900
-
-
-def _future_timestamp(seconds_ahead: int) -> Timestamp:
-    ts = Timestamp()
-    ts.GetCurrentTime()
-    ts.seconds += seconds_ahead
-    return ts
+_FAILURE_STATUS = {
+    TokenFailure.EXPIRED: auth_pb2.VERIFICATION_STATUS_EXPIRED,
+    TokenFailure.AUDIENCE_MISMATCH: auth_pb2.VERIFICATION_STATUS_AUDIENCE_MISMATCH,
+    TokenFailure.SIGNATURE_INVALID: auth_pb2.VERIFICATION_STATUS_SIGNATURE_INVALID,
+    TokenFailure.MALFORMED: auth_pb2.VERIFICATION_STATUS_MALFORMED,
+}
 
 
 def _now_timestamp() -> Timestamp:
@@ -35,14 +32,27 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
         request: auth_pb2.VerifyTokenRequest,
         context: grpc.aio.ServicerContext,
     ) -> auth_pb2.VerifyTokenReply:
-        logger.info("verify token request, audience=%s", request.expected_audience)
+        try:
+            claims = decode_access_token(request.token)
+        except TokenError as exc:
+            return auth_pb2.VerifyTokenReply(status=_FAILURE_STATUS[exc.failure])
+        jti = claims["jti"]
+        try:
+            revoked = await is_revoked(jti)
+        except RedisError:
+            logger.warning("revocation check unavailable, jti=%s", jti)
+            await context.abort(grpc.StatusCode.UNAVAILABLE, "revocation store unavailable")
+        if revoked:
+            return auth_pb2.VerifyTokenReply(status=auth_pb2.VERIFICATION_STATUS_REVOKED)
+        expires_at = Timestamp()
+        expires_at.FromSeconds(int(claims["exp"]))
         return auth_pb2.VerifyTokenReply(
             status=auth_pb2.VERIFICATION_STATUS_VALID,
-            user_id=_STUB_USER_ID,
-            username=_STUB_USERNAME,
-            roles=list(_STUB_ROLES),
-            expires_at=_future_timestamp(_STUB_EXPIRES_IN_SECONDS),
-            session_id=_STUB_SESSION_ID,
+            user_id=claims["sub"],
+            username=claims["username"],
+            roles=list(claims.get("roles", [])),
+            expires_at=expires_at,
+            session_id=claims["sid"],
         )
 
     async def IntrospectSession(
@@ -50,14 +60,27 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
         request: auth_pb2.IntrospectSessionRequest,
         context: grpc.aio.ServicerContext,
     ) -> auth_pb2.IntrospectSessionReply:
-        logger.info("introspect session request, session_id=%s", request.session_id)
+        factory = get_sessionmaker()
+        try:
+            async with factory() as db:
+                sessions = SessionRepository(db)
+                login_session = await sessions.get_by_id(request.session_id)
+        except SQLAlchemyError:
+            logger.warning("session store unavailable, session_id=%s", request.session_id)
+            await context.abort(grpc.StatusCode.UNAVAILABLE, "session store unavailable")
+        if login_session is None:
+            return auth_pb2.IntrospectSessionReply(active=False)
+        issued_at = Timestamp()
+        issued_at.FromDatetime(login_session.created_at)
+        last_used_at = Timestamp()
+        last_used_at.FromDatetime(login_session.last_used_at)
         return auth_pb2.IntrospectSessionReply(
-            active=True,
-            user_id=_STUB_USER_ID,
-            issued_at=_now_timestamp(),
-            last_used_at=_now_timestamp(),
-            source_ip="",
-            user_agent="",
+            active=not login_session.revoked,
+            user_id=login_session.user_id,
+            issued_at=issued_at,
+            last_used_at=last_used_at,
+            source_ip=login_session.source_ip,
+            user_agent=login_session.user_agent,
         )
 
     async def RevokeSession(
@@ -65,7 +88,15 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
         request: auth_pb2.RevokeSessionRequest,
         context: grpc.aio.ServicerContext,
     ) -> auth_pb2.RevokeSessionReply:
-        logger.info("revoke session request, session_id=%s", request.session_id)
+        factory = get_sessionmaker()
+        try:
+            async with factory() as db:
+                sessions = SessionRepository(db)
+                await sessions.revoke(request.session_id)
+                await db.commit()
+        except SQLAlchemyError:
+            logger.warning("session store unavailable, session_id=%s", request.session_id)
+            await context.abort(grpc.StatusCode.UNAVAILABLE, "session store unavailable")
         return auth_pb2.RevokeSessionReply(
             revoked=True,
             revoked_at=_now_timestamp(),

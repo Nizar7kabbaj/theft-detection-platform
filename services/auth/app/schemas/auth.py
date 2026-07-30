@@ -1,9 +1,10 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    username: str = Field(min_length=1, max_length=50)
+    password: str = Field(min_length=1)
 
 
 class TokenResponse(BaseModel):
@@ -14,7 +15,8 @@ class TokenResponse(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    refresh_token: str = Field(min_length=1)
 
 
 class LogoutResponse(BaseModel):
