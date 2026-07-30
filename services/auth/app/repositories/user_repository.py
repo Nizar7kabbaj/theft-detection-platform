@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.db.models.user import User
+from app.core.roles import Role
 
 
 class UserRepository:
@@ -25,10 +25,11 @@ class UserRepository:
     async def create(
         self, username: str, password_hash: str, roles: list[str]
     ) -> User:
+        validated = [str(Role(r)) for r in roles]
         user = User(
             username=username,
             password_hash=password_hash,
-            roles=roles,
+            roles=validated,
         )
         self._session.add(user)
         await self._session.flush()
