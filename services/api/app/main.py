@@ -17,6 +17,7 @@ from .core.database import (
 from .core.errors import (
     AlertUnavailable,
     AppError,
+    AuthUnavailable,
     ConflictError,
     InferenceUnavailable,
     NotFoundError,
@@ -24,6 +25,7 @@ from .core.errors import (
 )
 from .core.redis import close_redis, open_redis
 from .grpc_gen.alert_pb2_grpc import AlertServiceStub
+from .grpc_gen.auth_pb2_grpc import AuthServiceStub
 from .grpc_gen.inference_pb2_grpc import InferenceServiceStub
 from .observability import setup_observability
 from .services.broadcast_service import BroadcastService
@@ -70,8 +72,15 @@ async def lifespan(app: FastAPI):
         interceptors=aio_client_interceptors(),
     )
     app.state.alert_stub = AlertServiceStub(app.state.alert_channel)
+    app.state.auth_channel = grpc.aio.insecure_channel(
+        settings.AUTH_TARGET,
+        options=_GRPC_CHANNEL_OPTIONS,
+        interceptors=aio_client_interceptors(),
+    )
+    app.state.auth_stub = AuthServiceStub(app.state.auth_channel)
     logger.info("backend ready")
     yield
+    await app.state.auth_channel.close(grace=2)
     await app.state.alert_channel.close(grace=2)
     await app.state.inference_channel.close(grace=2)
     await app.state.broadcaster.stop()
@@ -107,6 +116,12 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AlertUnavailable)
     async def _alert_unavailable(
         _: Request, exc: AlertUnavailable
+    ) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+    @app.exception_handler(AuthUnavailable)
+    async def _auth_unavailable(
+        _: Request, exc: AuthUnavailable
     ) -> JSONResponse:
         return JSONResponse(status_code=503, content={"detail": str(exc)})
 

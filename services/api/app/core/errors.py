@@ -22,3 +22,6 @@ class InferenceUnavailable(AppError):
 
 class AlertUnavailable(AppError):
     """upstream alert service unreachable or timed out."""
+
+class AuthUnavailable(AppError):
+    """auth service unreachable or timed out during token verification."""

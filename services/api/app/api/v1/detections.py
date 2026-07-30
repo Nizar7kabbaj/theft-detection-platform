@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 
+from app.core.authz import Permission, require_permission
 from app.core.idempotency import IdempotencyState, idempotency
 from app.dependencies import get_detection_usecase, get_inference_client
 from app.schemas.detection import DetectionCreate, DetectionResponse
@@ -9,7 +10,12 @@ from app.usecases.detection_usecase import DetectionUseCase
 router = APIRouter(prefix="/detections", tags=["detections"])
 
 
-@router.post("", response_model=DetectionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=DetectionResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission(Permission.DETECTION_WRITE))],
+)
 async def create_detection(
     payload: DetectionCreate,
     usecase: DetectionUseCase = Depends(get_detection_usecase),
@@ -26,6 +32,7 @@ async def create_detection(
     "/analyze",
     response_model=DetectionResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission(Permission.DETECTION_INFER))],
 )
 async def analyze_frame(
     session_id: int = Form(...),
@@ -45,7 +52,11 @@ async def analyze_frame(
     )
 
 
-@router.get("", response_model=list[DetectionResponse])
+@router.get(
+    "",
+    response_model=list[DetectionResponse],
+    dependencies=[Depends(require_permission(Permission.DETECTION_READ))],
+)
 async def list_detections(
     limit: int = Query(default=50, le=200),
     skip: int = Query(default=0, ge=0),
@@ -54,7 +65,11 @@ async def list_detections(
     return await usecase.list(limit=limit, skip=skip)
 
 
-@router.get("/session/{session_id}", response_model=list[DetectionResponse])
+@router.get(
+    "/session/{session_id}",
+    response_model=list[DetectionResponse],
+    dependencies=[Depends(require_permission(Permission.DETECTION_READ))],
+)
 async def list_detections_by_session(
     session_id: int,
     usecase: DetectionUseCase = Depends(get_detection_usecase),
@@ -62,7 +77,11 @@ async def list_detections_by_session(
     return await usecase.list_by_session(session_id)
 
 
-@router.delete("/{detection_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{detection_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission(Permission.DETECTION_WRITE))],
+)
 async def delete_detection(
     detection_id: str,
     usecase: DetectionUseCase = Depends(get_detection_usecase),
