@@ -4,12 +4,43 @@ import logging
 from functools import lru_cache
 
 from redis.asyncio import Redis
+from redis.commands.core import AsyncScript
 
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 _client: Redis | None = None
+_check_script: AsyncScript | None = None
+_record_script: AsyncScript | None = None
+
+_CHECK_LUA = """
+local count = tonumber(redis.call('get', KEYS[1]) or '0')
+local limit = tonumber(ARGV[1])
+if count >= limit then
+    local ttl = redis.call('pttl', KEYS[1])
+    if ttl < 0 then
+        ttl = 0
+    end
+    return {1, ttl}
+end
+return {0, 0}
+"""
+
+_RECORD_LUA = """
+local limit = tonumber(ARGV[1])
+local window_ms = tonumber(ARGV[2])
+local block_ms = tonumber(ARGV[3])
+local count = redis.call('incr', KEYS[1])
+if count == 1 then
+    redis.call('pexpire', KEYS[1], window_ms)
+end
+if count >= limit then
+    redis.call('pexpire', KEYS[1], block_ms)
+    return {1, block_ms}
+end
+return {0, 0}
+"""
 
 
 @lru_cache(maxsize=1)
@@ -43,6 +74,48 @@ def get_redis() -> Redis:
         )
         logger.info("redis client created")
     return _client
+
+
+def _register_scripts() -> tuple[AsyncScript, AsyncScript]:
+    global _check_script, _record_script
+    if _check_script is None or _record_script is None:
+        client = get_redis()
+        _check_script = client.register_script(_CHECK_LUA)
+        _record_script = client.register_script(_RECORD_LUA)
+    return _check_script, _record_script
+
+
+def login_key(ip: str, username: str) -> str:
+    return f"login:fail:{ip}:{username}"
+
+
+async def check_login(ip: str, username: str) -> tuple[bool, int]:
+    check, _ = _register_scripts()
+    settings = get_settings()
+    result = await check(
+        keys=[login_key(ip, username)],
+        args=[settings.login_max_attempts],
+    )
+    locked = bool(int(result[0]))
+    retry_ms = int(result[1])
+    return locked, retry_ms
+
+
+async def record_failure(ip: str, username: str) -> None:
+    _, record = _register_scripts()
+    settings = get_settings()
+    await record(
+        keys=[login_key(ip, username)],
+        args=[
+            settings.login_max_attempts,
+            settings.login_window_seconds * 1000,
+            settings.login_block_seconds * 1000,
+        ],
+    )
+
+
+async def reset_failures(ip: str, username: str) -> None:
+    await get_redis().delete(login_key(ip, username))
 
 
 async def revoke_jti(jti: str, ttl_seconds: int) -> None:
