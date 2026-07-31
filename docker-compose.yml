@@ -183,6 +183,7 @@ services:
       image: auth:dev
       container_name: auth
       networks:
+        - edge
         - data
         - observability
       user: "1000:1000"
@@ -209,6 +210,14 @@ services:
         timeout: 5s
         retries: 5
         start_period: 15s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=theft-detection-platform_edge"
+        - "traefik.http.routers.auth.rule=Host(`localhost`) && PathPrefix(`/auth`)"
+        - "traefik.http.routers.auth.entrypoints=websecure"
+        - "traefik.http.routers.auth.tls=true"
+        - "traefik.http.routers.auth.middlewares=gateway-chain@file"
+        - "traefik.http.services.auth.loadbalancer.server.port=8000"
       restart: unless-stopped
 
   postgres:
