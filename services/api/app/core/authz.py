@@ -6,7 +6,6 @@ from enum import StrEnum
 from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPBearer
 
 from app.schemas.identity import CurrentUser
 from app.services.auth_service import AuthClient
@@ -65,7 +64,6 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
     ),
 }
 
-_bearer_scheme = HTTPBearer(auto_error=False)
 
 _UNAUTHENTICATED = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -78,7 +76,12 @@ def get_auth_client(request: Request) -> AuthClient:
     return AuthClient(request.app.state.auth_stub)
 
 
-def _extract_bearer(request: Request) -> str:
+def _extract_token(request: Request) -> str:
+    from app.core.config import settings
+
+    cookie_token = request.cookies.get(settings.ACCESS_COOKIE_NAME)
+    if cookie_token:
+        return cookie_token
     header = request.headers.get("authorization")
     if header is None:
         raise _UNAUTHENTICATED
@@ -92,7 +95,7 @@ async def get_current_user(
     request: Request,
     auth_client: AuthClient = Depends(get_auth_client),
 ) -> CurrentUser:
-    token = _extract_bearer(request)
+    token = _extract_token(request)
     source_ip = request.client.host if request.client else ""
     user_agent = request.headers.get("user-agent", "")
     result = await auth_client.verify_token(

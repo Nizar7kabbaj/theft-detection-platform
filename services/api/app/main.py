@@ -2,13 +2,14 @@ import logging
 from contextlib import asynccontextmanager
 
 import grpc
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from opentelemetry.instrumentation.grpc import aio_client_interceptors
 
 from .api.v1 import alerts, cameras, detections, stats, streams
 from .core.config import settings
+from .core.csrf import csrf_protect
 from .core.database import (
     close_mongodb_connection,
     connect_to_mongodb,
@@ -136,6 +137,7 @@ app = FastAPI(
     title="theft-detection backend",
     version="2.0.0",
     lifespan=lifespan,
+    dependencies=[Depends(csrf_protect)],
 )
 
 setup_observability(app, service_name="theft-backend")
@@ -143,10 +145,10 @@ register_error_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["content-type", settings.CSRF_HEADER_NAME],
 )
 
 app.include_router(cameras.router, prefix="/api/v1")

@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     WS_MAX_CONNECTIONS:   int = 100
     WS_HEARTBEAT_SECONDS: int = 30
     ALERT_THRESHOLD:      float = 0.7
+    
+    ACCESS_COOKIE_NAME: str = "__Host-access_token"
+    CSRF_COOKIE_NAME:   str = "__Host-csrf"
+    CSRF_HEADER_NAME:   str = "X-CSRF-Token"
+    CORS_ORIGINS:       str = "http://localhost:3000"
 
     model_config = SettingsConfigDict(env_file="backend/.env")
 
