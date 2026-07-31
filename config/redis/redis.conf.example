@@ -6,7 +6,7 @@ protected-mode yes
 # Security
 requirepass __REDIS_PASSWORD_PLACEHOLDER__
 user default on >SET_PASSWORD ~* &* -@all +ping +@connection
-user api on >SET_PASSWORD ~cache:* ~idem:* resetchannels &alerts:* &cameras:* -@all +@connection +get +set +del +scan +publish +subscribe +unsubscribe +psubscribe +punsubscribe
+user api on sanitize-payload <KEEP_YOUR_EXISTING_HASH> ~cache:* ~idem:* ~rl:* resetchannels &alerts:* &cameras:* -@all +@connection +get +set +del +scan +time +eval +evalsha +script +publish +subscribe +unsubscribe +psubscribe +punsubscribe
 user exporter on >SET_PASSWORD resetchannels ~* -@all +@connection +info +client +ping +latency +slowlog
 user auth on >SET_PASSWORD resetchannels ~revoked:jti:* ~login:fail:* -@all +@connection +set +exists +eval +evalsha +script +incr +get +pttl +pexpire +del
 

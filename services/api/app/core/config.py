@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,7 +34,12 @@ class Settings(BaseSettings):
     WS_MAX_CONNECTIONS:   int = 100
     WS_HEARTBEAT_SECONDS: int = 30
     ALERT_THRESHOLD:      float = 0.7
-    
+
+    RATE_LIMIT_ENABLED:         bool = True
+    RATE_LIMIT_REQUESTS:        int = 100
+    RATE_LIMIT_WINDOW_SECONDS:  int = 60
+    RATE_LIMIT_BURST:           int = 100
+
     ACCESS_COOKIE_NAME: str = "__Host-access_token"
     CSRF_COOKIE_NAME:   str = "__Host-csrf"
     CSRF_HEADER_NAME:   str = "X-CSRF-Token"
