@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     redis_password_file: Path = Path("/run/secrets/auth_redis_password")
     access_token_ttl_seconds: int = 900
     refresh_token_ttl_seconds: int = 1209600
+    access_cookie_name: str = "__Host-access_token"
+    refresh_cookie_name: str = "__Host-refresh_token"
+    csrf_cookie_name: str = "__Host-csrf"
+    csrf_header_name: str = "X-CSRF-Token"
+    cookie_samesite: str = "strict"
 
 @lru_cache
 def get_settings() -> Settings:
