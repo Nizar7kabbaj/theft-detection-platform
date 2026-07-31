@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from ipaddress import ip_address
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
@@ -14,7 +15,12 @@ from app.core.tokens import (
     sign_access_token,
 )
 from app.core.database import get_sessionmaker
-from app.core.redis import is_revoked, revoke_jti
+from app.core.redis import (
+    check_login,
+    record_failure,
+    reset_failures,
+    revoke_jti,
+)
 from app.core.config import get_settings
 from app.core.cookies import (
     clear_auth_cookies,
@@ -34,13 +40,34 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 _INVALID_CREDENTIALS = "invalid credentials"
 _INVALID_REFRESH = "invalid refresh token"
+_LOCKED_OUT = "too many failed login attempts"
 _DUMMY_HASH = hash_password("timing-defense-dummy")
 
 
 def _client_ip(request: Request) -> str:
-    if request.client is not None:
-        return request.client.host
-    return ""
+    peer = request.client.host if request.client is not None else ""
+    if not peer:
+        return ""
+    settings = get_settings()
+    try:
+        peer_addr = ip_address(peer)
+    except ValueError:
+        return peer
+    if not any(peer_addr in net for net in settings.trusted_proxy_networks):
+        return peer
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if not forwarded:
+        return peer
+    hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+    for hop in reversed(hops):
+        try:
+            hop_addr = ip_address(hop)
+        except ValueError:
+            continue
+        if any(hop_addr in net for net in settings.trusted_proxy_networks):
+            continue
+        return hop
+    return peer
 
 
 def _build_refresh_token(jti: str, secret: str) -> str:
@@ -59,17 +86,30 @@ async def login(
     payload: LoginRequest, request: Request, response: Response
 ) -> TokenResponse:
     settings = get_settings()
+    ip = _client_ip(request)
+
+    locked, retry_ms = await check_login(ip, payload.username)
+    if locked:
+        retry_after = (retry_ms + 999) // 1000
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=_LOCKED_OUT,
+            headers={"Retry-After": str(retry_after)},
+        )
+
     factory = get_sessionmaker()
     async with factory() as db:
         users = UserRepository(db)
         user = await users.get_by_username(payload.username)
         if user is None:
             verify_password(_DUMMY_HASH, payload.password)
+            await record_failure(ip, payload.username)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=_INVALID_CREDENTIALS,
             )
         if not verify_password(user.password_hash, payload.password):
+            await record_failure(ip, payload.username)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=_INVALID_CREDENTIALS,
@@ -77,7 +117,7 @@ async def login(
         sessions = SessionRepository(db)
         login_session = await sessions.create(
             user_id=user.id,
-            source_ip=_client_ip(request),
+            source_ip=ip,
             user_agent=request.headers.get("user-agent", ""),
         )
         access_token, _, _ = sign_access_token(
@@ -102,6 +142,7 @@ async def login(
             expires_at=refresh_expires_at,
         )
         await db.commit()
+        await reset_failures(ip, payload.username)
         set_auth_cookies(
             response=response,
             access_token=access_token,
