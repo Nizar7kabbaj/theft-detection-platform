@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
+from starlette.requests import HTTPConnection
 
 from app.schemas.identity import CurrentUser
 from app.services.auth_service import AuthClient
@@ -64,7 +65,6 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
     ),
 }
 
-
 _UNAUTHENTICATED = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
     detail="not authenticated",
@@ -72,32 +72,44 @@ _UNAUTHENTICATED = HTTPException(
 )
 
 
+class TokenMissing(Exception):
+    pass
+
+
+class TokenRejected(Exception):
+    pass
+
+
 def get_auth_client(request: Request) -> AuthClient:
     return AuthClient(request.app.state.auth_stub)
 
 
-def _extract_token(request: Request) -> str:
+def build_auth_client(connection: HTTPConnection) -> AuthClient:
+    return AuthClient(connection.app.state.auth_stub)
+
+
+def extract_token(connection: HTTPConnection) -> str:
     from app.core.config import settings
 
-    cookie_token = request.cookies.get(settings.ACCESS_COOKIE_NAME)
+    cookie_token = connection.cookies.get(settings.ACCESS_COOKIE_NAME)
     if cookie_token:
         return cookie_token
-    header = request.headers.get("authorization")
+    header = connection.headers.get("authorization")
     if header is None:
-        raise _UNAUTHENTICATED
+        raise TokenMissing
     scheme, _, token = header.partition(" ")
     if scheme.lower() != "bearer" or not token:
-        raise _UNAUTHENTICATED
+        raise TokenMissing
     return token
 
 
-async def get_current_user(
-    request: Request,
-    auth_client: AuthClient = Depends(get_auth_client),
+async def verify_connection(
+    connection: HTTPConnection,
+    auth_client: AuthClient,
+    token: str,
 ) -> CurrentUser:
-    token = _extract_token(request)
-    source_ip = request.client.host if request.client else ""
-    user_agent = request.headers.get("user-agent", "")
+    source_ip = connection.client.host if connection.client else ""
+    user_agent = connection.headers.get("user-agent", "")
     result = await auth_client.verify_token(
         token=token,
         source_ip=source_ip,
@@ -110,13 +122,24 @@ async def get_current_user(
             "token rejected status=%s",
             pb.VerificationStatus.Name(result.status),
         )
-        raise _UNAUTHENTICATED
+        raise TokenRejected
     return CurrentUser(
         user_id=result.user_id,
         username=result.username,
         roles=result.roles,
         session_id=result.session_id,
     )
+
+
+async def get_current_user(
+    request: Request,
+    auth_client: AuthClient = Depends(get_auth_client),
+) -> CurrentUser:
+    try:
+        token = extract_token(request)
+        return await verify_connection(request, auth_client, token)
+    except (TokenMissing, TokenRejected) as exc:
+        raise _UNAUTHENTICATED from exc
 
 
 def _resolve_permissions(roles: frozenset[str]) -> frozenset[Permission]:
@@ -139,5 +162,4 @@ def require_permission(
                 detail="insufficient permission",
             )
         return user
-
     return _guard
