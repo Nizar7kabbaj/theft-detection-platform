@@ -4,7 +4,6 @@ import grpc
 
 
 from fastapi import Depends, FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from opentelemetry.instrumentation.grpc import aio_client_interceptors
 
@@ -129,13 +128,7 @@ app = FastAPI(
 )
 setup_observability(app, service_name="theft-backend")
 register_error_handlers(app)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["content-type", settings.CSRF_HEADER_NAME],
-)
+
 app.include_router(
     cameras.router, prefix="/api/v1", dependencies=[Depends(rate_limit)]
 )
