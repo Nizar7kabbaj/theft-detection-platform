@@ -74,3 +74,23 @@ class AuthClient:
                 roles=frozenset(response.roles),
                 session_id=response.session_id,
             )
+
+    async def session_active(self, session_id: str) -> bool:
+        request = pb.IntrospectSessionRequest(session_id=session_id)
+        with tracer.start_as_current_span("auth.introspect_session") as span:
+            try:
+                response = await self._stub.IntrospectSession(
+                    request,
+                    timeout=settings.AUTH_VERIFY_TIMEOUT_SECONDS,
+                )
+            except grpc.aio.AioRpcError as exc:
+                if exc.code() in _TRANSIENT_CODES:
+                    logger.warning(
+                        "auth call failed code=%s detail=%s",
+                        exc.code().name,
+                        exc.details(),
+                    )
+                    raise AuthUnavailable("auth service unavailable") from exc
+                raise
+            span.set_attribute("auth.session_active", response.active)
+            return response.active

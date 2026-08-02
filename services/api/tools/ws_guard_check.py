@@ -12,9 +12,22 @@ from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 EDGE = "https://localhost"
 WS_BASE = "wss://localhost"
-GOOD_ORIGIN = "http://localhost:3000"
-EVIL_ORIGIN = "http://evil.example"
 COOKIE_NAME = "__Host-access_token"
+
+ALERTS = "/ws/alerts"
+CAMERAS = "/ws/cameras"
+
+ORIGIN_EXACT = "http://localhost:3000"
+ORIGIN_SLASH = "http://localhost:3000/"
+ORIGIN_UPPER = "http://LOCALHOST:3000"
+ORIGIN_OTHER_PORT = "http://localhost:3001"
+ORIGIN_FOREIGN = "http://evil.example"
+
+OPEN = "open"
+REJECT = "reject"
+
+REJECT_STATUS = 403
+REJECT_CLOSE_CODE = 1008
 
 
 def _ssl_context() -> ssl.SSLContext:
@@ -48,12 +61,14 @@ async def attempt(
     path: str,
     origin: str | None,
     cookie: str | None,
-) -> None:
+    expected: str,
+) -> bool:
     headers = {}
     if origin is not None:
         headers["Origin"] = origin
     if cookie is not None:
         headers["Cookie"] = f"{COOKIE_NAME}={cookie}"
+    expected_reject = False
     try:
         async with websockets.connect(
             f"{WS_BASE}{path}",
@@ -62,20 +77,39 @@ async def attempt(
             open_timeout=10,
         ) as ws:
             await asyncio.sleep(0.2)
-            print(f"OPEN    {label}")
+            outcome = OPEN
+            detail = "socket open"
             await ws.close()
     except InvalidStatus as exc:
-        print(f"REJECT  {label}: http {exc.response.status_code} at handshake")
+        outcome = REJECT
+        status = exc.response.status_code
+        expected_reject = status == REJECT_STATUS
+        detail = f"http {status} at handshake"
     except ConnectionClosed as exc:
-        print(f"REJECT  {label}: ws close {exc.code} {exc.reason}")
+        outcome = REJECT
+        expected_reject = exc.code == REJECT_CLOSE_CODE
+        detail = f"ws close {exc.code} {exc.reason}"
     except Exception as exc:
-        print(f"ERROR   {label}: {type(exc).__name__} {exc}")
+        print(f"ERROR  {label}: {type(exc).__name__} {exc}")
+        return False
+    if outcome != expected:
+        print(f"FAIL   {label}: expected {expected}, got {outcome} ({detail})")
+        return False
+    if outcome == REJECT and not expected_reject:
+        print(
+            f"FAIL   {label}: refused, but not by the guard "
+            f"(want http {REJECT_STATUS} or close {REJECT_CLOSE_CODE}, got {detail})"
+        )
+        return False
+    print(f"ok     {label}: {detail}")
+    return True
 
 
 async def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--operator", required=True)
-    parser.add_argument("--compliance", required=True)
+    parser.add_argument("--operator", default="ws-operator")
+    parser.add_argument("--viewer", default="ws-viewer")
+    parser.add_argument("--compliance", default="ws-compliance")
     args = parser.parse_args()
 
     password = os.environ.get("WS_CHECK_PASSWORD")
@@ -84,21 +118,37 @@ async def main() -> int:
         return 2
 
     try:
-        op = login(args.operator, password)
-        co = login(args.compliance, password)
+        operator = login(args.operator, password)
+        viewer = login(args.viewer, password)
+        compliance = login(args.compliance, password)
     except RuntimeError as exc:
-        print(f"ERROR   {exc}", file=sys.stderr)
+        print(f"ERROR  {exc}", file=sys.stderr)
         return 2
-    print("logged in both users")
 
-    await attempt("foreign origin, operator cookie, alerts", "/ws/alerts", EVIL_ORIGIN, op)
-    await attempt("no origin, operator cookie, alerts", "/ws/alerts", None, op)
-    await attempt("good origin, no cookie, alerts", "/ws/alerts", GOOD_ORIGIN, None)
-    await attempt("good origin, operator, alerts", "/ws/alerts", GOOD_ORIGIN, op)
-    await attempt("good origin, operator, cameras", "/ws/cameras", GOOD_ORIGIN, op)
-    await attempt("good origin, compliance, alerts", "/ws/alerts", GOOD_ORIGIN, co)
-    await attempt("good origin, compliance, cameras", "/ws/cameras", GOOD_ORIGIN, co)
-    return 0
+    print("logged in three users")
+
+    cases = [
+        ("foreign origin refused", ALERTS, ORIGIN_FOREIGN, operator, REJECT),
+        ("missing origin refused", ALERTS, None, operator, REJECT),
+        ("missing cookie refused", ALERTS, ORIGIN_EXACT, None, REJECT),
+        ("other port refused", ALERTS, ORIGIN_OTHER_PORT, operator, REJECT),
+        ("exact origin opens", ALERTS, ORIGIN_EXACT, operator, OPEN),
+        ("trailing slash origin opens", ALERTS, ORIGIN_SLASH, operator, OPEN),
+        ("uppercase host origin opens", ALERTS, ORIGIN_UPPER, operator, OPEN),
+        ("operator reads cameras", CAMERAS, ORIGIN_EXACT, operator, OPEN),
+        ("viewer reads alerts", ALERTS, ORIGIN_EXACT, viewer, OPEN),
+        ("viewer reads cameras", CAMERAS, ORIGIN_EXACT, viewer, OPEN),
+        ("compliance reads alerts", ALERTS, ORIGIN_EXACT, compliance, OPEN),
+        ("compliance refused on cameras", CAMERAS, ORIGIN_EXACT, compliance, REJECT),
+    ]
+
+    results = []
+    for label, path, origin, cookie, expected in cases:
+        results.append(await attempt(label, path, origin, cookie, expected))
+
+    failed = results.count(False)
+    print(f"{len(results) - failed} passed, {failed} failed")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

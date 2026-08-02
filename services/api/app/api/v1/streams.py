@@ -11,7 +11,6 @@ from app.schemas.identity import CurrentUser
 from app.services.broadcast_service import BroadcastService
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter()
 
 
@@ -19,13 +18,13 @@ def _get_broadcaster(ws: WebSocket) -> BroadcastService:
     return ws.app.state.broadcaster
 
 
-async def _serve(ws: WebSocket, topic: str, token: str) -> None:
+async def _serve(ws: WebSocket, topic: str, user: CurrentUser) -> None:
     await ws.accept()
     broadcaster = _get_broadcaster(ws)
     registered = await broadcaster.register(ws, topic)
     if not registered:
         return
-    watchdog = asyncio.create_task(reverify_loop(ws, token))
+    watchdog = asyncio.create_task(reverify_loop(ws, user))
     try:
         while True:
             await ws.receive_text()
@@ -41,18 +40,14 @@ async def _serve(ws: WebSocket, topic: str, token: str) -> None:
 @router.websocket("/ws/alerts")
 async def alerts_stream(
     ws: WebSocket,
-    identity: tuple[CurrentUser, str] = Depends(
-        require_ws_permission(Permission.ALERT_READ)
-    ),
+    user: CurrentUser = Depends(require_ws_permission(Permission.ALERT_READ)),
 ) -> None:
-    await _serve(ws, "alerts", identity[1])
+    await _serve(ws, "alerts", user)
 
 
 @router.websocket("/ws/cameras")
 async def cameras_stream(
     ws: WebSocket,
-    identity: tuple[CurrentUser, str] = Depends(
-        require_ws_permission(Permission.CAMERA_READ)
-    ),
+    user: CurrentUser = Depends(require_ws_permission(Permission.CAMERA_READ)),
 ) -> None:
-    await _serve(ws, "cameras", identity[1])
+    await _serve(ws, "cameras", user)

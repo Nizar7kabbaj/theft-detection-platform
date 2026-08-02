@@ -245,6 +245,7 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
 async def logout(request: Request, response: Response) -> LogoutResponse:
     settings = get_settings()
     token = request.cookies.get(settings.access_cookie_name, "")
+    revoked = False
     if token:
         try:
             claims = decode_access_token(token)
@@ -259,5 +260,13 @@ async def logout(request: Request, response: Response) -> LogoutResponse:
                 )
                 if remaining > 0:
                     await revoke_jti(jti, remaining)
+                    revoked = True
+            session_id = claims.get("sid")
+            if session_id:
+                factory = get_sessionmaker()
+                async with factory() as db:
+                    await SessionRepository(db).revoke(session_id)
+                    await db.commit()
+                revoked = True
     clear_auth_cookies(response)
-    return LogoutResponse(revoked=True)
+    return LogoutResponse(revoked=revoked)
