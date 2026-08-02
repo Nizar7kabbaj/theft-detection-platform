@@ -9,10 +9,12 @@ from fastapi.responses import JSONResponse
 from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.alerts import router as alerts_router
+from app.core.authz import get_current_user
 from app.core.errors import NotFoundError
 from app.core.idempotency import IdempotencyState, idempotency
 from app.dependencies import get_alert_usecase
 from app.schemas.alert import AlertCreate, AlertResponse, Severity
+from app.schemas.identity import CurrentUser
 
 
 def _sample_response(alert_id: str = "a1") -> AlertResponse:
@@ -104,24 +106,30 @@ def idem_state() -> dict[str, IdempotencyState]:
     return {"state": _make_idempotency_state(hit=False)}
 
 
+OPERATOR_USER = CurrentUser(
+    user_id="65f1a2b3c4d5e6f7a8b9c0d2",
+    username="operator-1",
+    roles=frozenset({"operator"}),
+    session_id="sess-1",
+)
+
+
 @pytest.fixture
 def app(fake_usecase: FakeAlertUseCase, idem_state: dict[str, IdempotencyState]) -> FastAPI:
     test_app = FastAPI()
     test_app.include_router(alerts_router, prefix="/api/v1")
-
     async def _not_found_handler(request: Request, exc: NotFoundError) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(exc)})
-
     test_app.add_exception_handler(NotFoundError, _not_found_handler)
-
     def _get_usecase() -> FakeAlertUseCase:
         return fake_usecase
-
     def _get_idem() -> IdempotencyState:
         return idem_state["state"]
-
+    async def _get_user() -> CurrentUser:
+        return OPERATOR_USER
     test_app.dependency_overrides[get_alert_usecase] = _get_usecase
     test_app.dependency_overrides[idempotency] = _get_idem
+    test_app.dependency_overrides[get_current_user] = _get_user
     return test_app
 
 
