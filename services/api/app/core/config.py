@@ -37,7 +37,11 @@ class Settings(BaseSettings):
     ACCESS_COOKIE_NAME: str = "__Host-access_token"
     CSRF_COOKIE_NAME:   str = "__Host-csrf"
     CSRF_HEADER_NAME:   str = "X-CSRF-Token"
-    model_config = SettingsConfigDict(env_file="backend/.env")
+
+    model_config = SettingsConfigDict(
+        env_file=Path(__file__).resolve().parents[2] / ".env",
+        extra="ignore",
+    )
 
 
 settings = Settings()
