@@ -166,14 +166,31 @@ class TestListFiltered:
 
 
 class TestAcknowledge:
-    async def test_stamps_acknowledged_and_timestamp(self, repo, mocker):
-        spy = mocker.patch.object(repo, "update", new=mocker.AsyncMock(return_value={"ok": 1}))
+    async def test_conditional_write_stamps_acknowledged_and_timestamp(
+        self, repo, mock_collection, mocker
+    ):
+        mock_collection.update_one.return_value = mocker.MagicMock(matched_count=1)
+        mock_collection.find_one.return_value = {"_id": ObjectId(VALID_OID), "acknowledged": True}
         await repo.acknowledge(VALID_OID)
-
-        spy.assert_awaited_once()
-        args, _ = spy.call_args
-        assert args[0] == VALID_OID
-        changes = args[1]
+        mock_collection.update_one.assert_awaited_once()
+        filter_, update = mock_collection.update_one.await_args.args
+        assert filter_["_id"] == ObjectId(VALID_OID)
+        assert filter_["acknowledged"] == {"$ne": True}
+        changes = update["$set"]
         assert changes["acknowledged"] is True
         assert isinstance(changes["acknowledged_at"], datetime)
         assert changes["acknowledged_at"].tzinfo == timezone.utc
+
+    async def test_first_acknowledge_reports_flipped(self, repo, mock_collection, mocker):
+        mock_collection.update_one.return_value = mocker.MagicMock(matched_count=1)
+        mock_collection.find_one.return_value = {"_id": ObjectId(VALID_OID), "acknowledged": True}
+        doc, flipped = await repo.acknowledge(VALID_OID)
+        assert doc is not None
+        assert flipped is True
+
+    async def test_repeat_acknowledge_reports_not_flipped(self, repo, mock_collection, mocker):
+        mock_collection.update_one.return_value = mocker.MagicMock(matched_count=0)
+        mock_collection.find_one.return_value = {"_id": ObjectId(VALID_OID), "acknowledged": True}
+        doc, flipped = await repo.acknowledge(VALID_OID)
+        assert doc is not None
+        assert flipped is False
