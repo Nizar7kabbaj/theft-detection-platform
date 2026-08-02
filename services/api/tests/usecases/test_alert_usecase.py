@@ -187,6 +187,15 @@ class TestAcknowledge:
         await alert_usecase.acknowledge(sample_alert_doc["_id"])
         channel, _ = mock_redis.publish.await_args.args
         assert channel == "alerts:acknowledged"
+        
+    async def test_repeat_acknowledge_does_not_republish(
+        self, alert_usecase, fake_alert_repo, mock_redis, sample_alert_doc
+    ):
+        fake_alert_repo.store[sample_alert_doc["_id"]] = {**sample_alert_doc}
+        await alert_usecase.acknowledge(sample_alert_doc["_id"])
+        assert mock_redis.publish.await_count == 1
+        await alert_usecase.acknowledge(sample_alert_doc["_id"])
+        assert mock_redis.publish.await_count == 1
 
 
 class TestDelete:
