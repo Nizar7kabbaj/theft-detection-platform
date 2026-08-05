@@ -220,6 +220,41 @@ services:
         - "traefik.http.services.auth.loadbalancer.server.port=8000"
       restart: unless-stopped
 
+  audit-service:
+        build:
+          context: ./services/audit
+        image: audit:dev
+        container_name: audit
+        networks:
+          - data
+          - observability
+        user: "1000:1000"
+        env_file:
+          - ./services/audit/.env
+        environment:
+          <<: *otel-env
+          OTEL_SERVICE_NAME: "audit"
+          OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=audit"
+          AUDIT_GRPC_PORT: "50054"
+        ports:
+          - "127.0.0.1:50054:50054"
+        volumes:
+          - ./config/postgres/audit_owner_postgres_password:/run/secrets/audit_owner_postgres_password:ro
+          - ./config/postgres/audit_app_postgres_password:/run/secrets/audit_app_postgres_password:ro
+          - ./config/redis/audit_redis_password:/run/secrets/audit_redis_password:ro
+        depends_on:
+          postgres:
+            condition: service_healthy
+          redis:
+            condition: service_started
+        healthcheck:
+          test: ["CMD", "grpc_health_probe", "-addr=:50054"]
+          interval: 30s
+          timeout: 5s
+          retries: 5
+          start_period: 15s
+        restart: unless-stopped
+        
   postgres:
     image: postgres:17-alpine
     container_name: theft-postgres

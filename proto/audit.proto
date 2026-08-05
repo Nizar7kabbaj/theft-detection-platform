@@ -141,8 +141,15 @@ message QueryEventsRequest {
   string page_token = 7;
 }
 
+message StoredAuditEvent {
+  AuditEvent event = 1;
+  string sequence_number = 2;
+  string chain_hash = 3;
+  google.protobuf.Timestamp persisted_at = 4;
+}
+
 message QueryEventsReply {
-  repeated AuditEvent events = 1;
+  repeated StoredAuditEvent events = 1;
   string next_page_token = 2;
 }
 
