@@ -239,7 +239,6 @@ services:
         ports:
           - "127.0.0.1:50054:50054"
         volumes:
-          - ./config/postgres/audit_owner_postgres_password:/run/secrets/audit_owner_postgres_password:ro
           - ./config/postgres/audit_app_postgres_password:/run/secrets/audit_app_postgres_password:ro
           - ./config/redis/audit_redis_password:/run/secrets/audit_redis_password:ro
           - ./config/audit/pseudonym_key:/run/secrets/audit_pseudonym_key:ro
@@ -257,6 +256,31 @@ services:
           retries: 5
           start_period: 15s
         restart: unless-stopped
+
+  audit-operator:
+      build:
+        context: ./services/audit
+      image: audit:dev
+      container_name: audit-operator
+      profiles:
+        - ops
+      networks:
+        - data
+      user: "1000:1000"
+      env_file:
+        - ./services/audit/.env
+      environment:
+        AUDIT_POSTGRES_HOST: "postgres"
+      volumes:
+        - ./config/postgres/audit_owner_postgres_password:/run/secrets/audit_owner_postgres_password:ro
+        - ./config/postgres/audit_app_postgres_password:/run/secrets/audit_app_postgres_password:ro
+        - ./config/audit/pseudonym_key:/run/secrets/audit_pseudonym_key:ro
+        - ./config/audit/checkpoint_public.pem:/run/secrets/audit_checkpoint_public_key:ro
+      depends_on:
+        postgres:
+          condition: service_healthy
+      entrypoint: ["sleep", "infinity"]
+      restart: "no"
 
   postgres:
     image: postgres:17-alpine

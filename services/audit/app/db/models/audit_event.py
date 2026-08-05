@@ -124,3 +124,9 @@ class AuditCheckpoint(Base):
     signed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    prev_checkpoint_hash: Mapped[bytes] = mapped_column(
+        LargeBinary, nullable=False, unique=True
+    )
+    checkpoint_hash: Mapped[bytes] = mapped_column(
+        LargeBinary, nullable=False, unique=True
+    )

@@ -33,9 +33,19 @@ class Settings(BaseSettings):
     redis_user: str = "audit"
     redis_db: int = 0
     redis_password_file: Path = Path("/run/secrets/audit_redis_password")
+    
+    redis_connect_timeout_seconds: float = 2.0
+    redis_socket_timeout_seconds: float = 2.0
+    postgres_pool_size: int = 5
+    postgres_max_overflow: int = 5
+    postgres_pool_timeout_seconds: int = 10
+    lock_timeout_ms: int = 3000
+    statement_timeout_ms: int = 10000
+    idle_transaction_timeout_ms: int = 15000
 
     append_rate_limit: int = 2000
     append_rate_window_seconds: int = 1
+    append_rate_fail_closed: bool = False
 
     schema_version: int = 1
     min_accepted_schema_version: int = 1

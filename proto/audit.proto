@@ -114,6 +114,12 @@ enum ThrottleBucket {
   THROTTLE_BUCKET_SUBNET = 2;
   THROTTLE_BUCKET_GLOBAL = 3;
 }
+enum AuditQueryScope {
+  AUDIT_QUERY_SCOPE_UNSPECIFIED = 0;
+  AUDIT_QUERY_SCOPE_EVENTS = 1;
+  AUDIT_QUERY_SCOPE_VERIFY = 2;
+  AUDIT_QUERY_SCOPE_CHECKPOINT = 3;
+}
 message LoginSuccess {
   string subject_id = 1;
   string session_id = 2;
@@ -194,6 +200,16 @@ message AuthThrottleTriggered {
   uint32 window_seconds = 4;
   bytes subject_hmac = 5;
 }
+message AuditLogAccessed {
+  string actor_user_id = 1;
+  AuditQueryScope scope = 2;
+  google.protobuf.Timestamp window_from = 3;
+  google.protobuf.Timestamp window_to = 4;
+  SourceService filter_source_service = 5;
+  bytes filter_actor_hmac = 6;
+  Severity filter_min_severity = 7;
+  uint32 rows_returned = 8;
+}
 message AuditEvent {
   uint32 schema_version = 1;
   string event_id = 2;
@@ -215,6 +231,7 @@ message AuditEvent {
     DataSubjectErasure data_subject_erasure = 29;
     ServiceLifecycleEvent service_lifecycle = 30;
     AuthThrottleTriggered auth_throttle_triggered = 31;
+    AuditLogAccessed audit_log_accessed = 32;
   }
 }
 enum AppendStatus {
@@ -286,6 +303,8 @@ message Checkpoint {
   bytes signature = 7;
   string key_id = 8;
   google.protobuf.Timestamp signed_at = 9;
+  bytes prev_checkpoint_hash = 10;
+  bytes checkpoint_hash = 11;
 }
 message GetCheckpointRequest {
   int64 checkpoint_id = 1;
