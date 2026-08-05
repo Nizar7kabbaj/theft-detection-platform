@@ -1,31 +1,25 @@
 syntax = "proto3";
-
 package theftdetection.v1;
-
 message Bbox {
   float x1 = 1;
   float y1 = 2;
   float x2 = 3;
   float y2 = 4;
 }
-
 message Keypoint {
   float x = 1;
   float y = 2;
   float confidence = 3;
 }
-
 message Person {
   int32 track_id = 1;
   Bbox bbox = 2;
   repeated Keypoint keypoints = 3;
 }
-
 message Object {
   string class_name = 1;
   Bbox bbox = 2;
 }
-
 enum Severity {
   SEVERITY_UNSPECIFIED = 0;
   SEVERITY_INFO = 1;
@@ -33,10 +27,35 @@ enum Severity {
   SEVERITY_WARNING = 3;
   SEVERITY_CRITICAL = 4;
 }
-
 enum AlertType {
   ALERT_TYPE_UNSPECIFIED = 0;
   ALERT_TYPE_OBJECT_PROXIMITY = 1;
   ALERT_TYPE_BENDING = 2;
   ALERT_TYPE_LOITERING = 3;
+}
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_ADMIN = 1;
+  ROLE_OPERATOR = 2;
+  ROLE_VIEWER = 3;
+  ROLE_ML_ENGINEER = 4;
+  ROLE_COMPLIANCE = 5;
+}
+enum SourceService {
+  SOURCE_SERVICE_UNSPECIFIED = 0;
+  SOURCE_SERVICE_API = 1;
+  SOURCE_SERVICE_AUTH = 2;
+  SOURCE_SERVICE_AI = 3;
+  SOURCE_SERVICE_CAMERA = 4;
+  SOURCE_SERVICE_DETECT_GATE = 5;
+  SOURCE_SERVICE_NOTIFICATION = 6;
+  SOURCE_SERVICE_AUDIT = 7;
+}
+enum HashAlgorithm {
+  HASH_ALGORITHM_UNSPECIFIED = 0;
+  HASH_ALGORITHM_SHA256 = 1;
+}
+enum SignatureAlgorithm {
+  SIGNATURE_ALGORITHM_UNSPECIFIED = 0;
+  SIGNATURE_ALGORITHM_ED25519 = 1;
 }

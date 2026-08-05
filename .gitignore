@@ -88,3 +88,7 @@ services/auth/.env
 config/auth/jwt_private.pem
 !config/auth/jwt_public.pem
 config/auth/test_users_password
+
+config/audit/checkpoint_private.pem
+!config/audit/checkpoint_public.pem
+config/audit/pseudonym_key

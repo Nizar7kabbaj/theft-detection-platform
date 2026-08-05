@@ -242,6 +242,9 @@ services:
           - ./config/postgres/audit_owner_postgres_password:/run/secrets/audit_owner_postgres_password:ro
           - ./config/postgres/audit_app_postgres_password:/run/secrets/audit_app_postgres_password:ro
           - ./config/redis/audit_redis_password:/run/secrets/audit_redis_password:ro
+          - ./config/audit/pseudonym_key:/run/secrets/audit_pseudonym_key:ro
+          - ./config/audit/checkpoint_private.pem:/run/secrets/audit_checkpoint_private_key:ro
+          - ./config/audit/checkpoint_public.pem:/run/secrets/audit_checkpoint_public_key:ro
         depends_on:
           postgres:
             condition: service_healthy
@@ -254,7 +257,7 @@ services:
           retries: 5
           start_period: 15s
         restart: unless-stopped
-        
+
   postgres:
     image: postgres:17-alpine
     container_name: theft-postgres
