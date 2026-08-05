@@ -30,7 +30,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+packages = ["app", "tools"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -40,3 +40,15 @@ markers = [
     "unit: pure unit tests, no external services",
     "integration: tests against a running grpc server",
 ]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+extend-exclude = ["app/server/grpc_gen", "migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "S", "RUF"]
+ignore = ["S101", "S104", "ASYNC109", "SIM103"]
+
+[tool.ruff.lint.per-file-ignores]
+"tools/*" = ["S608"]

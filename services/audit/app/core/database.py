@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
+_owner_engine: AsyncEngine | None = None
+_owner_sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
 class DatabaseCredentialError(RuntimeError):
@@ -77,6 +79,18 @@ def _server_settings() -> dict[str, str]:
     }
 
 
+def _owner_server_settings() -> dict[str, str]:
+    settings = get_settings()
+    return {
+        "application_name": f"{settings.service_name}-operator",
+        "lock_timeout": f"{settings.owner_lock_timeout_ms}ms",
+        "statement_timeout": f"{settings.owner_statement_timeout_ms}ms",
+        "idle_in_transaction_session_timeout": (
+            f"{settings.owner_idle_transaction_timeout_ms}ms"
+        ),
+    }
+
+
 def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
@@ -106,6 +120,33 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     return _sessionmaker
 
 
+def get_owner_engine() -> AsyncEngine:
+    global _owner_engine
+    if _owner_engine is None:
+        _owner_engine = create_async_engine(
+            resolve_owner_url(),
+            pool_size=1,
+            max_overflow=0,
+            pool_timeout=30,
+            pool_pre_ping=True,
+            echo=False,
+            connect_args={"server_settings": _owner_server_settings()},
+        )
+        logger.info("postgres owner engine created")
+    return _owner_engine
+
+
+def get_owner_sessionmaker() -> async_sessionmaker[AsyncSession]:
+    global _owner_sessionmaker
+    if _owner_sessionmaker is None:
+        _owner_sessionmaker = async_sessionmaker(
+            bind=get_owner_engine(),
+            expire_on_commit=False,
+            autoflush=False,
+        )
+    return _owner_sessionmaker
+
+
 async def get_session() -> AsyncIterator[AsyncSession]:
     factory = get_sessionmaker()
     async with factory() as session:
@@ -123,3 +164,11 @@ async def dispose_engine() -> None:
         await _engine.dispose()
         _engine = None
         logger.info("postgres engine disposed")
+
+
+async def dispose_owner_engine() -> None:
+    global _owner_engine
+    if _owner_engine is not None:
+        await _owner_engine.dispose()
+        _owner_engine = None
+        logger.info("postgres owner engine disposed")

@@ -16,7 +16,7 @@ _DOMAIN_CHAIN: Final[bytes] = b"\x01"
 _DOMAIN_CHECKPOINT: Final[bytes] = b"\x02"
 _DOMAIN_CHECKPOINT_DIGEST: Final[bytes] = b"\x03"
 
-_ALGORITHMS: Final[dict[int, tuple[Callable[[], "hashlib._Hash"], int]]] = {
+_ALGORITHMS: Final[dict[int, tuple[Callable[[], hashlib._Hash], int]]] = {
     HASH_ALGORITHM_SHA256: (hashlib.sha256, 32),
 }
 
@@ -47,7 +47,7 @@ def genesis_checkpoint_hash(algorithm: int = DEFAULT_HASH_ALGORITHM) -> bytes:
     return b"\x00" * digest_size(algorithm)
 
 
-def _new(algorithm: int) -> "hashlib._Hash":
+def _new(algorithm: int) -> hashlib._Hash:
     entry = _ALGORITHMS.get(algorithm)
     if entry is None:
         raise UnsupportedAlgorithmError(f"unsupported hash algorithm {algorithm}")
@@ -125,7 +125,8 @@ def checkpoint_payload(
         )
     if len(prev_checkpoint_hash) != size:
         raise ValueError(
-            f"prev_checkpoint_hash must be {size} bytes, got {len(prev_checkpoint_hash)}"
+            f"prev_checkpoint_hash must be {size} bytes, "
+            f"got {len(prev_checkpoint_hash)}"
         )
     parts = [
         _DOMAIN_CHECKPOINT,
@@ -152,4 +153,6 @@ def compute_checkpoint_hash(
 def checkpoint_matches(
     payload: bytes, checkpoint_hash: bytes, algorithm: int = DEFAULT_HASH_ALGORITHM
 ) -> bool:
-    return _constant_time_eq(compute_checkpoint_hash(payload, algorithm), checkpoint_hash)
+    return _constant_time_eq(
+        compute_checkpoint_hash(payload, algorithm), checkpoint_hash
+    )

@@ -74,7 +74,9 @@ def _read_key_file(path: Path, label: str) -> bytes:
 
 
 class PublicKeyring:
-    def __init__(self, directory: Path, active_key_id: str, active_public_key: Path) -> None:
+    def __init__(
+        self, directory: Path, active_key_id: str, active_public_key: Path
+    ) -> None:
         self._directory = directory
         self._active_key_id = active_key_id
         self._active_public_key = active_public_key
@@ -135,7 +137,9 @@ class LocalFileSigner(CheckpointSigner):
             try:
                 loaded = load_pem_private_key(data, password=None)
             except (ValueError, TypeError) as exc:
-                raise SigningKeyError("checkpoint private key is not valid pem") from exc
+                raise SigningKeyError(
+                    "checkpoint private key is not valid pem"
+                ) from exc
             if not isinstance(loaded, Ed25519PrivateKey):
                 raise SigningKeyError("checkpoint private key is not ed25519")
             public = loaded.public_key()
