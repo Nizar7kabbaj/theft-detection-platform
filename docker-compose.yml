@@ -244,13 +244,16 @@ services:
           - ./config/audit/pseudonym_key:/run/secrets/audit_pseudonym_key:ro
           - ./config/audit/checkpoint_private.pem:/run/secrets/audit_checkpoint_private_key:ro
           - ./config/audit/checkpoint_public.pem:/run/secrets/audit_checkpoint_public_key:ro
+          - ./config/pki/audit/tls.crt:/run/secrets/audit_tls_cert:ro
+          - ./config/pki/audit/tls.key:/run/secrets/audit_tls_key:ro
+          - ./config/pki/ca/ca.crt:/run/secrets/audit_tls_ca:ro
         depends_on:
           postgres:
             condition: service_healthy
           redis:
             condition: service_started
         healthcheck:
-          test: ["CMD", "grpc_health_probe", "-addr=:50054"]
+          test: ["CMD", "grpc_health_probe", "-addr=audit:50054", "-tls", "-tls-ca-cert=/run/secrets/audit_tls_ca", "-tls-client-cert=/run/secrets/audit_tls_cert", "-tls-client-key=/run/secrets/audit_tls_key"]
           interval: 30s
           timeout: 5s
           retries: 5

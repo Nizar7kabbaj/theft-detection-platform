@@ -92,3 +92,8 @@ config/auth/test_users_password
 config/audit/checkpoint_private.pem
 !config/audit/checkpoint_public.pem
 config/audit/pseudonym_key
+config/pki/*
+!config/pki/.gitkeep
+!config/pki/ca/
+config/pki/ca/*
+!config/pki/ca/ca.crt

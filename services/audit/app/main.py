@@ -15,8 +15,20 @@ from app.core.database import dispose_engine, get_sessionmaker
 from app.core.redis import close_redis, get_redis
 from app.server.grpc_gen import audit_pb2, audit_pb2_grpc
 from app.server.servicer import AuditServicer
+from app.server.interceptors import IdentityInterceptor
 
 AUDIT_SERVICE_FULL_NAME = "theftdetection.v1.AuditService"
+
+def _server_credentials() -> grpc.ServerCredentials:
+    settings = get_settings()
+    key = settings.tls_key_file.read_bytes()
+    cert = settings.tls_cert_file.read_bytes()
+    ca = settings.tls_ca_file.read_bytes()
+    return grpc.ssl_server_credentials(
+        [(key, cert)],
+        root_certificates=ca,
+        require_client_auth=settings.tls_require_client_auth,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +104,7 @@ async def _run_grpc(stop_event: asyncio.Event) -> None:
     server = grpc.aio.server(
         migration_thread_pool=None,
         maximum_concurrent_rpcs=settings.grpc_max_concurrent_rpcs,
+        interceptors=(IdentityInterceptor(),),
     )
 
     health_servicer = AsyncHealthServicer()
@@ -111,7 +124,7 @@ async def _run_grpc(stop_event: asyncio.Event) -> None:
     reflection.enable_server_reflection(service_names, server)
 
     bind_address = f"{settings.grpc_host}:{settings.grpc_port}"
-    server.add_insecure_port(bind_address)
+    server.add_secure_port(bind_address, _server_credentials())
     await server.start()
     logger.info("grpc server listening on %s", bind_address)
 

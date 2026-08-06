@@ -20,6 +20,7 @@ from app.repositories.audit_repository import (
     AuditRepository,
 )
 from app.server.grpc_gen import audit_pb2, audit_pb2_grpc
+from app.server.interceptors import peer_service
 from app.services.checkpoint_service import verify_checkpoints
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,9 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> audit_pb2.AppendEventReply:
         settings = get_settings()
-
+        if int(request.source_service) != peer_service():
+            logger.warning("source_service does not match caller certificate")
+            return _rejected()
         if not _is_uuid(request.event_id):
             return _rejected()
 
