@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-set -uo pipefail
-COMPILER_SERVICE="ai"
+set -euo pipefail
+GRPCIO_TOOLS_VERSION="1.71.2"
 usage() {
   cat >&2 <<'EOF'
 usage: tools/scripts/gen_proto.sh <target>
@@ -17,6 +17,7 @@ resolve_outdir() {
     detect-gate-service)  echo "services/detect-gate/app/grpc_gen" ;;
     auth-service)         echo "services/auth/app/server/grpc_gen" ;;
     audit-service)        echo "services/audit/app/server/grpc_gen" ;;
+    *)                    return 1 ;;
   esac
 }
 resolve_protos() {
@@ -28,6 +29,7 @@ resolve_protos() {
     detect-gate-service)  echo "common.proto presence.proto" ;;
     auth-service)         echo "auth.proto" ;;
     audit-service)        echo "common.proto audit.proto" ;;
+    *)                    return 1 ;;
   esac
 }
 generate() {
@@ -54,7 +56,7 @@ generate() {
     -v "${PROTOC_CACHE:-${HOME}/.cache/theft-protoc}:/tmp/.cache" \
     -w /out \
     python:3.12-slim \
-    sh -c "pip install --quiet --cache-dir /tmp/.cache/pip grpcio-tools==1.71.2 \
+    sh -c "pip install --quiet --cache-dir /tmp/.cache/pip grpcio-tools==${GRPCIO_TOOLS_VERSION} \
       && python -m grpc_tools.protoc \
         -I /proto \
         --python_out=/out \

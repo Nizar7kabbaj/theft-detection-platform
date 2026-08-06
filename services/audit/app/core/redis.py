@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from functools import lru_cache
 
 from redis.asyncio import Redis
@@ -12,19 +13,21 @@ logger = logging.getLogger(__name__)
 _client: Redis | None = None
 
 
+class RedisCredentialError(RuntimeError):
+    pass
+
+
 @lru_cache(maxsize=1)
 def _load_redis_password() -> str:
     path = get_settings().redis_password_file
     try:
         password = path.read_text(encoding="utf-8").strip()
-    except FileNotFoundError:
-        logger.error("redis password file missing at %s", path)
-        return ""
+    except FileNotFoundError as exc:
+        raise RedisCredentialError(f"redis password file missing at {path}") from exc
     except OSError as exc:
-        logger.error("redis password file unreadable at %s: %s", path, exc)
-        return ""
+        raise RedisCredentialError(f"redis password file unreadable at {path}") from exc
     if not password:
-        logger.error("redis password file empty at %s", path)
+        raise RedisCredentialError(f"redis password file empty at {path}")
     return password
 
 
@@ -40,28 +43,32 @@ def get_redis() -> Redis:
             db=settings.redis_db,
             decode_responses=True,
             health_check_interval=30,
+            socket_connect_timeout=settings.redis_connect_timeout_seconds,
+            socket_timeout=settings.redis_socket_timeout_seconds,
         )
         logger.info("redis client created")
     return _client
 
 
-def rate_limit_key(source_service: str) -> str:
-    return f"audit:rl:{source_service or 'unknown'}"
+def rate_limit_key(source_service: int, window: int) -> str:
+    return f"audit:rl:{source_service}:{window}"
 
 
-async def check_append_rate(source_service: str) -> bool:
+async def check_append_rate(source_service: int) -> bool:
     settings = get_settings()
-    key = rate_limit_key(source_service)
+    span = max(settings.append_rate_window_seconds, 1)
+    window = int(time.time()) // span
+    key = rate_limit_key(source_service, window)
     client = get_redis()
     try:
         count = await client.incr(key)
         if count == 1:
-            await client.pexpire(key, settings.append_rate_window_seconds * 1000)
+            await client.pexpire(key, span * 2000)
         return count <= settings.append_rate_limit
     except Exception as exc:
-        logger.error("rate limit check failed for %s: %s", source_service, exc)
-        return True
-
+        logger.error("rate limit check failed: %s", exc)
+        return not get_settings().append_rate_fail_closed
+    
 
 async def close_redis() -> None:
     global _client

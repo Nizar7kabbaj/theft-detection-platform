@@ -30,6 +30,7 @@ ENV PATH=/opt/venv/bin:$PATH
 COPY --from=builder --chown=audit:audit /opt/venv /opt/venv
 COPY --from=probe /usr/local/bin/grpc_health_probe /usr/local/bin/grpc_health_probe
 COPY --chown=audit:audit app /app/app
+COPY --chown=audit:audit tools /app/tools
 COPY --chown=audit:audit alembic.ini /app/alembic.ini
 COPY --chown=audit:audit migrations /app/migrations
 USER audit

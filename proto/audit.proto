@@ -1,32 +1,140 @@
 syntax = "proto3";
-
 package theftdetection.v1;
-
 import "google/protobuf/timestamp.proto";
 import "common.proto";
-
+enum AuthFailureReason {
+  AUTH_FAILURE_REASON_UNSPECIFIED = 0;
+  AUTH_FAILURE_REASON_UNKNOWN_SUBJECT = 1;
+  AUTH_FAILURE_REASON_BAD_CREDENTIAL = 2;
+  AUTH_FAILURE_REASON_ACCOUNT_DISABLED = 3;
+  AUTH_FAILURE_REASON_ACCOUNT_LOCKED = 4;
+  AUTH_FAILURE_REASON_THROTTLED = 5;
+  AUTH_FAILURE_REASON_EXPIRED_CREDENTIAL = 6;
+  AUTH_FAILURE_REASON_MALFORMED_REQUEST = 7;
+}
+enum SessionEndKind {
+  SESSION_END_KIND_UNSPECIFIED = 0;
+  SESSION_END_KIND_USER_LOGOUT = 1;
+  SESSION_END_KIND_EXPIRED = 2;
+  SESSION_END_KIND_REVOKED = 3;
+  SESSION_END_KIND_SUPERSEDED = 4;
+}
+enum NotificationChannel {
+  NOTIFICATION_CHANNEL_UNSPECIFIED = 0;
+  NOTIFICATION_CHANNEL_TELEGRAM = 1;
+  NOTIFICATION_CHANNEL_WEBHOOK = 2;
+  NOTIFICATION_CHANNEL_EMAIL = 3;
+  NOTIFICATION_CHANNEL_WEBSOCKET = 4;
+}
+enum DispatchFailureReason {
+  DISPATCH_FAILURE_REASON_UNSPECIFIED = 0;
+  DISPATCH_FAILURE_REASON_NONE = 1;
+  DISPATCH_FAILURE_REASON_TIMEOUT = 2;
+  DISPATCH_FAILURE_REASON_REJECTED_BY_PROVIDER = 3;
+  DISPATCH_FAILURE_REASON_RATE_LIMITED = 4;
+  DISPATCH_FAILURE_REASON_UNREACHABLE = 5;
+  DISPATCH_FAILURE_REASON_CREDENTIAL_INVALID = 6;
+  DISPATCH_FAILURE_REASON_RECIPIENT_UNKNOWN = 7;
+}
+enum ConfigResourceKind {
+  CONFIG_RESOURCE_KIND_UNSPECIFIED = 0;
+  CONFIG_RESOURCE_KIND_CAMERA = 1;
+  CONFIG_RESOURCE_KIND_ZONE = 2;
+  CONFIG_RESOURCE_KIND_DETECTION_THRESHOLD = 3;
+  CONFIG_RESOURCE_KIND_NOTIFICATION_ROUTE = 4;
+  CONFIG_RESOURCE_KIND_MODEL_BINDING = 5;
+  CONFIG_RESOURCE_KIND_RETENTION_POLICY = 6;
+}
+enum AdminActionKind {
+  ADMIN_ACTION_KIND_UNSPECIFIED = 0;
+  ADMIN_ACTION_KIND_CREATE = 1;
+  ADMIN_ACTION_KIND_UPDATE = 2;
+  ADMIN_ACTION_KIND_DISABLE = 3;
+  ADMIN_ACTION_KIND_ENABLE = 4;
+  ADMIN_ACTION_KIND_DELETE = 5;
+  ADMIN_ACTION_KIND_GRANT_ROLE = 6;
+  ADMIN_ACTION_KIND_REVOKE_ROLE = 7;
+  ADMIN_ACTION_KIND_FORCE_PASSWORD_RESET = 8;
+  ADMIN_ACTION_KIND_REVOKE_SESSION = 9;
+}
+enum AdminTargetKind {
+  ADMIN_TARGET_KIND_UNSPECIFIED = 0;
+  ADMIN_TARGET_KIND_USER = 1;
+  ADMIN_TARGET_KIND_ROLE_BINDING = 2;
+  ADMIN_TARGET_KIND_SESSION = 3;
+  ADMIN_TARGET_KIND_CAMERA = 4;
+  ADMIN_TARGET_KIND_ALERT = 5;
+  ADMIN_TARGET_KIND_MODEL = 6;
+}
+enum AdminReasonCode {
+  ADMIN_REASON_CODE_UNSPECIFIED = 0;
+  ADMIN_REASON_CODE_ROUTINE_ADMINISTRATION = 1;
+  ADMIN_REASON_CODE_SECURITY_INCIDENT = 2;
+  ADMIN_REASON_CODE_ONBOARDING = 3;
+  ADMIN_REASON_CODE_OFFBOARDING = 4;
+  ADMIN_REASON_CODE_POLICY_VIOLATION = 5;
+  ADMIN_REASON_CODE_DATA_SUBJECT_REQUEST = 6;
+  ADMIN_REASON_CODE_MAINTENANCE = 7;
+}
+enum RejectionKind {
+  REJECTION_KIND_UNSPECIFIED = 0;
+  REJECTION_KIND_ADVERSARIAL_PATTERN = 1;
+  REJECTION_KIND_OUT_OF_DISTRIBUTION = 2;
+  REJECTION_KIND_FRAME_INTEGRITY = 3;
+  REJECTION_KIND_REPLAY_SUSPECTED = 4;
+  REJECTION_KIND_RATE_ANOMALY = 5;
+}
+enum DetectorName {
+  DETECTOR_NAME_UNSPECIFIED = 0;
+  DETECTOR_NAME_INPUT_STATISTICS = 1;
+  DETECTOR_NAME_TEMPORAL_CONSISTENCY = 2;
+  DETECTOR_NAME_FRAME_HASH = 3;
+  DETECTOR_NAME_CONFIDENCE_DISTRIBUTION = 4;
+}
+enum LifecycleEventKind {
+  LIFECYCLE_EVENT_KIND_UNSPECIFIED = 0;
+  LIFECYCLE_EVENT_KIND_STARTED = 1;
+  LIFECYCLE_EVENT_KIND_READY = 2;
+  LIFECYCLE_EVENT_KIND_DRAINING = 3;
+  LIFECYCLE_EVENT_KIND_STOPPED = 4;
+  LIFECYCLE_EVENT_KIND_CONFIG_RELOADED = 5;
+  LIFECYCLE_EVENT_KIND_DEGRADED = 6;
+}
+enum ErasureScope {
+  ERASURE_SCOPE_UNSPECIFIED = 0;
+  ERASURE_SCOPE_ACCOUNT = 1;
+  ERASURE_SCOPE_SESSIONS = 2;
+  ERASURE_SCOPE_DETECTIONS = 3;
+  ERASURE_SCOPE_ALERTS = 4;
+  ERASURE_SCOPE_AUDIT_PAYLOADS = 5;
+}
+enum ThrottleBucket {
+  THROTTLE_BUCKET_UNSPECIFIED = 0;
+  THROTTLE_BUCKET_ACCOUNT = 1;
+  THROTTLE_BUCKET_SUBNET = 2;
+  THROTTLE_BUCKET_GLOBAL = 3;
+}
+enum AuditQueryScope {
+  AUDIT_QUERY_SCOPE_UNSPECIFIED = 0;
+  AUDIT_QUERY_SCOPE_EVENTS = 1;
+  AUDIT_QUERY_SCOPE_VERIFY = 2;
+  AUDIT_QUERY_SCOPE_CHECKPOINT = 3;
+}
 message LoginSuccess {
-  string user_id = 1;
-  string username = 2;
-  string source_ip = 3;
-  string user_agent = 4;
-  repeated string roles = 5;
-}
-
-message LoginFailure {
-  string username_attempted = 1;
-  string source_ip = 2;
-  string user_agent = 3;
-  string failure_reason = 4;
-  int32 attempt_count = 5;
-}
-
-message LogoutEvent {
-  string user_id = 1;
+  string subject_id = 1;
   string session_id = 2;
-  string source_ip = 3;
+  repeated Role roles = 3;
 }
-
+message LoginFailure {
+  bytes subject_hmac = 1;
+  AuthFailureReason reason = 2;
+  uint32 attempt_count = 3;
+}
+message SessionEnded {
+  string subject_id = 1;
+  string session_id = 2;
+  SessionEndKind kind = 3;
+}
 message DetectionWritten {
   string detection_id = 1;
   int64 session_id = 2;
@@ -36,76 +144,84 @@ message DetectionWritten {
   float score = 6;
   int32 track_id = 7;
 }
-
 message AlertDispatched {
   string alert_id = 1;
   int64 session_id = 2;
   string camera_id = 3;
   Severity severity = 4;
   AlertType alert_type = 5;
-  string channel = 6;
+  NotificationChannel channel = 6;
   bool delivered = 7;
-  int32 attempt_count = 8;
-  string failure_reason = 9;
+  uint32 attempt_count = 8;
+  DispatchFailureReason failure_reason = 9;
 }
-
 message AlertAcknowledged {
   string alert_id = 1;
-  string acknowledged_by = 2;
+  string actor_user_id = 2;
 }
-
 message ConfigChanged {
   string actor_user_id = 1;
-  string resource_kind = 2;
+  ConfigResourceKind resource_kind = 2;
   string resource_id = 3;
   string field_path = 4;
-  string before_value_hash = 5;
-  string after_value_hash = 6;
+  bytes before_value_hash = 5;
+  bytes after_value_hash = 6;
 }
-
 message AdminAction {
   string actor_user_id = 1;
-  string action = 2;
-  string target_kind = 3;
+  AdminActionKind action = 2;
+  AdminTargetKind target_kind = 3;
   string target_id = 4;
-  string reason = 5;
+  AdminReasonCode reason_code = 5;
 }
-
 message DefenseRejected {
   int64 session_id = 1;
   int32 frame_index = 2;
-  string rejection_kind = 3;
+  RejectionKind rejection_kind = 3;
   float anomaly_score = 4;
-  string detector_name = 5;
+  DetectorName detector_name = 5;
 }
-
 message DataSubjectErasure {
-  string data_subject_id = 1;
+  bytes data_subject_hmac = 1;
   string requested_by = 2;
-  repeated string scopes = 3;
-  int32 records_deleted = 4;
+  repeated ErasureScope scopes = 3;
+  uint32 records_erased = 4;
   bool completed = 5;
 }
-
 message ServiceLifecycleEvent {
-  string service_name = 1;
-  string event_kind = 2;
+  SourceService service = 1;
+  LifecycleEventKind event_kind = 2;
   string version = 3;
-  string hostname = 4;
 }
-
+message AuthThrottleTriggered {
+  ThrottleBucket bucket = 1;
+  uint32 observed_count = 2;
+  uint32 threshold = 3;
+  uint32 window_seconds = 4;
+  bytes subject_hmac = 5;
+}
+message AuditLogAccessed {
+  string actor_user_id = 1;
+  AuditQueryScope scope = 2;
+  google.protobuf.Timestamp window_from = 3;
+  google.protobuf.Timestamp window_to = 4;
+  SourceService filter_source_service = 5;
+  bytes filter_actor_hmac = 6;
+  Severity filter_min_severity = 7;
+  uint32 rows_returned = 8;
+}
 message AuditEvent {
-  string event_id = 1;
-  google.protobuf.Timestamp occurred_at = 2;
-  string source_service = 3;
-  string trace_id = 4;
-  string actor = 5;
-  Severity severity = 6;
-
+  uint32 schema_version = 1;
+  string event_id = 2;
+  google.protobuf.Timestamp occurred_at = 3;
+  SourceService source_service = 4;
+  string trace_id = 5;
+  string actor = 6;
+  Severity severity = 7;
   oneof payload {
     LoginSuccess login_success = 20;
     LoginFailure login_failure = 21;
-    LogoutEvent logout = 22;
+    SessionEnded session_ended = 22;
     DetectionWritten detection_written = 23;
     AlertDispatched alert_dispatched = 24;
     AlertAcknowledged alert_acknowledged = 25;
@@ -114,58 +230,92 @@ message AuditEvent {
     DefenseRejected defense_rejected = 28;
     DataSubjectErasure data_subject_erasure = 29;
     ServiceLifecycleEvent service_lifecycle = 30;
+    AuthThrottleTriggered auth_throttle_triggered = 31;
+    AuditLogAccessed audit_log_accessed = 32;
   }
 }
-
 enum AppendStatus {
   APPEND_STATUS_UNSPECIFIED = 0;
   APPEND_STATUS_ACCEPTED = 1;
   APPEND_STATUS_REJECTED = 2;
   APPEND_STATUS_RATE_LIMITED = 3;
+  APPEND_STATUS_SCHEMA_UNSUPPORTED = 4;
 }
-
 message AppendEventReply {
   AppendStatus status = 1;
   string sequence_number = 2;
-  string chain_hash = 3;
-  google.protobuf.Timestamp persisted_at = 4;
+  bytes chain_hash = 3;
+  bytes leaf_hash = 4;
+  google.protobuf.Timestamp persisted_at = 5;
 }
-
 message QueryEventsRequest {
   google.protobuf.Timestamp from_time = 1;
   google.protobuf.Timestamp to_time = 2;
-  string source_service = 3;
+  SourceService source_service = 3;
   string actor = 4;
   Severity min_severity = 5;
   int32 page_size = 6;
   string page_token = 7;
 }
-
 message StoredAuditEvent {
   AuditEvent event = 1;
   string sequence_number = 2;
-  string chain_hash = 3;
-  google.protobuf.Timestamp persisted_at = 4;
+  bytes chain_hash = 3;
+  bytes leaf_hash = 4;
+  google.protobuf.Timestamp persisted_at = 5;
+  bool erased = 6;
+  google.protobuf.Timestamp erased_at = 7;
 }
-
 message QueryEventsReply {
   repeated StoredAuditEvent events = 1;
   string next_page_token = 2;
 }
-
 message VerifyChainRequest {
   string from_sequence_number = 1;
   string to_sequence_number = 2;
 }
-
+enum VerifyFailureKind {
+  VERIFY_FAILURE_KIND_UNSPECIFIED = 0;
+  VERIFY_FAILURE_KIND_NONE = 1;
+  VERIFY_FAILURE_KIND_LINKAGE_MISMATCH = 2;
+  VERIFY_FAILURE_KIND_LEAF_MISMATCH = 3;
+  VERIFY_FAILURE_KIND_CHAIN_MISMATCH = 4;
+  VERIFY_FAILURE_KIND_MISSING_PAYLOAD = 5;
+  VERIFY_FAILURE_KIND_CHECKPOINT_SIGNATURE_INVALID = 6;
+  VERIFY_FAILURE_KIND_CHECKPOINT_DIVERGENCE = 7;
+  VERIFY_FAILURE_KIND_ALGORITHM_UNSUPPORTED = 8;
+}
 message VerifyChainReply {
   bool chain_intact = 1;
   string break_at_sequence_number = 2;
-  int64 events_verified = 3;
+  VerifyFailureKind failure_kind = 3;
+  int64 events_verified = 4;
+  int64 erased_rows_verified = 5;
+  int64 checkpoints_verified = 6;
 }
-
+message Checkpoint {
+  int64 checkpoint_id = 1;
+  string tail_sequence_number = 2;
+  bytes tail_chain_hash = 3;
+  int64 tree_size = 4;
+  HashAlgorithm hash_algorithm = 5;
+  SignatureAlgorithm signature_algorithm = 6;
+  bytes signature = 7;
+  string key_id = 8;
+  google.protobuf.Timestamp signed_at = 9;
+  bytes prev_checkpoint_hash = 10;
+  bytes checkpoint_hash = 11;
+}
+message GetCheckpointRequest {
+  int64 checkpoint_id = 1;
+}
+message GetCheckpointReply {
+  bool found = 1;
+  Checkpoint checkpoint = 2;
+}
 service AuditService {
   rpc AppendEvent(AuditEvent) returns (AppendEventReply);
   rpc QueryEvents(QueryEventsRequest) returns (QueryEventsReply);
   rpc VerifyChain(VerifyChainRequest) returns (VerifyChainReply);
+  rpc GetCheckpoint(GetCheckpointRequest) returns (GetCheckpointReply);
 }
