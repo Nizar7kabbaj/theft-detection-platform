@@ -28,10 +28,13 @@ from .core.errors import (
 from .core.rate_limit import RateLimited, rate_limit
 from .core.redis import close_redis, open_redis
 from .grpc_gen.alert_pb2_grpc import AlertServiceStub
+from .grpc_gen.audit_pb2_grpc import AuditServiceStub
 from .grpc_gen.auth_pb2_grpc import AuthServiceStub
 from .grpc_gen.inference_pb2_grpc import InferenceServiceStub
 from .observability import setup_observability
 from .services.broadcast_service import BroadcastService
+from .services.audit_service import drain_pending_appends
+
 logger = logging.getLogger(__name__)
 _GRPC_CHANNEL_OPTIONS = [
     ("grpc.keepalive_time_ms", 30_000),
@@ -75,8 +78,22 @@ async def lifespan(app: FastAPI):
         interceptors=aio_client_interceptors(),
     )
     app.state.auth_stub = AuthServiceStub(app.state.auth_channel)
+    audit_credentials = grpc.ssl_channel_credentials(
+        root_certificates=settings.AUDIT_TLS_CA_FILE.read_bytes(),
+        private_key=settings.AUDIT_TLS_KEY_FILE.read_bytes(),
+        certificate_chain=settings.AUDIT_TLS_CERT_FILE.read_bytes(),
+    )
+    app.state.audit_channel = grpc.aio.secure_channel(
+        settings.AUDIT_TARGET,
+        audit_credentials,
+        options=_GRPC_CHANNEL_OPTIONS,
+        interceptors=aio_client_interceptors(),
+    )
+    app.state.audit_stub = AuditServiceStub(app.state.audit_channel)
     logger.info("backend ready")
     yield
+    await drain_pending_appends()
+    await app.state.audit_channel.close(grace=2)
     await app.state.auth_channel.close(grace=2)
     await app.state.alert_channel.close(grace=2)
     await app.state.inference_channel.close(grace=2)

@@ -43,6 +43,7 @@ _PAYLOAD_FIELD_NUMBERS = {
     "service_lifecycle": 30,
     "auth_throttle_triggered": 31,
     "audit_log_accessed": 32,
+    "authorization_denied": 33,
 }
 
 

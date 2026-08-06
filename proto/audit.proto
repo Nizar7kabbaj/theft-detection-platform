@@ -120,6 +120,11 @@ enum AuditQueryScope {
   AUDIT_QUERY_SCOPE_VERIFY = 2;
   AUDIT_QUERY_SCOPE_CHECKPOINT = 3;
 }
+enum AuthorizationChannel {
+  AUTHORIZATION_CHANNEL_UNSPECIFIED = 0;
+  AUTHORIZATION_CHANNEL_HTTP = 1;
+  AUTHORIZATION_CHANNEL_WEBSOCKET = 2;
+}
 message LoginSuccess {
   string subject_id = 1;
   string session_id = 2;
@@ -210,6 +215,14 @@ message AuditLogAccessed {
   Severity filter_min_severity = 7;
   uint32 rows_returned = 8;
 }
+message AuthorizationDenied {
+  string subject_id = 1;
+  string required_permission = 2;
+  AuthorizationChannel channel = 3;
+  string method = 4;
+  string path = 5;
+  repeated Role subject_roles = 6;
+}
 message AuditEvent {
   uint32 schema_version = 1;
   string event_id = 2;
@@ -232,6 +245,7 @@ message AuditEvent {
     ServiceLifecycleEvent service_lifecycle = 30;
     AuthThrottleTriggered auth_throttle_triggered = 31;
     AuditLogAccessed audit_log_accessed = 32;
+    AuthorizationDenied authorization_denied = 33;
   }
 }
 enum AppendStatus {

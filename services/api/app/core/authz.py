@@ -8,7 +8,9 @@ from typing import Any
 from fastapi import Depends, HTTPException, Request, status
 from starlette.requests import HTTPConnection
 
+from app.grpc_gen import audit_pb2
 from app.schemas.identity import CurrentUser
+from app.services.audit_service import AuditClient
 from app.services.auth_service import AuthClient
 
 logger = logging.getLogger(__name__)
@@ -153,10 +155,20 @@ def require_permission(
     permission: Permission,
 ) -> Callable[[CurrentUser], Coroutine[Any, Any, CurrentUser]]:
     async def _guard(
+        request: Request,
         user: CurrentUser = Depends(get_current_user),
     ) -> CurrentUser:
         granted = _resolve_permissions(user.roles)
         if permission not in granted:
+            audit = AuditClient(request.app.state.audit_stub)
+            audit.emit_authorization_denied(
+                subject_id=user.user_id,
+                required_permission=permission.value,
+                channel=audit_pb2.AUTHORIZATION_CHANNEL_HTTP,
+                method=request.method,
+                path=request.url.path,
+                roles=user.roles,
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="insufficient permission",
