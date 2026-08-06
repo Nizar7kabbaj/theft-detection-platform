@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     NOTIFICATION_TARGET: str = "notification-service:50052"
     AUTH_TARGET:         str = "auth:50053"
     AUTH_VERIFY_TIMEOUT_SECONDS: float = 2.0
+    AUDIT_TARGET:        str = "audit:50054"
+    AUDIT_APPEND_TIMEOUT_SECONDS: float = 2.0
+    AUDIT_TLS_CERT_FILE: Path = Path("/run/secrets/api_tls_cert")
+    AUDIT_TLS_KEY_FILE:  Path = Path("/run/secrets/api_tls_key")
+    AUDIT_TLS_CA_FILE:   Path = Path("/run/secrets/api_tls_ca")
     WS_MAX_CONNECTIONS:   int = 100
     WS_HEARTBEAT_SECONDS: int = 30
     WS_ALLOWED_ORIGINS:   str = "http://localhost:3000"

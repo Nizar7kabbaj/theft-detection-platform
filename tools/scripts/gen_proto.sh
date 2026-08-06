@@ -22,7 +22,7 @@ resolve_outdir() {
 }
 resolve_protos() {
   case "$1" in
-    backend)              echo "common.proto inference.proto alert.proto auth.proto" ;;
+    backend)              echo "common.proto inference.proto alert.proto audit.proto auth.proto" ;;
     ai-service)           echo "common.proto inference.proto alert.proto presence.proto" ;;
     notification-service) echo "common.proto alert.proto" ;;
     camera-service)       echo "common.proto inference.proto" ;;

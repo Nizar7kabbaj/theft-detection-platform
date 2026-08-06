@@ -18,7 +18,9 @@ from app.core.authz import (
     verify_connection,
 )
 from app.core.errors import AuthUnavailable
+from app.grpc_gen import audit_pb2
 from app.schemas.identity import CurrentUser
+from app.services.audit_service import AuditClient
 
 logger = logging.getLogger(__name__)
 
@@ -92,11 +94,19 @@ def require_ws_permission(
                 user.username,
                 permission.value,
             )
+            audit = AuditClient(ws.app.state.audit_stub)
+            audit.emit_authorization_denied(
+                subject_id=user.user_id,
+                required_permission=permission.value,
+                channel=audit_pb2.AUTHORIZATION_CHANNEL_WEBSOCKET,
+                method="",
+                path=ws.url.path,
+                roles=user.roles,
+            )
             raise WebSocketException(
                 code=_POLICY, reason="insufficient permission"
             )
         return user
-
     return _guard
 
 
