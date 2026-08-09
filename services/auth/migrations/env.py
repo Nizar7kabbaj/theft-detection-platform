@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
 from app.core.database import _resolve_postgres_url
-from app.db.base import Base
 from app.db import models  # noqa: F401
+from app.db.base import Base
 
 config = context.config
 

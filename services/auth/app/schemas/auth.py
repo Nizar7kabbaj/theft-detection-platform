@@ -12,11 +12,6 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
-class RefreshRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    refresh_token: str = Field(min_length=1)
-
-
 class LogoutResponse(BaseModel):
     revoked: bool
 

@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     redis_db: int = 0
     redis_password_file: Path = Path("/run/secrets/auth_redis_password")
 
+    audit_target: str = "audit:50054"
+    audit_tls_cert_file: Path = Path("/run/secrets/auth_tls_cert")
+    audit_tls_key_file: Path = Path("/run/secrets/auth_tls_key")
+    audit_tls_ca_file: Path = Path("/run/secrets/auth_tls_ca")
+    audit_append_timeout_seconds: float = 2.0
+    audit_max_inflight_appends: int = 256
+    audit_drain_timeout_seconds: float = 3.0
+    pseudonym_key_file: Path = Path("/run/secrets/auth_pseudonym_key")
+
     access_token_ttl_seconds: int = 900
     refresh_token_ttl_seconds: int = 1209600
     access_cookie_name: str = "__Host-access_token"

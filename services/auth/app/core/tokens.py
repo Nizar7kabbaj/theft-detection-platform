@@ -1,12 +1,16 @@
 from __future__ import annotations
+
 import enum
 import hashlib
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 import jwt
+
 from app.core.config import get_settings
 from app.core.keys import load_private_key, load_public_key
+
 _ALGORITHM = "EdDSA"
 
 
@@ -38,7 +42,7 @@ def hash_refresh_secret(secret: str) -> str:
 def sign_access_token(user_id: str, username: str, roles: list[str], session_id: str) -> tuple[str, str, datetime]:
     settings = get_settings()
     jti = new_jti()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = now + timedelta(seconds=settings.access_token_ttl_seconds)
     claims = {
         "sub": user_id,

@@ -1,10 +1,23 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from ipaddress import ip_address
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
+from app.core.config import get_settings
+from app.core.cookies import (
+    clear_auth_cookies,
+    new_csrf_token,
+    set_auth_cookies,
+)
+from app.core.database import get_sessionmaker
+from app.core.redis import (
+    check_login,
+    record_failure,
+    reset_failures,
+    revoke_jti,
+)
 from app.core.security import hash_password, verify_password
 from app.core.tokens import (
     TokenError,
@@ -14,27 +27,16 @@ from app.core.tokens import (
     new_refresh_secret,
     sign_access_token,
 )
-from app.core.database import get_sessionmaker
-from app.core.redis import (
-    check_login,
-    record_failure,
-    reset_failures,
-    revoke_jti,
-)
-from app.core.config import get_settings
-from app.core.cookies import (
-    clear_auth_cookies,
-    new_csrf_token,
-    set_auth_cookies,
-)
-from app.repositories.user_repository import UserRepository
-from app.repositories.session_repository import SessionRepository
 from app.repositories.refresh_token_repository import RefreshTokenRepository
+from app.repositories.session_repository import SessionRepository
+from app.repositories.user_repository import UserRepository
 from app.schemas.auth import (
     LoginRequest,
     LogoutResponse,
     TokenResponse,
 )
+from app.server.grpc_gen import audit_pb2 as pb
+from app.services.audit_service import audit_client
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -70,6 +72,10 @@ def _client_ip(request: Request) -> str:
     return peer
 
 
+def _user_agent(request: Request) -> str:
+    return request.headers.get("user-agent", "")[:512]
+
+
 def _build_refresh_token(jti: str, secret: str) -> str:
     return f"{jti}.{secret}"
 
@@ -81,13 +87,41 @@ def _split_refresh_token(raw: str) -> tuple[str, str] | None:
     return parts[0], parts[1]
 
 
+def _emit_login_failure(
+    username: str,
+    reason: int,
+    tripped: bool,
+    attempts: int,
+    ip: str,
+    user_agent: str,
+) -> None:
+    client = audit_client()
+    if client is None:
+        return
+    settings = get_settings()
+    client.emit_login_failure(
+        username=username,
+        reason=reason,
+        attempt_count=attempts,
+        source_ip=ip,
+        user_agent=user_agent,
+    )
+    if tripped:
+        client.emit_throttle_triggered(
+            username=username,
+            observed_count=attempts,
+            threshold=settings.login_max_attempts,
+            window_seconds=settings.login_window_seconds,
+        )
+
+
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 async def login(
     payload: LoginRequest, request: Request, response: Response
 ) -> TokenResponse:
     settings = get_settings()
     ip = _client_ip(request)
-
+    user_agent = _user_agent(request)
     locked, retry_ms = await check_login(ip, payload.username)
     if locked:
         retry_after = (retry_ms + 999) // 1000
@@ -96,20 +130,35 @@ async def login(
             detail=_LOCKED_OUT,
             headers={"Retry-After": str(retry_after)},
         )
-
     factory = get_sessionmaker()
     async with factory() as db:
         users = UserRepository(db)
         user = await users.get_by_username(payload.username)
         if user is None:
             verify_password(_DUMMY_HASH, payload.password)
-            await record_failure(ip, payload.username)
+            tripped, attempts = await record_failure(ip, payload.username)
+            _emit_login_failure(
+                payload.username,
+                pb.AUTH_FAILURE_REASON_UNKNOWN_SUBJECT,
+                tripped,
+                attempts,
+                ip,
+                user_agent,
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=_INVALID_CREDENTIALS,
             )
         if not verify_password(user.password_hash, payload.password):
-            await record_failure(ip, payload.username)
+            tripped, attempts = await record_failure(ip, payload.username)
+            _emit_login_failure(
+                payload.username,
+                pb.AUTH_FAILURE_REASON_BAD_CREDENTIAL,
+                tripped,
+                attempts,
+                ip,
+                user_agent,
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=_INVALID_CREDENTIALS,
@@ -118,7 +167,7 @@ async def login(
         login_session = await sessions.create(
             user_id=user.id,
             source_ip=ip,
-            user_agent=request.headers.get("user-agent", ""),
+            user_agent=user_agent,
         )
         access_token, _, _ = sign_access_token(
             user_id=user.id,
@@ -128,10 +177,10 @@ async def login(
         )
         root_jti = new_jti()
         secret = new_refresh_secret()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         refresh_expires_at = datetime.fromtimestamp(
             now.timestamp() + settings.refresh_token_ttl_seconds,
-            tz=timezone.utc,
+            tz=UTC,
         )
         refresh_tokens = RefreshTokenRepository(db)
         await refresh_tokens.create(
@@ -143,6 +192,15 @@ async def login(
         )
         await db.commit()
         await reset_failures(ip, payload.username)
+        client = audit_client()
+        if client is not None:
+            client.emit_login_success(
+                subject_id=user.id,
+                session_id=login_session.id,
+                roles=user.roles,
+                source_ip=ip,
+                user_agent=user_agent,
+            )
         set_auth_cookies(
             response=response,
             access_token=access_token,
@@ -157,6 +215,8 @@ async def login(
 @router.post("/refresh", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 async def refresh(request: Request, response: Response) -> TokenResponse:
     settings = get_settings()
+    ip = _client_ip(request)
+    user_agent = _user_agent(request)
     raw = request.cookies.get(settings.refresh_cookie_name)
     if not raw:
         raise HTTPException(
@@ -184,11 +244,23 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
         if stored.revoked:
             await refresh_tokens.revoke_family(stored.family_id)
             await db.commit()
+            sessions = SessionRepository(db)
+            reused_session = await sessions.get_by_id(stored.session_id)
+            subject_id = reused_session.user_id if reused_session is not None else ""
+            client = audit_client()
+            if client is not None:
+                client.emit_refresh_reuse_detected(
+                    subject_id=subject_id,
+                    session_id=stored.session_id,
+                    family_id=stored.family_id,
+                    source_ip=ip,
+                    user_agent=user_agent,
+                )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=_INVALID_REFRESH,
             )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if stored.expires_at <= now:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -219,7 +291,7 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
         next_secret = new_refresh_secret()
         next_expires_at = datetime.fromtimestamp(
             now.timestamp() + settings.refresh_token_ttl_seconds,
-            tz=timezone.utc,
+            tz=UTC,
         )
         await refresh_tokens.create(
             jti=next_jti,
@@ -230,6 +302,15 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
             rotated_from=stored.jti,
         )
         await db.commit()
+        client = audit_client()
+        if client is not None:
+            client.emit_token_refreshed(
+                subject_id=user.id,
+                session_id=login_session.id,
+                family_id=stored.family_id,
+                source_ip=ip,
+                user_agent=user_agent,
+            )
         set_auth_cookies(
             response=response,
             access_token=access_token,
@@ -244,6 +325,8 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
 @router.post("/logout", response_model=LogoutResponse, status_code=status.HTTP_200_OK)
 async def logout(request: Request, response: Response) -> LogoutResponse:
     settings = get_settings()
+    ip = _client_ip(request)
+    user_agent = _user_agent(request)
     token = request.cookies.get(settings.access_cookie_name, "")
     revoked = False
     if token:
@@ -256,7 +339,7 @@ async def logout(request: Request, response: Response) -> LogoutResponse:
             exp = claims.get("exp")
             if jti and exp:
                 remaining = int(exp) - int(
-                    datetime.now(timezone.utc).timestamp()
+                    datetime.now(UTC).timestamp()
                 )
                 if remaining > 0:
                     await revoke_jti(jti, remaining)
@@ -268,5 +351,15 @@ async def logout(request: Request, response: Response) -> LogoutResponse:
                     await SessionRepository(db).revoke(session_id)
                     await db.commit()
                 revoked = True
+            if revoked:
+                client = audit_client()
+                if client is not None:
+                    client.emit_session_ended(
+                        subject_id=claims.get("sub", ""),
+                        session_id=claims.get("sid", ""),
+                        kind=pb.SESSION_END_KIND_USER_LOGOUT,
+                        source_ip=ip,
+                        user_agent=user_agent,
+                    )
     clear_auth_cookies(response)
     return LogoutResponse(revoked=revoked)
