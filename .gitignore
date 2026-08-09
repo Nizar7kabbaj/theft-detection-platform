@@ -97,3 +97,10 @@ config/pki/*
 !config/pki/ca/
 config/pki/ca/*
 !config/pki/ca/ca.crt
+
+!apps/web/public/**/*.png
+!apps/web/public/**/*.jpg
+!apps/web/public/**/*.jpeg
+!apps/web/public/**/*.svg
+!apps/web/public/**/*.webp
+!apps/web/public/**/*.ico

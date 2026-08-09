@@ -1,0 +1,9 @@
+.next/
+out/
+next-env.d.ts
+.env*.local
+*.tsbuildinfo
+.turbo/
+coverage/
+test-results/
+playwright-report/

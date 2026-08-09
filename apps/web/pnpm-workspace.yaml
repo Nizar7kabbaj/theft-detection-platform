@@ -1,0 +1,7 @@
+packages:
+  - "."
+
+nodeLinker: isolated
+minimumReleaseAge: 4320
+verifyDepsBeforeRun: install
+dangerouslyAllowAllBuilds: false
