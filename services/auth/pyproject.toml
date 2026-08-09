@@ -13,7 +13,7 @@ dependencies = [
     "grpcio==1.71.2",
     "grpcio-health-checking==1.71.2",
     "grpcio-reflection==1.71.2",
-    "protobuf==5.29.5",
+    "protobuf==5.29.6",
     "pydantic[email]==2.13.4",
     "pydantic-settings==2.14.2",
     "python-json-logger==3.2.1",
@@ -43,3 +43,12 @@ markers = [
     "unit: pure unit tests, no external services",
     "integration: tests against a running grpc or http server",
 ]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+extend-exclude = ["app/server/grpc_gen", "migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "A", "C4", "DTZ", "PT", "SIM", "PTH", "ASYNC", "RUF", "PL"]
+ignore = ["E501", "PLR0913", "PLW0603", "N802", "PLR2004"]

@@ -19,7 +19,7 @@ from app.repositories.audit_repository import (
     VERIFY_FAILURE_NONE,
     AuditRepository,
 )
-from app.server.grpc_gen import audit_pb2, audit_pb2_grpc
+from app.server.grpc_gen import audit_pb2, audit_pb2_grpc, common_pb2
 from app.server.interceptors import peer_service
 from app.services.checkpoint_service import verify_checkpoints
 
@@ -30,20 +30,8 @@ _DEFAULT_PAGE_SIZE = 100
 _ACTOR_DOMAIN = "audit-query-actor"
 
 _PAYLOAD_FIELD_NUMBERS = {
-    "login_success": 20,
-    "login_failure": 21,
-    "session_ended": 22,
-    "detection_written": 23,
-    "alert_dispatched": 24,
-    "alert_acknowledged": 25,
-    "config_changed": 26,
-    "admin_action": 27,
-    "defense_rejected": 28,
-    "data_subject_erasure": 29,
-    "service_lifecycle": 30,
-    "auth_throttle_triggered": 31,
-    "audit_log_accessed": 32,
-    "authorization_denied": 33,
+    field.name: field.number
+    for field in audit_pb2.AuditEvent.DESCRIPTOR.oneofs_by_name["payload"].fields
 }
 
 
@@ -112,7 +100,6 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
             return _rejected()
         if not _is_uuid(request.event_id):
             return _rejected()
-
         schema_version = request.schema_version or settings.schema_version
         if (
             schema_version < settings.min_accepted_schema_version
@@ -121,11 +108,9 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
             return audit_pb2.AppendEventReply(
                 status=audit_pb2.APPEND_STATUS_SCHEMA_UNSUPPORTED
             )
-
         occurred_at = _to_datetime(request.occurred_at)
         if occurred_at is None or not _clock_within_bounds(occurred_at):
             return _rejected()
-
         payload_kind = _payload_kind(request)
         if payload_kind == 0:
             return _rejected()
@@ -143,7 +128,6 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
             )
 
         event_bytes = request.SerializeToString(deterministic=True)
-
         factory = get_sessionmaker()
         try:
             async with factory() as db:
@@ -165,7 +149,6 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
         except SQLAlchemyError:
             logger.warning("audit store unavailable during append")
             await context.abort(grpc.StatusCode.UNAVAILABLE, "audit store unavailable")
-
         return audit_pb2.AppendEventReply(
             status=audit_pb2.APPEND_STATUS_ACCEPTED,
             sequence_number=str(result.sequence_number),
@@ -189,8 +172,8 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
         event.schema_version = get_settings().schema_version
         event.event_id = str(uuid.uuid4())
         event.occurred_at.FromDatetime(datetime.now(UTC))
-        event.source_service = 7
-        event.severity = 1
+        event.source_service = common_pb2.SOURCE_SERVICE_AUDIT
+        event.severity = common_pb2.SEVERITY_INFO
         access = event.audit_log_accessed
         access.scope = scope
         access.rows_returned = rows_returned
@@ -208,15 +191,14 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
             except PseudonymKeyError:
                 logger.error("pseudonym key unavailable, access record refused")
                 raise
-
         await AuditRepository(db).append(
             event_id=event.event_id,
             occurred_at=event.occurred_at.ToDatetime(tzinfo=UTC),
-            source_service=7,
+            source_service=common_pb2.SOURCE_SERVICE_AUDIT,
             actor="",
-            severity=1,
+            severity=common_pb2.SEVERITY_INFO,
             trace_id="",
-            payload_kind=32,
+            payload_kind=_PAYLOAD_FIELD_NUMBERS["audit_log_accessed"],
             schema_version=event.schema_version,
             event_bytes=event.SerializeToString(deterministic=True),
         )
@@ -231,16 +213,13 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
             page_size = _MAX_PAGE_SIZE
         if page_size < 1:
             page_size = _DEFAULT_PAGE_SIZE
-
         after, ok = _parse_sequence(request.page_token)
         if not ok:
             await context.abort(
                 grpc.StatusCode.INVALID_ARGUMENT, "malformed page token"
             )
-
         from_time = _to_datetime(request.from_time)
         to_time = _to_datetime(request.to_time)
-
         factory = get_sessionmaker()
         try:
             async with factory() as db:
@@ -272,7 +251,6 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
             await context.abort(
                 grpc.StatusCode.FAILED_PRECONDITION, "access record cannot be written"
             )
-
         stored = []
         for row in rows:
             entry = audit_pb2.StoredAuditEvent(
@@ -294,11 +272,9 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
                     )
                     entry.ClearField("event")
             stored.append(entry)
-
         next_page_token = ""
         if len(rows) == page_size and rows:
             next_page_token = str(rows[-1].sequence_number)
-
         return audit_pb2.QueryEventsReply(
             events=stored, next_page_token=next_page_token
         )
@@ -314,7 +290,6 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
             await context.abort(
                 grpc.StatusCode.INVALID_ARGUMENT, "malformed sequence range"
             )
-
         factory = get_sessionmaker()
         try:
             async with factory() as db:
@@ -337,7 +312,6 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
         except SQLAlchemyError:
             logger.warning("audit store unavailable during verify")
             await context.abort(grpc.StatusCode.UNAVAILABLE, "audit store unavailable")
-
         intact = result.chain_intact and checkpoints.failure_kind == VERIFY_FAILURE_NONE
         failure_kind = result.failure_kind
         break_at = ""
@@ -345,7 +319,6 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
             break_at = str(result.break_at_sequence_number)
         if result.chain_intact and checkpoints.failure_kind != VERIFY_FAILURE_NONE:
             failure_kind = checkpoints.failure_kind
-
         return audit_pb2.VerifyChainReply(
             chain_intact=intact,
             break_at_sequence_number=break_at,
@@ -382,10 +355,8 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
         except SQLAlchemyError:
             logger.warning("audit store unavailable during checkpoint read")
             await context.abort(grpc.StatusCode.UNAVAILABLE, "audit store unavailable")
-
         if row is None:
             return audit_pb2.GetCheckpointReply(found=False)
-
         return audit_pb2.GetCheckpointReply(
             found=True,
             checkpoint=audit_pb2.Checkpoint(

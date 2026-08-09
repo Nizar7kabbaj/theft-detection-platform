@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.models.user import User
+
 from app.core.roles import Role
+from app.db.models.user import User
 
 
 class UserRepository:

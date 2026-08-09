@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-
 from datetime import datetime
 from typing import TYPE_CHECKING
+
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
 
+from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.db.models.session import Session
@@ -40,4 +40,4 @@ class RefreshToken(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    session: Mapped["Session"] = relationship(back_populates="refresh_tokens")
+    session: Mapped[Session] = relationship(back_populates="refresh_tokens")

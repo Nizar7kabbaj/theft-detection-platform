@@ -35,11 +35,15 @@ local count = redis.call('incr', KEYS[1])
 if count == 1 then
     redis.call('pexpire', KEYS[1], window_ms)
 end
-if count >= limit then
+if count == limit then
     redis.call('pexpire', KEYS[1], block_ms)
-    return {1, block_ms}
+    return {1, count}
 end
-return {0, 0}
+if count > limit then
+    redis.call('pexpire', KEYS[1], block_ms)
+    return {0, count}
+end
+return {0, count}
 """
 
 
@@ -101,10 +105,10 @@ async def check_login(ip: str, username: str) -> tuple[bool, int]:
     return locked, retry_ms
 
 
-async def record_failure(ip: str, username: str) -> None:
+async def record_failure(ip: str, username: str) -> tuple[bool, int]:
     _, record = _register_scripts()
     settings = get_settings()
-    await record(
+    result = await record(
         keys=[login_key(ip, username)],
         args=[
             settings.login_max_attempts,
@@ -112,6 +116,7 @@ async def record_failure(ip: str, username: str) -> None:
             settings.login_block_seconds * 1000,
         ],
     )
+    return bool(int(result[0])), int(result[1])
 
 
 async def reset_failures(ip: str, username: str) -> None:

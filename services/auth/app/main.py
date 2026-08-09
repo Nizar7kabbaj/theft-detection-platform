@@ -6,16 +6,20 @@ import signal
 
 import grpc
 import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
+from grpc_reflection.v1alpha import reflection
 
 from app.api.v1.auth import router as auth_router
 from app.core.config import get_settings
 from app.server.grpc_gen import auth_pb2, auth_pb2_grpc
 from app.server.servicer import AuthServicer
-from grpc_reflection.v1alpha import reflection
-
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from app.services.audit_service import (
+    close_audit_client,
+    drain_pending_appends,
+    open_audit_client,
+)
 
 AUTH_SERVICE_FULL_NAME = "theftdetection.v1.AuthService"
 
@@ -64,7 +68,7 @@ async def _run_grpc(stop_event: asyncio.Event) -> None:
     health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
 
     auth_pb2_grpc.add_AuthServiceServicer_to_server(AuthServicer(), server)
-    
+
     service_names = (
         auth_pb2.DESCRIPTOR.services_by_name["AuthService"].full_name,
         health.SERVICE_NAME,
@@ -111,7 +115,7 @@ async def _serve() -> None:
     settings = get_settings()
     logging.basicConfig(level=settings.log_level.upper())
     logger.info("starting auth server")
-
+    open_audit_client()
     stop_event = asyncio.Event()
 
     def _on_signal(signame: str) -> None:
@@ -133,12 +137,13 @@ async def _serve() -> None:
     for task in pending:
         await task
 
+    await drain_pending_appends()
+    await close_audit_client()
     for task in done:
         exc = task.exception()
         if exc is not None:
             logger.error("server task failed: %s", exc)
             raise exc
-
     logger.info("auth server stopped")
 
 

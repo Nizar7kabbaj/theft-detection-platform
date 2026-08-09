@@ -27,7 +27,7 @@ resolve_protos() {
     notification-service) echo "common.proto alert.proto" ;;
     camera-service)       echo "common.proto inference.proto" ;;
     detect-gate-service)  echo "common.proto presence.proto" ;;
-    auth-service)         echo "auth.proto" ;;
+    auth-service)         echo "common.proto audit.proto auth.proto" ;;
     audit-service)        echo "common.proto audit.proto" ;;
     *)                    return 1 ;;
   esac

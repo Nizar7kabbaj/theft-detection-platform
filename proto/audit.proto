@@ -125,20 +125,39 @@ enum AuthorizationChannel {
   AUTHORIZATION_CHANNEL_HTTP = 1;
   AUTHORIZATION_CHANNEL_WEBSOCKET = 2;
 }
+message ClientContext {
+  string source_ip = 1;
+  string user_agent = 2;
+}
 message LoginSuccess {
   string subject_id = 1;
   string session_id = 2;
   repeated Role roles = 3;
+  ClientContext client = 4;
 }
 message LoginFailure {
   bytes subject_hmac = 1;
   AuthFailureReason reason = 2;
   uint32 attempt_count = 3;
+  ClientContext client = 4;
 }
 message SessionEnded {
   string subject_id = 1;
   string session_id = 2;
   SessionEndKind kind = 3;
+  ClientContext client = 4;
+}
+message TokenRefreshed {
+  string subject_id = 1;
+  string session_id = 2;
+  string family_id = 3;
+  ClientContext client = 4;
+}
+message RefreshTokenReuseDetected {
+  string subject_id = 1;
+  string session_id = 2;
+  string family_id = 3;
+  ClientContext client = 4;
 }
 message DetectionWritten {
   string detection_id = 1;
@@ -222,6 +241,7 @@ message AuthorizationDenied {
   string method = 4;
   string path = 5;
   repeated Role subject_roles = 6;
+  ClientContext client = 7;
 }
 message AuditEvent {
   uint32 schema_version = 1;
@@ -246,6 +266,8 @@ message AuditEvent {
     AuthThrottleTriggered auth_throttle_triggered = 31;
     AuditLogAccessed audit_log_accessed = 32;
     AuthorizationDenied authorization_denied = 33;
+    TokenRefreshed token_refreshed = 34;
+    RefreshTokenReuseDetected refresh_token_reuse_detected = 35;
   }
 }
 enum AppendStatus {

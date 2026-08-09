@@ -202,11 +202,17 @@ services:
         - ./config/redis/auth_redis_password:/run/secrets/auth_redis_password:ro
         - ./config/auth/jwt_private.pem:/run/secrets/jwt_private_key:ro
         - ./config/auth/jwt_public.pem:/run/secrets/jwt_public_key:ro
+        - ./config/pki/auth/tls.crt:/run/secrets/auth_tls_cert:ro
+        - ./config/pki/auth/tls.key:/run/secrets/auth_tls_key:ro
+        - ./config/pki/ca/ca.crt:/run/secrets/auth_tls_ca:ro
+        - ./config/audit/pseudonym_key:/run/secrets/auth_pseudonym_key:ro
       depends_on:
         postgres:
           condition: service_healthy
         redis:
           condition: service_started
+        audit-service:
+          condition: service_healthy
       healthcheck:
         test: ["CMD", "grpc_health_probe", "-addr=:50053"]
         interval: 30s

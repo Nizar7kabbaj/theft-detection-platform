@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-
 import logging
 from functools import lru_cache
-from app.core.config import get_settings
 
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 

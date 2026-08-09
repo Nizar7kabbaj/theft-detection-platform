@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+import base64
+import binascii
+import hmac
+from functools import lru_cache
+from hashlib import sha256
+
+from app.core.config import get_settings
+
+_MIN_KEY_BYTES = 32
+
+
+class PseudonymKeyError(RuntimeError):
+    pass
+
+
+@lru_cache(maxsize=1)
+def _load_key() -> bytes:
+    path = get_settings().pseudonym_key_file
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError as exc:
+        raise PseudonymKeyError(f"pseudonym key file missing at {path}") from exc
+    except OSError as exc:
+        raise PseudonymKeyError(f"pseudonym key file unreadable at {path}") from exc
+    if not raw:
+        raise PseudonymKeyError(f"pseudonym key file empty at {path}")
+    try:
+        key = base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise PseudonymKeyError(f"pseudonym key at {path} is not valid base64") from exc
+    if len(key) < _MIN_KEY_BYTES:
+        raise PseudonymKeyError(
+            f"pseudonym key at {path} is {len(key)} bytes, minimum {_MIN_KEY_BYTES}"
+        )
+    return key
+
+
+def pseudonymize(domain: str, value: str) -> bytes:
+    if not domain:
+        raise ValueError("domain must not be empty")
+    if not value:
+        return b""
+    key = _load_key()
+    message = b"".join(
+        [
+            len(domain).to_bytes(8, "big"),
+            domain.encode("utf-8"),
+            len(value.encode("utf-8")).to_bytes(8, "big"),
+            value.encode("utf-8"),
+        ]
+    )
+    return hmac.new(key, message, sha256).digest()
+
+
+def reset_cache() -> None:
+    _load_key.cache_clear()
