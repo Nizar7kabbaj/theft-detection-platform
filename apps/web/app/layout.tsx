@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import "./globals.css"
+import { GeistSans } from "geist/font/sans"
+import { cn } from "@/lib/utils"
 
 export const metadata: Metadata = {
   title: "theft detection platform",
@@ -14,7 +16,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={cn("font-sans", GeistSans.variable)}>
       <body>{children}</body>
     </html>
   )
