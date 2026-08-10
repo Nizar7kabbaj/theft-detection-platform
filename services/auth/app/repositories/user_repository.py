@@ -12,20 +12,14 @@ class UserRepository:
         self._session = session
 
     async def get_by_username(self, username: str) -> User | None:
-        result = await self._session.execute(
-            select(User).where(User.username == username)
-        )
+        result = await self._session.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
     async def get_by_id(self, user_id: str) -> User | None:
-        result = await self._session.execute(
-            select(User).where(User.id == user_id)
-        )
+        result = await self._session.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
 
-    async def create(
-        self, username: str, password_hash: str, roles: list[str]
-    ) -> User:
+    async def create(self, username: str, password_hash: str, roles: list[str]) -> User:
         validated = [str(Role(r)) for r in roles]
         user = User(
             username=username,

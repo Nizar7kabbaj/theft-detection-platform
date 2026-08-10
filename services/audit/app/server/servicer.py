@@ -79,9 +79,7 @@ def _clock_within_bounds(occurred_at: datetime) -> bool:
     now = datetime.now(UTC)
     if occurred_at > now + timedelta(seconds=settings.max_clock_skew_seconds):
         return False
-    if occurred_at < now - timedelta(seconds=settings.max_backdate_seconds):
-        return False
-    return True
+    return occurred_at >= now - timedelta(seconds=settings.max_backdate_seconds)
 
 
 def _rejected() -> audit_pb2.AppendEventReply:
@@ -105,9 +103,7 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
             schema_version < settings.min_accepted_schema_version
             or schema_version > settings.schema_version
         ):
-            return audit_pb2.AppendEventReply(
-                status=audit_pb2.APPEND_STATUS_SCHEMA_UNSUPPORTED
-            )
+            return audit_pb2.AppendEventReply(status=audit_pb2.APPEND_STATUS_SCHEMA_UNSUPPORTED)
         occurred_at = _to_datetime(request.occurred_at)
         if occurred_at is None or not _clock_within_bounds(occurred_at):
             return _rejected()
@@ -123,9 +119,7 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
         except RedisError:
             allowed = not settings.append_rate_fail_closed
         if not allowed:
-            return audit_pb2.AppendEventReply(
-                status=audit_pb2.APPEND_STATUS_RATE_LIMITED
-            )
+            return audit_pb2.AppendEventReply(status=audit_pb2.APPEND_STATUS_RATE_LIMITED)
 
         event_bytes = request.SerializeToString(deterministic=True)
         factory = get_sessionmaker()
@@ -209,15 +203,12 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> audit_pb2.QueryEventsReply:
         page_size = request.page_size or _DEFAULT_PAGE_SIZE
-        if page_size > _MAX_PAGE_SIZE:
-            page_size = _MAX_PAGE_SIZE
+        page_size = min(page_size, _MAX_PAGE_SIZE)
         if page_size < 1:
             page_size = _DEFAULT_PAGE_SIZE
         after, ok = _parse_sequence(request.page_token)
         if not ok:
-            await context.abort(
-                grpc.StatusCode.INVALID_ARGUMENT, "malformed page token"
-            )
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "malformed page token")
         from_time = _to_datetime(request.from_time)
         to_time = _to_datetime(request.to_time)
         factory = get_sessionmaker()
@@ -275,9 +266,7 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
         next_page_token = ""
         if len(rows) == page_size and rows:
             next_page_token = str(rows[-1].sequence_number)
-        return audit_pb2.QueryEventsReply(
-            events=stored, next_page_token=next_page_token
-        )
+        return audit_pb2.QueryEventsReply(events=stored, next_page_token=next_page_token)
 
     async def VerifyChain(
         self,
@@ -287,17 +276,13 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
         start, ok_start = _parse_sequence(request.from_sequence_number)
         end, ok_end = _parse_sequence(request.to_sequence_number)
         if not ok_start or not ok_end:
-            await context.abort(
-                grpc.StatusCode.INVALID_ARGUMENT, "malformed sequence range"
-            )
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "malformed sequence range")
         factory = get_sessionmaker()
         try:
             async with factory() as db:
                 events = AuditRepository(db)
                 checkpoints = await verify_checkpoints(events)
-                result = await events.verify(
-                    from_sequence_number=start, to_sequence_number=end
-                )
+                result = await events.verify(from_sequence_number=start, to_sequence_number=end)
                 await self._record_access(
                     db,
                     audit_pb2.AUDIT_QUERY_SCOPE_VERIFY,

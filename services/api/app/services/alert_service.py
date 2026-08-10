@@ -1,13 +1,17 @@
 from __future__ import annotations
+
 import logging
+
 import grpc
 from google.protobuf.timestamp_pb2 import Timestamp
 from opentelemetry import trace
-from app.core.errors import AlertUnavailable
+
+from app.core.errors import AlertUnavailableError
 from app.grpc_gen import alert_pb2 as pb
 from app.grpc_gen import common_pb2
 from app.grpc_gen.alert_pb2_grpc import AlertServiceStub
 from app.schemas.alert import AlertCreate, Bbox, Keypoint, Object, Person
+
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 _TRANSIENT_CODES = {
@@ -23,10 +27,7 @@ def _to_bbox(bbox: Bbox | None) -> common_pb2.Bbox | None:
 
 
 def _to_keypoints(items: list[Keypoint]) -> list[common_pb2.Keypoint]:
-    return [
-        common_pb2.Keypoint(x=kp.x, y=kp.y, confidence=kp.confidence)
-        for kp in items
-    ]
+    return [common_pb2.Keypoint(x=kp.x, y=kp.y, confidence=kp.confidence) for kp in items]
 
 
 def _to_person(person: Person | None) -> common_pb2.Person | None:
@@ -79,6 +80,7 @@ def _to_proto(payload: AlertCreate) -> pb.Alert:
 class AlertClient:
     def __init__(self, stub: AlertServiceStub) -> None:
         self._stub = stub
+
     async def send(self, payload: AlertCreate) -> None:
         proto = _to_proto(payload)
         with tracer.start_as_current_span("alert.send") as span:
@@ -94,6 +96,6 @@ class AlertClient:
                         exc.code().name,
                         exc.details(),
                     )
-                    raise AlertUnavailable("alert service unavailable") from exc
+                    raise AlertUnavailableError("alert service unavailable") from exc
                 raise
             span.set_attribute("alert.status", pb.Status.Name(response.status))

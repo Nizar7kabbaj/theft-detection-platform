@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 
@@ -27,9 +28,7 @@ class BroadcastService:
         self._redis = redis
         self._max = max_connections
         self._heartbeat = heartbeat_seconds
-        self._connections: dict[str, set[WebSocket]] = {
-            topic: set() for topic in _TOPIC_PATTERNS
-        }
+        self._connections: dict[str, set[WebSocket]] = {topic: set() for topic in _TOPIC_PATTERNS}
         self._pubsub: PubSub | None = None
         self._listener_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
@@ -41,9 +40,7 @@ class BroadcastService:
     async def start(self) -> None:
         self._pubsub = self._redis.pubsub()
         await self._pubsub.psubscribe(*_TOPIC_PATTERNS.values())
-        self._listener_task = asyncio.create_task(
-            self._listen(), name="ws-broadcast-listener"
-        )
+        self._listener_task = asyncio.create_task(self._listen(), name="ws-broadcast-listener")
         self._heartbeat_task = asyncio.create_task(
             self._heartbeat_loop(), name="ws-broadcast-heartbeat"
         )
@@ -57,10 +54,8 @@ class BroadcastService:
             if task is None:
                 continue
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
         if self._pubsub is not None:
             await self._pubsub.punsubscribe()
             await self._pubsub.aclose()
@@ -98,12 +93,12 @@ class BroadcastService:
         )
 
     async def _listen(self) -> None:
-        assert self._pubsub is not None
+        pubsub = self._pubsub
+        if pubsub is None:
+            return
         while True:
             try:
-                message = await self._pubsub.get_message(
-                    ignore_subscribe_messages=True, timeout=1.0
-                )
+                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
                 if message is None:
                     continue
                 if message["type"] not in ("message", "pmessage"):

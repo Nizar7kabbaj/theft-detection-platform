@@ -27,9 +27,7 @@ class Settings(BaseSettings):
     postgres_app_user: str = "audit_app"
     postgres_app_password_file: Path = Path("/run/secrets/audit_app_postgres_password")
     postgres_owner_user: str = "audit_owner"
-    postgres_owner_password_file: Path = Path(
-        "/run/secrets/audit_owner_postgres_password"
-    )
+    postgres_owner_password_file: Path = Path("/run/secrets/audit_owner_postgres_password")
 
     redis_host: str = "redis"
     redis_port: int = 6379
@@ -67,9 +65,7 @@ class Settings(BaseSettings):
 
     pseudonym_key_file: Path = Path("/run/secrets/audit_pseudonym_key")
     pseudonym_key_id: str = "p1"
-    checkpoint_private_key_file: Path = Path(
-        "/run/secrets/audit_checkpoint_private_key"
-    )
+    checkpoint_private_key_file: Path = Path("/run/secrets/audit_checkpoint_private_key")
     checkpoint_public_key_file: Path = Path("/run/secrets/audit_checkpoint_public_key")
     checkpoint_key_id: str = "c1"
     checkpoint_interval_events: int = 1000

@@ -134,9 +134,7 @@ async def checkpoint_loop(stop_event: asyncio.Event) -> None:
 
     while not stop_event.is_set():
         try:
-            await asyncio.wait_for(
-                stop_event.wait(), timeout=settings.checkpoint_interval_seconds
-            )
+            await asyncio.wait_for(stop_event.wait(), timeout=settings.checkpoint_interval_seconds)
             break
         except TimeoutError:
             pass

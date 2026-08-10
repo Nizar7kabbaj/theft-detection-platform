@@ -1,19 +1,25 @@
 from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 import grpc
 from google.protobuf.timestamp_pb2 import Timestamp
 from opentelemetry import trace
-from app.core.errors import InferenceUnavailable
+
+from app.core.errors import InferenceUnavailableError
 from app.grpc_gen import inference_pb2 as pb
 from app.grpc_gen.inference_pb2_grpc import InferenceServiceStub
+
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 _TRANSIENT_CODES = {
     grpc.StatusCode.UNAVAILABLE,
     grpc.StatusCode.DEADLINE_EXCEEDED,
 }
+
+
 @dataclass(frozen=True, slots=True)
 class InferenceResult:
     bbox: dict[str, float]
@@ -22,9 +28,12 @@ class InferenceResult:
     inference_state: int
     track_id: int = 0
     detection_present: bool = False
+
+
 class InferenceClient:
     def __init__(self, stub: InferenceServiceStub) -> None:
         self._stub = stub
+
     async def analyze(
         self,
         payload: bytes,
@@ -32,7 +41,7 @@ class InferenceClient:
         frame_index: int,
     ) -> InferenceResult:
         ts = Timestamp()
-        ts.FromDatetime(datetime.now(timezone.utc))
+        ts.FromDatetime(datetime.now(UTC))
         frame = pb.Frame(
             payload=payload,
             session_id=session_id,
@@ -52,20 +61,23 @@ class InferenceClient:
                         exc.code().name,
                         exc.details(),
                     )
-                    raise InferenceUnavailable("inference service unavailable") from exc
+                    raise InferenceUnavailableError("inference service unavailable") from exc
                 raise
             span.set_attribute("detection.score", response.score)
-            span.set_attribute("detection.inference_state", pb.InferenceState.Name(response.inference_state))
+            span.set_attribute(
+                "detection.inference_state", pb.InferenceState.Name(response.inference_state)
+            )
             span.set_attribute("detection.track_id", response.track_id)
             span.set_attribute("detection.present", response.detection_present)
             return _to_result(response)
+
+
 def _to_result(response: pb.Detection) -> InferenceResult:
     bbox = response.bbox
     return InferenceResult(
         bbox={"x1": bbox.x1, "y1": bbox.y1, "x2": bbox.x2, "y2": bbox.y2},
         keypoints=[
-            {"x": kp.x, "y": kp.y, "confidence": kp.confidence}
-            for kp in response.keypoints
+            {"x": kp.x, "y": kp.y, "confidence": kp.confidence} for kp in response.keypoints
         ],
         score=response.score,
         inference_state=response.inference_state,

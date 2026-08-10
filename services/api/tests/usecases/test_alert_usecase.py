@@ -1,13 +1,12 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
-from app.core.errors import AlertUnavailable, NotFoundError
+from app.core.errors import AlertUnavailableError, NotFoundError
 from app.schemas.alert import AlertCreate, AlertResponse, AlertType
 from app.usecases.alert_usecase import _to_response
 
-
-OCCURRED_AT = datetime(2026, 6, 12, 10, 0, 0, tzinfo=timezone.utc)
+OCCURRED_AT = datetime(2026, 6, 12, 10, 0, 0, tzinfo=UTC)
 
 
 VALID_PAYLOAD = {
@@ -101,7 +100,7 @@ class TestCreate:
         mock_alert_client.send.assert_awaited_once()
 
     async def test_swallows_alert_unavailable(self, alert_usecase, mock_alert_client):
-        mock_alert_client.send.side_effect = AlertUnavailable("downstream down")
+        mock_alert_client.send.side_effect = AlertUnavailableError("downstream down")
         payload = AlertCreate(**VALID_PAYLOAD)
         resp = await alert_usecase.create(payload)
         assert resp.alert_id == "a1"
@@ -152,7 +151,7 @@ class TestList:
     ):
         fake_alert_repo.store[sample_alert_doc["_id"]] = {
             **sample_alert_doc,
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
         }
 
         async def call_loader(_redis, _key, _ttl, loader):
@@ -168,9 +167,7 @@ class TestList:
 
 
 class TestAcknowledge:
-    async def test_marks_alert_acknowledged(
-        self, alert_usecase, fake_alert_repo, sample_alert_doc
-    ):
+    async def test_marks_alert_acknowledged(self, alert_usecase, fake_alert_repo, sample_alert_doc):
         fake_alert_repo.store[sample_alert_doc["_id"]] = {**sample_alert_doc}
         resp = await alert_usecase.acknowledge(sample_alert_doc["_id"])
         assert isinstance(resp, AlertResponse)

@@ -108,7 +108,7 @@ async def receive_alertmanager(payload: AlertmanagerWebhook) -> None:
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="intent write failed",
-                )
+                ) from exc
             span.set_attribute("alertmanager.persisted", True)
             span.set_attribute("intent.id", intent.id)
 
@@ -120,7 +120,7 @@ async def receive_alertmanager(payload: AlertmanagerWebhook) -> None:
                 )
             except Exception as exc:
                 logger.warning(
-                    "enqueue failed for alertmanager group=%s intent=%s: %s, reconciler will pick up",
+                    "enqueue failed group=%s intent=%s: %s, reconciler will retry",
                     payload.group_key,
                     intent.id,
                     exc,

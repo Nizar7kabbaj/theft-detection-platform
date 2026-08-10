@@ -39,7 +39,9 @@ def hash_refresh_secret(secret: str) -> str:
     return hashlib.sha256(secret.encode("utf-8")).hexdigest()
 
 
-def sign_access_token(user_id: str, username: str, roles: list[str], session_id: str) -> tuple[str, str, datetime]:
+def sign_access_token(
+    user_id: str, username: str, roles: list[str], session_id: str
+) -> tuple[str, str, datetime]:
     settings = get_settings()
     jti = new_jti()
     now = datetime.now(UTC)

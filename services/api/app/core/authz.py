@@ -74,11 +74,11 @@ _UNAUTHENTICATED = HTTPException(
 )
 
 
-class TokenMissing(Exception):
+class TokenMissingError(Exception):
     pass
 
 
-class TokenRejected(Exception):
+class TokenRejectedError(Exception):
     pass
 
 
@@ -98,10 +98,10 @@ def extract_token(connection: HTTPConnection) -> str:
         return cookie_token
     header = connection.headers.get("authorization")
     if header is None:
-        raise TokenMissing
+        raise TokenMissingError
     scheme, _, token = header.partition(" ")
     if scheme.lower() != "bearer" or not token:
-        raise TokenMissing
+        raise TokenMissingError
     return token
 
 
@@ -124,7 +124,7 @@ async def verify_connection(
             "token rejected status=%s",
             pb.VerificationStatus.Name(result.status),
         )
-        raise TokenRejected
+        raise TokenRejectedError
     return CurrentUser(
         user_id=result.user_id,
         username=result.username,
@@ -140,7 +140,7 @@ async def get_current_user(
     try:
         token = extract_token(request)
         return await verify_connection(request, auth_client, token)
-    except (TokenMissing, TokenRejected) as exc:
+    except (TokenMissingError, TokenRejectedError) as exc:
         raise _UNAUTHENTICATED from exc
 
 
@@ -174,4 +174,5 @@ def require_permission(
                 detail="insufficient permission",
             )
         return user
+
     return _guard

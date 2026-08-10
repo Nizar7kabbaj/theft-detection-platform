@@ -26,3 +26,6 @@ dependencies = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
+[tool.ruff]
+extend = "../../ruff.toml"

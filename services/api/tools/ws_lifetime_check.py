@@ -69,7 +69,7 @@ async def watch(token: str, hold_seconds: int) -> int:
                 return 0
             try:
                 await asyncio.wait_for(ws.recv(), timeout=min(remaining, 10.0))
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 print(f"  {int(time.monotonic() - started)}s open")
             except ConnectionClosed as exc:
                 print(

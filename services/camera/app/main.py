@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-
 import asyncio
+import contextlib
 import logging
 import signal
 
 import grpc
 
-from app.core.config import Settings, get_settings
-from app.observability import register_capture_metrics, setup_observability
 from app.capture.buffer import ForwardBuffer
 from app.capture.device import CameraDevice
 from app.capture.forwarder import Forwarder
 from app.capture.loop import CaptureLoop
 from app.capture.publisher import FramePublisher
 from app.capture.rate import RateController
+from app.core.config import Settings, get_settings
+from app.observability import register_capture_metrics, setup_observability
 
 
 def _channel_credentials(settings: Settings) -> grpc.ChannelCredentials:
@@ -93,14 +93,16 @@ async def _serve() -> None:
     log.info("shutdown signal received")
     await forwarder.stop()
     forward_task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await forward_task
-    except asyncio.CancelledError:
-        pass
     loop.stop()
     publisher.stop()
     log.info("camera service stopped")
+
+
 def main() -> None:
     asyncio.run(_serve())
+
+
 if __name__ == "__main__":
     main()

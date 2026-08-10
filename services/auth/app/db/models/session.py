@@ -11,6 +11,8 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.db.models.refresh_token import RefreshToken
+
+
 class Session(Base):
     __tablename__ = "sessions"
     id: Mapped[str] = mapped_column(
@@ -18,14 +20,10 @@ class Session(Base):
         primary_key=True,
         server_default=text("gen_random_uuid()"),
     )
-    user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), nullable=False, index=True
-    )
+    user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False, index=True)
     source_ip: Mapped[str] = mapped_column(String(45), nullable=False, server_default=text("''"))
     user_agent: Mapped[str] = mapped_column(String(512), nullable=False, server_default=text("''"))
-    revoked: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("false")
-    )
+    revoked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

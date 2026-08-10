@@ -1,6 +1,6 @@
 import logging
 import os
-from prometheus_client import start_http_server
+
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
@@ -10,6 +10,7 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from prometheus_client import start_http_server
 from pythonjsonlogger.json import JsonFormatter
 
 
@@ -34,6 +35,7 @@ def setup_observability(service_name: str) -> None:
     root.setLevel(logging.INFO)
     GrpcAioInstrumentorServer().instrument()
 
+
 def get_frames_counter():
     meter = metrics.get_meter("theft.ai")
     return meter.create_counter(
@@ -41,6 +43,7 @@ def get_frames_counter():
         unit="1",
         description="frames processed by the inference pipeline",
     )
+
 
 def get_inference_histogram():
     meter = metrics.get_meter("theft.ai")
@@ -50,6 +53,7 @@ def get_inference_histogram():
         description="time spent running the detector on a single frame",
     )
 
+
 def get_presence_events_counter():
     meter = metrics.get_meter("theft.ai")
     return meter.create_counter(
@@ -58,12 +62,16 @@ def get_presence_events_counter():
         description="presence events received from the detect gate",
     )
 
+
 def register_presence_gauge(servicer) -> None:
     from opentelemetry.metrics import CallbackOptions, Observation
+
     meter = metrics.get_meter("theft.ai")
+
     def _presence(options: CallbackOptions):
         for camera_id in servicer.cameras():
             yield Observation(servicer.presence_value(camera_id), {"camera_id": camera_id})
+
     meter.create_observable_gauge(
         "theft_ai_presence_state",
         callbacks=[_presence],

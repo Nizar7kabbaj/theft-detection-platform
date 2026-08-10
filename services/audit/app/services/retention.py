@@ -74,9 +74,7 @@ class RetentionService:
         )
         return result.scalar_one_or_none()
 
-    async def next_segment(
-        self, now: datetime | None = None
-    ) -> SegmentCandidate | None:
+    async def next_segment(self, now: datetime | None = None) -> SegmentCandidate | None:
         settings = get_settings()
         cutoff = retention_cutoff(now)
         sealed_through = await self._sealed_through()
@@ -85,9 +83,7 @@ class RetentionService:
         if oldest is None:
             return None
 
-        window_end = oldest.persisted_at + timedelta(
-            days=settings.segment_interval_days
-        )
+        window_end = oldest.persisted_at + timedelta(days=settings.segment_interval_days)
         if window_end > cutoff:
             return None
 
@@ -116,15 +112,13 @@ class RetentionService:
             return None
         if successor.prev_hash != tail.chain_hash:
             raise RetentionError(
-                f"chain linkage broken at boundary {tail.sequence_number}, "
-                "refusing to seal"
+                f"chain linkage broken at boundary {tail.sequence_number}, refusing to seal"
             )
 
         algorithms = {row.hash_algorithm for row in rows}
         if len(algorithms) != 1:
             raise RetentionError(
-                "mixed hash algorithms in range "
-                f"{head.sequence_number}-{tail.sequence_number}"
+                f"mixed hash algorithms in range {head.sequence_number}-{tail.sequence_number}"
             )
 
         return SegmentCandidate(
@@ -189,8 +183,7 @@ class RetentionService:
         )
         if deleted.rowcount != candidate.row_count:
             raise RetentionError(
-                f"expected to drop {candidate.row_count} rows, "
-                f"dropped {deleted.rowcount}"
+                f"expected to drop {candidate.row_count} rows, dropped {deleted.rowcount}"
             )
 
         survivor = await self._oldest_live(candidate.last_sequence_number)

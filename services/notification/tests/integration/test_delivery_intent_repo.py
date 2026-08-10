@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from app.repositories.delivery_intent import DeliveryIntentRepository
 from app.shared.config import settings
 from app.shared.schemas.delivery import DeliveryStatus
 
@@ -15,7 +14,7 @@ COLL = settings.DELIVERY_INTENT_COLLECTION
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 async def test_acquire_persists_pending(intent_repo, make_create) -> None:
@@ -105,9 +104,7 @@ async def test_mark_requeued_skips_sent(intent_repo, make_create, age_doc) -> No
     assert await intent_repo.mark_requeued(intent.id, cutoff) is None
 
 
-async def test_find_stale_returns_old_sending(
-    intent_repo, make_create, age_doc
-) -> None:
+async def test_find_stale_returns_old_sending(intent_repo, make_create, age_doc) -> None:
     intent = await intent_repo.acquire(make_create())
     await age_doc(
         COLL,
@@ -120,9 +117,7 @@ async def test_find_stale_returns_old_sending(
     assert [i.id for i in stale] == [intent.id]
 
 
-async def test_find_stale_ignores_fresh_sending(
-    intent_repo, make_create, age_doc
-) -> None:
+async def test_find_stale_ignores_fresh_sending(intent_repo, make_create, age_doc) -> None:
     intent = await intent_repo.acquire(make_create())
     await age_doc(COLL, intent.id, _now(), status=DeliveryStatus.SENDING.value)
     cutoff = _now() - timedelta(minutes=1)

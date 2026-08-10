@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.core.config import settings
@@ -20,9 +20,11 @@ _INFERENCE_TO_ALERT_TYPE: dict[int, AlertType] = {
     pb.InferenceState.INFERENCE_STATE_ANOMALY: AlertType.ALERT_TYPE_OBJECT_PROXIMITY,
 }
 
+_WARNING_SCORE_THRESHOLD = 0.9
+
 
 def _severity_from_score(score: float) -> Severity:
-    if score >= 0.9:
+    if score >= _WARNING_SCORE_THRESHOLD:
         return Severity.SEVERITY_WARNING
     return Severity.SEVERITY_NOTICE
 
@@ -38,7 +40,7 @@ class DetectionUseCase:
 
     async def create(self, payload: DetectionCreate) -> DetectionResponse:
         doc = payload.model_dump()
-        doc["created_at"] = datetime.now(timezone.utc)
+        doc["created_at"] = datetime.now(UTC)
         created = await self._repo.create(doc)
         return DetectionResponse.model_validate(created)
 
@@ -55,7 +57,7 @@ class DetectionUseCase:
             session_id=session_id,
             frame_index=frame_index,
         )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         doc = {
             "session_id": session_id,

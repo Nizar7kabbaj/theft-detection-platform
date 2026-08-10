@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from redis.asyncio import Redis
 
 from app.core.cache import get_or_set, invalidate_prefix, make_list_key
-from app.core.errors import AlertUnavailable, NotFoundError
+from app.core.errors import AlertUnavailableError, NotFoundError
 from app.repositories.alert_repository import AlertRepository
 from app.schemas.alert import AlertCreate, AlertResponse, AlertType, Severity
 from app.services.alert_service import AlertClient
@@ -72,13 +72,13 @@ class AlertUseCase:
     async def create(self, payload: AlertCreate) -> AlertResponse:
         doc = payload.model_dump(mode="json")
         doc["occurred_at"] = payload.occurred_at
-        doc["created_at"] = datetime.now(timezone.utc)
+        doc["created_at"] = datetime.now(UTC)
         doc["acknowledged"] = False
         created = await self._repo.create(doc)
 
         try:
             await self._alert_client.send(payload)
-        except AlertUnavailable as exc:
+        except AlertUnavailableError as exc:
             logger.warning("alert delivery unavailable for %s: %s", payload.alert_id, exc)
 
         await invalidate_prefix(self._redis, self.LIST_PREFIX)

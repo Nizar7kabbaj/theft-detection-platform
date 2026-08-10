@@ -1,11 +1,10 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from bson import ObjectId
 
 from app.core.errors import ValidationError
 from app.repositories.alert_repository import AlertRepository
-
 
 VALID_OID = "65f1a2b3c4d5e6f7a8b9c0d1"
 
@@ -141,18 +140,14 @@ class TestCount:
     async def test_with_query(self, repo, mock_collection):
         mock_collection.count_documents.return_value = 3
         await repo.count({"severity": "SEVERITY_WARNING"})
-        mock_collection.count_documents.assert_awaited_once_with(
-            {"severity": "SEVERITY_WARNING"}
-        )
+        mock_collection.count_documents.assert_awaited_once_with({"severity": "SEVERITY_WARNING"})
 
 
 class TestListFiltered:
     async def test_no_severity_passes_empty_query(self, repo, mocker):
         spy = mocker.patch.object(repo, "list", new=mocker.AsyncMock(return_value=[]))
         await repo.list_filtered()
-        spy.assert_awaited_once_with(
-            query={}, limit=50, skip=0, sort=[("created_at", -1)]
-        )
+        spy.assert_awaited_once_with(query={}, limit=50, skip=0, sort=[("created_at", -1)])
 
     async def test_severity_passed_through_unchanged(self, repo, mocker):
         spy = mocker.patch.object(repo, "list", new=mocker.AsyncMock(return_value=[]))
@@ -179,7 +174,7 @@ class TestAcknowledge:
         changes = update["$set"]
         assert changes["acknowledged"] is True
         assert isinstance(changes["acknowledged_at"], datetime)
-        assert changes["acknowledged_at"].tzinfo == timezone.utc
+        assert changes["acknowledged_at"].tzinfo == UTC
 
     async def test_first_acknowledge_reports_flipped(self, repo, mock_collection, mocker):
         mock_collection.update_one.return_value = mocker.MagicMock(matched_count=1)

@@ -7,8 +7,8 @@ from typing import Any
 from fastapi import Depends, Request
 from redis.asyncio import Redis
 
-from .errors import ConflictError
-from .redis import get_redis
+from app.core.errors import ConflictError
+from app.core.redis import get_redis
 
 logger = logging.getLogger(__name__)
 

@@ -35,9 +35,7 @@ class RefreshTokenRepository:
         await self._session.refresh(token)
         return token
 
-    async def get_by_jti_and_hash(
-        self, jti: str, token_hash: str
-    ) -> RefreshToken | None:
+    async def get_by_jti_and_hash(self, jti: str, token_hash: str) -> RefreshToken | None:
         result = await self._session.execute(
             select(RefreshToken).where(
                 RefreshToken.jti == jti,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import redis
 
@@ -25,7 +25,7 @@ def _redis() -> redis.Redis:
 
 
 def gate_set(reason: str) -> None:
-    stamp = datetime.now(timezone.utc).isoformat()
+    stamp = datetime.now(UTC).isoformat()
     value = f"{stamp} {reason}"
     _redis().set(settings.GATE_KEY, value, ex=settings.GATE_TTL_SEC)
     logger.warning("delivery gate raised: %s", reason)

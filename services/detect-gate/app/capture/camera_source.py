@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 
@@ -37,10 +38,8 @@ class CameraFrameSource:
 
     def _drop_client(self) -> None:
         if self._client is not None:
-            try:
+            with contextlib.suppress(redis.exceptions.RedisError):
                 self._client.close()
-            except redis.exceptions.RedisError:
-                pass
             self._client = None
         self._connected_logged = False
 
@@ -61,10 +60,14 @@ class CameraFrameSource:
                 return None
             frame = cv2.imdecode(np.frombuffer(payload, dtype=np.uint8), cv2.IMREAD_COLOR)
             if frame is None:
-                logger.warning("frame decode failed stream=%s bytes=%d", self._stream_key, len(payload))
+                logger.warning(
+                    "frame decode failed stream=%s bytes=%d", self._stream_key, len(payload)
+                )
             return frame
         except redis.exceptions.RedisError as exc:
-            logger.warning("frame read failed error=%s, backing off %.1fs", type(exc).__name__, self._backoff)
+            logger.warning(
+                "frame read failed error=%s, backing off %.1fs", type(exc).__name__, self._backoff
+            )
             self._drop_client()
             time.sleep(self._backoff)
             self._backoff = min(self._backoff * 2, self._retry_backoff_max)

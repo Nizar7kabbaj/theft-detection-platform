@@ -1,19 +1,21 @@
 from __future__ import annotations
+
 import asyncio
+import contextlib
 import logging
-import os
 import signal
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import grpc
 
-from app.core.config import Settings, get_settings
-from app.observability import register_gate_metrics, setup_observability
 from app.capture.camera_source import CameraFrameSource
-from app.capture.frame_source import ClipFrameSource, FrameSource
 from app.capture.detector import PersonDetector
+from app.capture.frame_source import ClipFrameSource, FrameSource
 from app.capture.presence import PresenceEdge, PresenceState, PresenceStateMachine
 from app.capture.presence_client import PresenceClient
+from app.core.config import Settings, get_settings
+from app.observability import register_gate_metrics, setup_observability
 
 
 def _channel_credentials(settings: Settings) -> grpc.ChannelCredentials:
@@ -29,12 +31,15 @@ _STATE_TO_GAUGE = {
     PresenceState.ABSENT: 0,
     PresenceState.PRESENT: 1,
 }
+
+
 class GateCounters:
     def __init__(self) -> None:
         self.frames_processed_total = 0
         self.person_detections_total = 0
         self.entries_total = 0
         self.exits_total = 0
+
     def snapshot(self) -> dict[str, int]:
         return {
             "frames_processed_total": self.frames_processed_total,
@@ -42,8 +47,12 @@ class GateCounters:
             "entries_total": self.entries_total,
             "exits_total": self.exits_total,
         }
-def _touch(path: str) -> None:
-    os.utime(path, None) if os.path.exists(path) else open(path, "w").close()
+
+
+def _touch(path: Path) -> None:
+    path.touch()
+
+
 async def _frame_loop(
     source: FrameSource,
     detector: PersonDetector,
@@ -52,7 +61,7 @@ async def _frame_loop(
     counters: GateCounters,
     pool: ThreadPoolExecutor,
     camera_id: str,
-    heartbeat_path: str,
+    heartbeat_path: Path,
     stop_event: asyncio.Event,
 ) -> None:
     loop = asyncio.get_running_loop()
@@ -77,6 +86,8 @@ async def _frame_loop(
             counters.exits_total += 1
             client.submit(edge, result.top_confidence, frame_index)
             log.info("person left camera=%s frame=%d", camera_id, frame_index)
+
+
 async def _serve() -> None:
     setup_observability(service_name="theft-detect-gate")
     settings = get_settings()
@@ -121,7 +132,7 @@ async def _serve() -> None:
         gate_counters=counters.snapshot,
         stream_counters=lambda: client.counters,
     )
-    open(settings.HEARTBEAT_PATH, "w").close()
+    await asyncio.to_thread(_touch, settings.HEARTBEAT_PATH)
     pool = ThreadPoolExecutor(max_workers=1)
     stop_event = asyncio.Event()
     running_loop = asyncio.get_running_loop()
@@ -130,29 +141,36 @@ async def _serve() -> None:
     client_task = asyncio.create_task(client.run())
     loop_task = asyncio.create_task(
         _frame_loop(
-            source, detector, machine, client, counters, pool,
-            settings.CAMERA_ID, settings.HEARTBEAT_PATH, stop_event,
+            source,
+            detector,
+            machine,
+            client,
+            counters,
+            pool,
+            settings.CAMERA_ID,
+            settings.HEARTBEAT_PATH,
+            stop_event,
         )
     )
     log.info("detect-gate running")
     await stop_event.wait()
     log.info("shutdown signal received")
     loop_task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await loop_task
-    except asyncio.CancelledError:
-        pass
     await client.stop()
     client_task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await client_task
-    except asyncio.CancelledError:
-        pass
     await source.close()
     detector.close()
     pool.shutdown(wait=False)
     log.info("detect-gate stopped")
+
+
 def main() -> None:
     asyncio.run(_serve())
+
+
 if __name__ == "__main__":
     main()

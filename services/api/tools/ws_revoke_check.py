@@ -110,7 +110,7 @@ async def main() -> int:
                 f"{exc.reason} ({frames} frames before close)"
             )
             return 0
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print(
                 f"ERROR   socket still open after {args.wait}s, "
                 f"revocation not enforced ({frames} frames seen)"

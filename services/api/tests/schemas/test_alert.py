@@ -1,12 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
 
 from app.schemas.alert import AlertCreate, AlertResponse, AlertType, Severity
 
-
-OCCURRED_AT = datetime(2026, 6, 12, 10, 0, 0, tzinfo=timezone.utc)
+OCCURRED_AT = datetime(2026, 6, 12, 10, 0, 0, tzinfo=UTC)
 
 
 VALID_PAYLOAD = {

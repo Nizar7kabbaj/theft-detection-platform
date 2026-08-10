@@ -1,18 +1,20 @@
 from __future__ import annotations
+
 import asyncio
 import logging
 import signal
 from concurrent.futures import ThreadPoolExecutor
+
 import grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
+
 from app.core.config import settings
 from app.grpc_gen import inference_pb2_grpc, presence_pb2_grpc
 from app.inference import LSTMDetector
-from app.observability import setup_observability, register_presence_gauge
-from app.servicer import InferenceServicer
+from app.observability import register_presence_gauge, setup_observability
 from app.presence_servicer import PresenceServicer
 from app.server.interceptors import IdentityInterceptor
-
+from app.servicer import InferenceServicer
 
 INFERENCE_SERVICE_FULL_NAME = "theftdetection.v1.InferenceService"
 PRESENCE_SERVICE_FULL_NAME = "theftdetection.v1.PresenceService"
@@ -27,15 +29,21 @@ def _server_credentials() -> grpc.ServerCredentials:
         root_certificates=ca,
         require_client_auth=settings.TLS_REQUIRE_CLIENT_AUTH,
     )
+
+
 class AsyncHealthServicer(health.HealthServicer):
     async def Check(self, request, context):
         return super().Check(request, context)
+
     async def Watch(self, request, context):
         async for response in self._async_watch(request, context):
             yield response
+
     async def _async_watch(self, request, context):
         for response in super().Watch(request, context):
             yield response
+
+
 async def _serve() -> None:
     setup_observability(service_name="theft-ai")
     logging.getLogger().setLevel(settings.LOG_LEVEL)
@@ -73,9 +81,11 @@ async def _serve() -> None:
     health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
     log.info("grpc server listening on %s", bind_address)
     stop_event = asyncio.Event()
+
     def _on_signal(signame: str) -> None:
         log.info("received %s, initiating graceful shutdown", signame)
         stop_event.set()
+
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _on_signal, sig.name)
@@ -87,7 +97,11 @@ async def _serve() -> None:
     executor.shutdown(wait=True)
     detector.close()
     log.info("ai service stopped")
+
+
 def main() -> None:
     asyncio.run(_serve())
+
+
 if __name__ == "__main__":
     main()

@@ -14,10 +14,11 @@ from app.core.config import get_settings
 from app.core.database import dispose_engine, get_sessionmaker
 from app.core.redis import close_redis, get_redis
 from app.server.grpc_gen import audit_pb2, audit_pb2_grpc
-from app.server.servicer import AuditServicer
 from app.server.interceptors import IdentityInterceptor
+from app.server.servicer import AuditServicer
 
 AUDIT_SERVICE_FULL_NAME = "theftdetection.v1.AuditService"
+
 
 def _server_credentials() -> grpc.ServerCredentials:
     settings = get_settings()
@@ -29,6 +30,7 @@ def _server_credentials() -> grpc.ServerCredentials:
         root_certificates=ca,
         require_client_auth=settings.tls_require_client_auth,
     )
+
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +74,7 @@ async def _probe_dependencies(timeout: float) -> bool:
     return postgres_ok and redis_ok
 
 
-async def _watch_health(
-    health_servicer: AsyncHealthServicer, stop_event: asyncio.Event
-) -> None:
+async def _watch_health(health_servicer: AsyncHealthServicer, stop_event: asyncio.Event) -> None:
     settings = get_settings()
     previous: int | None = None
     while not stop_event.is_set():
@@ -109,9 +109,7 @@ async def _run_grpc(stop_event: asyncio.Event) -> None:
 
     health_servicer = AsyncHealthServicer()
     health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
-    health_servicer.set(
-        AUDIT_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING
-    )
+    health_servicer.set(AUDIT_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
     health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
 
     audit_pb2_grpc.add_AuditServiceServicer_to_server(AuditServicer(), server)
@@ -132,9 +130,7 @@ async def _run_grpc(stop_event: asyncio.Event) -> None:
     try:
         await stop_event.wait()
     finally:
-        health_servicer.set(
-            AUDIT_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING
-        )
+        health_servicer.set(AUDIT_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
         health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
         health_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):

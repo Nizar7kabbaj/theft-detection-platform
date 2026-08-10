@@ -54,8 +54,11 @@ def _new(algorithm: int) -> hashlib._Hash:
     return entry[0]()
 
 
+_UINT64_MAX = 0xFFFFFFFFFFFFFFFF
+
+
 def _u64(value: int) -> bytes:
-    if value < 0 or value > 0xFFFFFFFFFFFFFFFF:
+    if value < 0 or value > _UINT64_MAX:
         raise ValueError(f"value out of range for uint64: {value}")
     return value.to_bytes(8, "big")
 
@@ -68,9 +71,7 @@ def _constant_time_eq(left: bytes, right: bytes) -> bool:
     return hmac.compare_digest(left, right)
 
 
-def compute_leaf_hash(
-    event_bytes: bytes, algorithm: int = DEFAULT_HASH_ALGORITHM
-) -> bytes:
+def compute_leaf_hash(event_bytes: bytes, algorithm: int = DEFAULT_HASH_ALGORITHM) -> bytes:
     digest = _new(algorithm)
     digest.update(_DOMAIN_LEAF)
     digest.update(_length_prefixed(event_bytes))
@@ -104,9 +105,7 @@ def chain_matches(
     chain_hash: bytes,
     algorithm: int = DEFAULT_HASH_ALGORITHM,
 ) -> bool:
-    return _constant_time_eq(
-        compute_chain_hash(prev_hash, leaf_hash, algorithm), chain_hash
-    )
+    return _constant_time_eq(compute_chain_hash(prev_hash, leaf_hash, algorithm), chain_hash)
 
 
 def checkpoint_payload(
@@ -120,13 +119,10 @@ def checkpoint_payload(
 ) -> bytes:
     size = digest_size(hash_algorithm)
     if len(tail_chain_hash) != size:
-        raise ValueError(
-            f"tail_chain_hash must be {size} bytes, got {len(tail_chain_hash)}"
-        )
+        raise ValueError(f"tail_chain_hash must be {size} bytes, got {len(tail_chain_hash)}")
     if len(prev_checkpoint_hash) != size:
         raise ValueError(
-            f"prev_checkpoint_hash must be {size} bytes, "
-            f"got {len(prev_checkpoint_hash)}"
+            f"prev_checkpoint_hash must be {size} bytes, got {len(prev_checkpoint_hash)}"
         )
     parts = [
         _DOMAIN_CHECKPOINT,
@@ -141,9 +137,7 @@ def checkpoint_payload(
     return b"".join(parts)
 
 
-def compute_checkpoint_hash(
-    payload: bytes, algorithm: int = DEFAULT_HASH_ALGORITHM
-) -> bytes:
+def compute_checkpoint_hash(payload: bytes, algorithm: int = DEFAULT_HASH_ALGORITHM) -> bytes:
     digest = _new(algorithm)
     digest.update(_DOMAIN_CHECKPOINT_DIGEST)
     digest.update(_length_prefixed(payload))
@@ -153,6 +147,4 @@ def compute_checkpoint_hash(
 def checkpoint_matches(
     payload: bytes, checkpoint_hash: bytes, algorithm: int = DEFAULT_HASH_ALGORITHM
 ) -> bool:
-    return _constant_time_eq(
-        compute_checkpoint_hash(payload, algorithm), checkpoint_hash
-    )
+    return _constant_time_eq(compute_checkpoint_hash(payload, algorithm), checkpoint_hash)

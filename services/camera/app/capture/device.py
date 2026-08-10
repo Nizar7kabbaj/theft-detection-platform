@@ -1,9 +1,14 @@
 from __future__ import annotations
+
 import logging
 import time
+
 import cv2
 from numpy import ndarray
+
 logger = logging.getLogger(__name__)
+
+
 class CameraDevice:
     def __init__(
         self,
@@ -25,18 +30,23 @@ class CameraDevice:
         self._actual_width = 0
         self._actual_height = 0
         self._actual_fps = 0.0
+
     @property
     def session_id(self) -> int:
         return self._session_id
+
     @property
     def actual_resolution(self) -> tuple[int, int]:
         return self._actual_width, self._actual_height
+
     @property
     def actual_fps(self) -> float:
         return self._actual_fps
+
     @property
     def is_open(self) -> bool:
         return self._capture is not None and self._capture.isOpened()
+
     def open(self) -> bool:
         self._release_handle()
         capture = cv2.VideoCapture(self._device_path, cv2.CAP_V4L2)
@@ -71,6 +81,7 @@ class CameraDevice:
                 self._target_fps,
             )
         return True
+
     def read(self) -> ndarray | None:
         if self._capture is None:
             return None
@@ -78,6 +89,7 @@ class CameraDevice:
         if not ok or frame is None:
             return None
         return frame
+
     def reopen_with_backoff(self, on_retry=None) -> None:
         delay = self._reopen_backoff
         while True:
@@ -88,10 +100,12 @@ class CameraDevice:
             if self.open():
                 return
             delay = min(delay * 2, self._reopen_backoff_max)
+
     def _release_handle(self) -> None:
         if self._capture is not None:
             self._capture.release()
             self._capture = None
+
     def close(self) -> None:
         self._release_handle()
         logger.info("device closed: %s", self._device_path)

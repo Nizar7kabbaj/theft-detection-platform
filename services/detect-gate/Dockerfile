@@ -35,11 +35,11 @@ ENV PATH=/opt/venv/bin:$PATH
 COPY --from=builder --chown=gate:gate /opt/venv /opt/venv
 COPY --from=weights --chown=gate:gate /app/yolov8n.pt /app/yolov8n.pt
 COPY --chown=gate:gate app /app/app
-RUN mkdir -p /app/.ultralytics /app/.matplotlib \
-    && chown gate:gate /app/.ultralytics /app/.matplotlib
+RUN mkdir -p /app/.ultralytics /app/.matplotlib /app/run \
+    && chown gate:gate /app/.ultralytics /app/.matplotlib /app/run
 USER gate
 EXPOSE 9464
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
-    CMD test -f /tmp/detect_gate_heartbeat && \
-        [ $(( $(date +%s) - $(stat -c %Y /tmp/detect_gate_heartbeat) )) -lt 10 ] || exit 1
+    CMD test -f /app/run/detect_gate_heartbeat && \
+        [ $(( $(date +%s) - $(stat -c %Y /app/run/detect_gate_heartbeat) )) -lt 10 ] || exit 1
 CMD ["python", "-m", "app.main"]

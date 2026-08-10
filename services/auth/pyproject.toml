@@ -25,6 +25,7 @@ dependencies = [
     "cryptography==49.0.0",
     "redis==5.2.1",
 ]
+
 [project.optional-dependencies]
 dev = [
     "pytest==8.3.4",
@@ -35,6 +36,7 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
@@ -45,10 +47,4 @@ markers = [
 ]
 
 [tool.ruff]
-line-length = 88
-target-version = "py312"
-extend-exclude = ["app/server/grpc_gen", "migrations/versions"]
-
-[tool.ruff.lint]
-select = ["E", "W", "F", "I", "N", "UP", "B", "A", "C4", "DTZ", "PT", "SIM", "PTH", "ASYNC", "RUF", "PL"]
-ignore = ["E501", "PLR0913", "PLW0603", "N802", "PLR2004"]
+extend = "../../ruff.toml"

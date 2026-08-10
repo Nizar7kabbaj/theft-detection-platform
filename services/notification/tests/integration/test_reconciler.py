@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,7 +17,7 @@ tracer = trace.get_tracer("test")
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 async def _call(intent, cutoff, intent_repo, dlq_repo) -> str:
@@ -25,15 +25,11 @@ async def _call(intent, cutoff, intent_repo, dlq_repo) -> str:
         return await tasks._requeue_one(intent, cutoff, intent_repo, dlq_repo, span)
 
 
-async def test_retires_poison(
-    intent_repo, dlq_repo, make_create, age_doc, monkeypatch
-) -> None:
+async def test_retires_poison(intent_repo, dlq_repo, make_create, age_doc, monkeypatch) -> None:
     apply = MagicMock()
     monkeypatch.setattr(tasks.send_alert_task, "apply_async", apply)
     seed = await intent_repo.acquire(make_create())
-    await age_doc(
-        COLL, seed.id, _now() - timedelta(minutes=10), requeue_count=3
-    )
+    await age_doc(COLL, seed.id, _now() - timedelta(minutes=10), requeue_count=3)
     intent = await intent_repo.get_by_id(seed.id)
 
     outcome = await _call(intent, _now() - timedelta(minutes=1), intent_repo, dlq_repo)
@@ -45,9 +41,7 @@ async def test_retires_poison(
     apply.assert_not_called()
 
 
-async def test_requeues_stale(
-    intent_repo, dlq_repo, make_create, age_doc, monkeypatch
-) -> None:
+async def test_requeues_stale(intent_repo, dlq_repo, make_create, age_doc, monkeypatch) -> None:
     apply = MagicMock()
     monkeypatch.setattr(tasks.send_alert_task, "apply_async", apply)
     seed = await intent_repo.acquire(make_create())
@@ -63,9 +57,7 @@ async def test_requeues_stale(
     apply.assert_called_once_with(args=[seed.id])
 
 
-async def test_races_on_fresh(
-    intent_repo, dlq_repo, make_create, age_doc, monkeypatch
-) -> None:
+async def test_races_on_fresh(intent_repo, dlq_repo, make_create, age_doc, monkeypatch) -> None:
     apply = MagicMock()
     monkeypatch.setattr(tasks.send_alert_task, "apply_async", apply)
     seed = await intent_repo.acquire(make_create())

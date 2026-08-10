@@ -28,9 +28,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PATH=/opt/venv/bin:$PATH
 COPY --from=builder --chown=camera:camera /opt/venv /opt/venv
 COPY --chown=camera:camera app /app/app
+RUN mkdir -p /app/run \
+    && chown camera:camera /app/run
 USER camera
 EXPOSE 9464
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
-    CMD test -f /tmp/camera_heartbeat && \
-        [ $(( $(date +%s) - $(stat -c %Y /tmp/camera_heartbeat) )) -lt 10 ] || exit 1
+    CMD test -f /app/run/camera_heartbeat && \
+        [ $(( $(date +%s) - $(stat -c %Y /app/run/camera_heartbeat) )) -lt 10 ] || exit 1
 CMD ["python", "-m", "app.main"]

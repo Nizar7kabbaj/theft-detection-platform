@@ -1,11 +1,13 @@
 from __future__ import annotations
+
 import sys
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+
 import cv2
 import numpy as np
+
 from app.core.config import settings
 from app.tracker_store import TrackerStore
 
@@ -15,7 +17,9 @@ if _AI_MODEL_SCRIPTS.exists() and str(_AI_MODEL_SCRIPTS) not in sys.path:
 
 from predictor import ShoplifterPredictor
 from ultralytics import YOLO
+
 from app.grpc_gen.inference_pb2 import InferenceState
+
 
 @dataclass(frozen=True, slots=True)
 class DetectionResult:
@@ -24,6 +28,8 @@ class DetectionResult:
     score: float
     inference_state: InferenceState.ValueType
     track_id: int
+
+
 class Detector(Protocol):
     def load(self) -> None: ...
     def analyze_frame(
@@ -34,6 +40,8 @@ class Detector(Protocol):
         camera_id: str,
     ) -> DetectionResult | None: ...
     def close(self) -> None: ...
+
+
 class LSTMDetector:
     def __init__(
         self,
@@ -51,6 +59,7 @@ class LSTMDetector:
         self._yolo: YOLO | None = None
         self._predictor: ShoplifterPredictor | None = None
         self._store: TrackerStore | None = None
+
     def load(self) -> None:
         self._store = TrackerStore(
             redis_url=settings.REDIS_URL,
@@ -64,6 +73,7 @@ class LSTMDetector:
             device=self._device,
             store=self._store,
         )
+
     def analyze_frame(
         self,
         image_bytes: bytes,
@@ -96,7 +106,9 @@ class LSTMDetector:
         top = int(np.argmax(confs))
         coords = boxes.xyxy[top].cpu().numpy().astype(float)
         kp_xy = kpts.xy[top].cpu().numpy()
-        kp_conf = kpts.conf[top].cpu().numpy() if kpts.conf is not None else np.zeros(kp_xy.shape[0])
+        kp_conf = (
+            kpts.conf[top].cpu().numpy() if kpts.conf is not None else np.zeros(kp_xy.shape[0])
+        )
         track_ids = boxes.id.cpu().numpy() if boxes.id is not None else None
         if track_ids is None or top >= len(track_ids):
             return None
@@ -132,6 +144,7 @@ class LSTMDetector:
             inference_state=inference_state,
             track_id=track_id,
         )
+
     def close(self) -> None:
         if self._store is not None:
             self._store.close()

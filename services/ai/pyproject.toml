@@ -51,3 +51,7 @@ explicit = true
 [tool.uv.sources]
 torch = { index = "pytorch-cu121" }
 torchvision = { index = "pytorch-cu121" }
+
+
+[tool.ruff]
+extend = "../../ruff.toml"
