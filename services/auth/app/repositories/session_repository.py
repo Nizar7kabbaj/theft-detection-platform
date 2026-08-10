@@ -29,10 +29,11 @@ class SessionRepository:
         )
         return result.scalar_one_or_none()
 
-    async def revoke(self, session_id: str) -> None:
-        await self._session.execute(
+    async def revoke(self, session_id: str) -> bool:
+        result = await self._session.execute(
             update(Session)
-            .where(Session.id == session_id)
+            .where(Session.id == session_id, Session.revoked.is_(False))
             .values(revoked=True)
             .execution_options(synchronize_session=False)
         )
+        return result.rowcount == 1

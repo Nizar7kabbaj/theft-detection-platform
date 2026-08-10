@@ -118,7 +118,6 @@ async def record_failure(ip: str, username: str) -> tuple[bool, int]:
     )
     return bool(int(result[0])), int(result[1])
 
-
 async def reset_failures(ip: str, username: str) -> None:
     await get_redis().delete(login_key(ip, username))
 
@@ -127,9 +126,19 @@ async def revoke_jti(jti: str, ttl_seconds: int) -> None:
     await get_redis().set(f"revoked:jti:{jti}", 1, ex=ttl_seconds)
 
 
-async def is_revoked(jti: str) -> bool:
-    return await get_redis().exists(f"revoked:jti:{jti}") == 1
+async def revoke_sid(session_id: str, ttl_seconds: int) -> None:
+    await get_redis().set(f"revoked:sid:{session_id}", 1, ex=ttl_seconds)
 
+
+
+
+async def is_token_revoked(jti: str, session_id: str) -> bool:
+    return (
+        await get_redis().exists(
+            f"revoked:jti:{jti}", f"revoked:sid:{session_id}"
+        )
+        > 0
+    )
 
 async def close_redis() -> None:
     global _client
