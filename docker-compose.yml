@@ -532,6 +532,9 @@ services:
     volumes:
       - redis_data:/data
       - ./config/redis/redis.conf:/etc/redis/redis.conf:ro
+      - ./config/pki/redis/tls.crt:/etc/redis/tls/tls.crt:ro
+      - ./config/pki/redis/tls.key:/etc/redis/tls/tls.key:ro
+      - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis.conf)\" ping | grep -q PONG"]
       interval: 30s
@@ -552,6 +555,9 @@ services:
     volumes:
       - redis_broker_data:/data
       - ./config/redis/redis-broker.conf:/etc/redis/redis-broker.conf:ro
+      - ./config/pki/redis-broker/tls.crt:/etc/redis/tls/tls.crt:ro
+      - ./config/pki/redis-broker/tls.key:/etc/redis/tls/tls.key:ro
+      - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-broker.conf)\" ping | grep -q PONG"]
       interval: 30s
@@ -572,6 +578,9 @@ services:
     command: ["redis-server", "/etc/redis/redis-stream.conf"]
     volumes:
       - ./config/redis/redis-stream.conf:/etc/redis/redis-stream.conf:ro
+      - ./config/pki/redis-stream/tls.crt:/etc/redis/tls/tls.crt:ro
+      - ./config/pki/redis-stream/tls.key:/etc/redis/tls/tls.key:ro
+      - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-stream.conf)\" ping | grep -q PONG"]
       interval: 30s
