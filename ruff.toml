@@ -1,0 +1,72 @@
+line-length = 100
+extend-exclude = ["grpc_gen", "migrations"]
+
+[lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "A", "C4", "C90",
+    "DTZ", "PT", "SIM", "PTH", "ASYNC", "RUF", "PL", "S",
+    "LOG", "G", "BLE", "ERA", "T20", "TID", "PIE", "RET",
+    "NPY", "FA", "SLF",
+]
+ignore = ["PLR0913", "PLR0917", "RET504", "SIM108", "ASYNC109", "PLW0603", "UP042"]
+
+[lint.per-file-ignores]
+"services/*/tests/**" = [
+    "S101", "PLR2004", "PLR0915", "SLF001", "S105", "S106", "S108", "S110",
+    "PT017", "PT018", "SIM103", "SIM105", "E501", "PLC0415", "BLE001",
+]
+"services/*/tools/*.py" = ["S608", "T201"]
+"services/*/scripts/*.py" = ["S608", "T201"]
+"services/api/tools/ws_*_check.py" = ["S501", "T201", "PLR2004", "PLR0911", "BLE001"]
+"services/*/app/server/servicer.py" = ["N802"]
+"services/*/app/main.py" = ["N802"]
+"services/*/app/servicer.py" = ["N802"]
+"services/*/app/presence_servicer.py" = ["N802"]
+"services/*/app/server/main.py" = ["N802"]
+"services/*/app/core/config.py" = ["S104", "S105", "N802"]
+"services/*/app/shared/config.py" = ["S104", "N802"]
+"services/auth/app/schemas/auth.py" = ["S105"]
+"services/auth/app/api/v1/auth.py" = ["PLR0915"]
+"services/auth/app/main.py" = ["N802", "LOG004"]
+"services/ai/app/inference.py" = ["E402"]
+"services/ai/app/observability.py" = ["PLC0415"]
+"services/api/app/api/v1/streams.py" = ["BLE001"]
+"services/api/app/core/authz.py" = ["PLC0415"]
+"services/api/app/core/csrf.py" = ["PLC0415"]
+"services/api/app/core/ws_authz.py" = ["PLC0415"]
+"services/api/app/services/audit_service.py" = ["BLE001"]
+"services/api/app/services/broadcast_service.py" = ["BLE001"]
+"services/api/app/usecases/alert_usecase.py" = ["BLE001"]
+"services/api/app/usecases/camera_usecase.py" = ["BLE001"]
+"services/api/app/usecases/detection_usecase.py" = ["BLE001"]
+"services/audit/app/core/redis.py" = ["BLE001"]
+"services/audit/app/server/servicer.py" = ["N802", "PLR0911"]
+"services/audit/app/services/checkpoint_service.py" = ["BLE001"]
+"services/auth/app/services/audit_service.py" = ["BLE001"]
+"services/notification/app/server/http_app.py" = ["LOG004"]
+"services/notification/app/server/api/webhooks.py" = ["BLE001"]
+"services/notification/app/server/servicer.py" = ["BLE001"]
+"services/notification/app/worker/tasks.py" = ["PLR0911", "PLR0915"]
+
+[lint.isort]
+known-first-party = ["app"]
+
+[lint.mccabe]
+max-complexity = 12
+
+[lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.Body",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Security",
+    "app.core.ws_authz.require_ws_permission",
+]
