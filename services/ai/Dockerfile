@@ -46,5 +46,5 @@ RUN mkdir -p /app/.ultralytics /app/.matplotlib \
 USER ai
 EXPOSE 50051 9464
 HEALTHCHECK --interval=10s --timeout=3s --start-period=40s --retries=3 \
-    CMD grpc_health_probe -addr=localhost:50051 || exit 1
+    CMD grpc_health_probe -addr=localhost:50051 -tls -tls-ca-cert=/run/secrets/ai_tls_ca -tls-client-cert=/run/secrets/ai_tls_cert -tls-client-key=/run/secrets/ai_tls_key || exit 1
 CMD ["python", "-m", "app.main"]

@@ -14,6 +14,7 @@ from grpc_reflection.v1alpha import reflection
 from app.api.v1.auth import router as auth_router
 from app.core.config import get_settings
 from app.server.grpc_gen import auth_pb2, auth_pb2_grpc
+from app.server.interceptors import IdentityInterceptor
 from app.server.servicer import AuthServicer
 from app.services.audit_service import (
     close_audit_client,
@@ -24,6 +25,18 @@ from app.services.audit_service import (
 AUTH_SERVICE_FULL_NAME = "theftdetection.v1.AuthService"
 
 logger = logging.getLogger(__name__)
+
+
+def _server_credentials() -> grpc.ServerCredentials:
+    settings = get_settings()
+    key = settings.tls_key_file.read_bytes()
+    cert = settings.tls_cert_file.read_bytes()
+    ca = settings.tls_ca_file.read_bytes()
+    return grpc.ssl_server_credentials(
+        [(key, cert)],
+        root_certificates=ca,
+        require_client_auth=settings.tls_require_client_auth,
+    )
 
 
 def create_app() -> FastAPI:
@@ -61,28 +74,25 @@ async def _run_grpc(stop_event: asyncio.Event) -> None:
     server = grpc.aio.server(
         migration_thread_pool=None,
         maximum_concurrent_rpcs=None,
+        interceptors=[IdentityInterceptor()],
     )
     health_servicer = AsyncHealthServicer()
     health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
     health_servicer.set(AUTH_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
     health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
-
     auth_pb2_grpc.add_AuthServiceServicer_to_server(AuthServicer(), server)
-
     service_names = (
         auth_pb2.DESCRIPTOR.services_by_name["AuthService"].full_name,
         health.SERVICE_NAME,
         reflection.SERVICE_NAME,
     )
     reflection.enable_server_reflection(service_names, server)
-
     bind_address = f"{settings.grpc_host}:{settings.grpc_port}"
-    server.add_insecure_port(bind_address)
+    server.add_secure_port(bind_address, _server_credentials())
     await server.start()
     health_servicer.set(AUTH_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.SERVING)
     health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
     logger.info("grpc server listening on %s", bind_address)
-
     try:
         await stop_event.wait()
     finally:
@@ -125,18 +135,13 @@ async def _serve() -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _on_signal, sig.name)
-
     grpc_task = asyncio.create_task(_run_grpc(stop_event))
     http_task = asyncio.create_task(_run_http(stop_event))
     tasks = (grpc_task, http_task)
-
     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-
     stop_event.set()
-
     for task in pending:
         await task
-
     await drain_pending_appends()
     await close_audit_client()
     for task in done:

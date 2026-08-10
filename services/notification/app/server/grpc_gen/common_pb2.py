@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0c\x63ommon.proto\x12\x11theftdetection.v1\"6\n\x04\x42\x62ox\x12\n\n\x02x1\x18\x01 \x01(\x02\x12\n\n\x02y1\x18\x02 \x01(\x02\x12\n\n\x02x2\x18\x03 \x01(\x02\x12\n\n\x02y2\x18\x04 \x01(\x02\"4\n\x08Keypoint\x12\t\n\x01x\x18\x01 \x01(\x02\x12\t\n\x01y\x18\x02 \x01(\x02\x12\x12\n\nconfidence\x18\x03 \x01(\x02\"q\n\x06Person\x12\x10\n\x08track_id\x18\x01 \x01(\x05\x12%\n\x04\x62\x62ox\x18\x02 \x01(\x0b\x32\x17.theftdetection.v1.Bbox\x12.\n\tkeypoints\x18\x03 \x03(\x0b\x32\x1b.theftdetection.v1.Keypoint\"C\n\x06Object\x12\x12\n\nclass_name\x18\x01 \x01(\t\x12%\n\x04\x62\x62ox\x18\x02 \x01(\x0b\x32\x17.theftdetection.v1.Bbox*y\n\x08Severity\x12\x18\n\x14SEVERITY_UNSPECIFIED\x10\x00\x12\x11\n\rSEVERITY_INFO\x10\x01\x12\x13\n\x0fSEVERITY_NOTICE\x10\x02\x12\x14\n\x10SEVERITY_WARNING\x10\x03\x12\x15\n\x11SEVERITY_CRITICAL\x10\x04*z\n\tAlertType\x12\x1a\n\x16\x41LERT_TYPE_UNSPECIFIED\x10\x00\x12\x1f\n\x1b\x41LERT_TYPE_OBJECT_PROXIMITY\x10\x01\x12\x16\n\x12\x41LERT_TYPE_BENDING\x10\x02\x12\x18\n\x14\x41LERT_TYPE_LOITERING\x10\x03\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0c\x63ommon.proto\x12\x11theftdetection.v1\"6\n\x04\x42\x62ox\x12\n\n\x02x1\x18\x01 \x01(\x02\x12\n\n\x02y1\x18\x02 \x01(\x02\x12\n\n\x02x2\x18\x03 \x01(\x02\x12\n\n\x02y2\x18\x04 \x01(\x02\"4\n\x08Keypoint\x12\t\n\x01x\x18\x01 \x01(\x02\x12\t\n\x01y\x18\x02 \x01(\x02\x12\x12\n\nconfidence\x18\x03 \x01(\x02\"q\n\x06Person\x12\x10\n\x08track_id\x18\x01 \x01(\x05\x12%\n\x04\x62\x62ox\x18\x02 \x01(\x0b\x32\x17.theftdetection.v1.Bbox\x12.\n\tkeypoints\x18\x03 \x03(\x0b\x32\x1b.theftdetection.v1.Keypoint\"C\n\x06Object\x12\x12\n\nclass_name\x18\x01 \x01(\t\x12%\n\x04\x62\x62ox\x18\x02 \x01(\x0b\x32\x17.theftdetection.v1.Bbox*y\n\x08Severity\x12\x18\n\x14SEVERITY_UNSPECIFIED\x10\x00\x12\x11\n\rSEVERITY_INFO\x10\x01\x12\x13\n\x0fSEVERITY_NOTICE\x10\x02\x12\x14\n\x10SEVERITY_WARNING\x10\x03\x12\x15\n\x11SEVERITY_CRITICAL\x10\x04*z\n\tAlertType\x12\x1a\n\x16\x41LERT_TYPE_UNSPECIFIED\x10\x00\x12\x1f\n\x1b\x41LERT_TYPE_OBJECT_PROXIMITY\x10\x01\x12\x16\n\x12\x41LERT_TYPE_BENDING\x10\x02\x12\x18\n\x14\x41LERT_TYPE_LOITERING\x10\x03*{\n\x04Role\x12\x14\n\x10ROLE_UNSPECIFIED\x10\x00\x12\x0e\n\nROLE_ADMIN\x10\x01\x12\x11\n\rROLE_OPERATOR\x10\x02\x12\x0f\n\x0bROLE_VIEWER\x10\x03\x12\x14\n\x10ROLE_ML_ENGINEER\x10\x04\x12\x13\n\x0fROLE_COMPLIANCE\x10\x05*\xed\x01\n\rSourceService\x12\x1e\n\x1aSOURCE_SERVICE_UNSPECIFIED\x10\x00\x12\x16\n\x12SOURCE_SERVICE_API\x10\x01\x12\x17\n\x13SOURCE_SERVICE_AUTH\x10\x02\x12\x15\n\x11SOURCE_SERVICE_AI\x10\x03\x12\x19\n\x15SOURCE_SERVICE_CAMERA\x10\x04\x12\x1e\n\x1aSOURCE_SERVICE_DETECT_GATE\x10\x05\x12\x1f\n\x1bSOURCE_SERVICE_NOTIFICATION\x10\x06\x12\x18\n\x14SOURCE_SERVICE_AUDIT\x10\x07*J\n\rHashAlgorithm\x12\x1e\n\x1aHASH_ALGORITHM_UNSPECIFIED\x10\x00\x12\x19\n\x15HASH_ALGORITHM_SHA256\x10\x01*}\n\x12SignatureAlgorithm\x12#\n\x1fSIGNATURE_ALGORITHM_UNSPECIFIED\x10\x00\x12\x1f\n\x1bSIGNATURE_ALGORITHM_ED25519\x10\x01\x12!\n\x1dSIGNATURE_ALGORITHM_ML_DSA_44\x10\x02\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,6 +35,14 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_SEVERITY']._serialized_end=450
   _globals['_ALERTTYPE']._serialized_start=452
   _globals['_ALERTTYPE']._serialized_end=574
+  _globals['_ROLE']._serialized_start=576
+  _globals['_ROLE']._serialized_end=699
+  _globals['_SOURCESERVICE']._serialized_start=702
+  _globals['_SOURCESERVICE']._serialized_end=939
+  _globals['_HASHALGORITHM']._serialized_start=941
+  _globals['_HASHALGORITHM']._serialized_end=1015
+  _globals['_SIGNATUREALGORITHM']._serialized_start=1017
+  _globals['_SIGNATUREALGORITHM']._serialized_end=1142
   _globals['_BBOX']._serialized_start=35
   _globals['_BBOX']._serialized_end=89
   _globals['_KEYPOINT']._serialized_start=91

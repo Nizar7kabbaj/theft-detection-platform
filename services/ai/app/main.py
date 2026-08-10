@@ -11,12 +11,22 @@ from app.inference import LSTMDetector
 from app.observability import setup_observability, register_presence_gauge
 from app.servicer import InferenceServicer
 from app.presence_servicer import PresenceServicer
+from app.server.interceptors import IdentityInterceptor
 
 
 INFERENCE_SERVICE_FULL_NAME = "theftdetection.v1.InferenceService"
 PRESENCE_SERVICE_FULL_NAME = "theftdetection.v1.PresenceService"
 
 
+def _server_credentials() -> grpc.ServerCredentials:
+    key = settings.TLS_KEY_FILE.read_bytes()
+    cert = settings.TLS_CERT_FILE.read_bytes()
+    ca = settings.TLS_CA_FILE.read_bytes()
+    return grpc.ssl_server_credentials(
+        [(key, cert)],
+        root_certificates=ca,
+        require_client_auth=settings.TLS_REQUIRE_CLIENT_AUTH,
+    )
 class AsyncHealthServicer(health.HealthServicer):
     async def Check(self, request, context):
         return super().Check(request, context)
@@ -39,7 +49,7 @@ async def _serve() -> None:
         anomaly_threshold=settings.ANOMALY_THRESHOLD,
         person_class=settings.YOLO_PERSON_CLASS,
     )
-    server = grpc.aio.server()
+    server = grpc.aio.server(interceptors=[IdentityInterceptor()])
     health_servicer = AsyncHealthServicer()
     health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
     health_servicer.set(INFERENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
@@ -53,7 +63,7 @@ async def _serve() -> None:
     presence_pb2_grpc.add_PresenceServiceServicer_to_server(presence_servicer, server)
     register_presence_gauge(presence_servicer)
     bind_address = f"{settings.GRPC_HOST}:{settings.GRPC_PORT}"
-    server.add_insecure_port(bind_address)
+    server.add_secure_port(bind_address, _server_credentials())
     log.info("loading detector")
     await asyncio.get_running_loop().run_in_executor(executor, detector.load)
     log.info("detector ready")

@@ -100,8 +100,11 @@ services:
       - ./ml:/app/ai-model:ro
       - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
       - ./config/redis/ai_redis_password:/run/secrets/ai_redis_password:ro
+      - ./config/pki/ai/tls.crt:/run/secrets/ai_tls_cert:ro
+      - ./config/pki/ai/tls.key:/run/secrets/ai_tls_key:ro
+      - ./config/pki/ca/ca.crt:/run/secrets/ai_tls_ca:ro
     healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+      test: ["CMD", "grpc_health_probe", "-addr=ai:50051", "-tls", "-tls-ca-cert=/run/secrets/ai_tls_ca", "-tls-client-cert=/run/secrets/ai_tls_cert", "-tls-client-key=/run/secrets/ai_tls_key"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -130,6 +133,9 @@ services:
       - "c 81:* rmw"
     volumes:
       - ./config/redis/camera_redis_password:/run/secrets/camera_redis_password:ro
+      - ./config/pki/camera/tls.crt:/run/secrets/camera_tls_cert:ro
+      - ./config/pki/camera/tls.key:/run/secrets/camera_tls_key:ro
+      - ./config/pki/ca/ca.crt:/run/secrets/camera_tls_ca:ro
       - /dev:/dev
     environment:
       <<: *otel-env
@@ -167,6 +173,9 @@ services:
       AI_PORT: "50051"
     volumes:
       - ./config/redis/gate_redis_password:/run/secrets/gate_redis_password:ro
+      - ./config/pki/detect-gate/tls.crt:/run/secrets/gate_tls_cert:ro
+      - ./config/pki/detect-gate/tls.key:/run/secrets/gate_tls_key:ro
+      - ./config/pki/ca/ca.crt:/run/secrets/gate_tls_ca:ro
     depends_on:
       ai:
         condition: service_healthy
@@ -214,7 +223,7 @@ services:
         audit-service:
           condition: service_healthy
       healthcheck:
-        test: ["CMD", "grpc_health_probe", "-addr=:50053"]
+        test: ["CMD", "grpc_health_probe", "-addr=auth:50053", "-tls", "-tls-ca-cert=/run/secrets/auth_tls_ca", "-tls-client-cert=/run/secrets/auth_tls_cert", "-tls-client-key=/run/secrets/auth_tls_key"]
         interval: 30s
         timeout: 5s
         retries: 5
@@ -320,7 +329,7 @@ services:
         condition: service_healthy
     entrypoint: ["python", "-m", "tools.harness"]
     restart: "no"
-    
+
   postgres:
     image: postgres:17-alpine
     container_name: theft-postgres
@@ -391,11 +400,14 @@ services:
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
       - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
       - ./config/redis/notify_redis_password:/run/secrets/notify_redis_password:ro
+      - ./config/pki/notification/tls.crt:/run/secrets/notification_tls_cert:ro
+      - ./config/pki/notification/tls.key:/run/secrets/notification_tls_key:ro
+      - ./config/pki/ca/ca.crt:/run/secrets/notification_tls_ca:ro
     depends_on:
       redis-broker:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=:50052"]
+      test: ["CMD", "grpc_health_probe", "-addr=notification:50052", "-tls", "-tls-ca-cert=/run/secrets/notification_tls_ca", "-tls-client-cert=/run/secrets/notification_tls_cert", "-tls-client-key=/run/secrets/notification_tls_key"]
       interval: 30s
       timeout: 5s
       retries: 5

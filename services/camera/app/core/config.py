@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     DEBUG: bool = False
 
+    TLS_CERT_FILE: Path = Path("/run/secrets/camera_tls_cert")
+    TLS_KEY_FILE: Path = Path("/run/secrets/camera_tls_key")
+    TLS_CA_FILE: Path = Path("/run/secrets/camera_tls_ca")
+
     @field_validator("CAMERA_ID")
     @classmethod
     def _camera_id_not_blank(cls, v: str) -> str:

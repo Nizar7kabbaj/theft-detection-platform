@@ -60,32 +60,35 @@ async def lifespan(app: FastAPI):
         heartbeat_seconds=settings.WS_HEARTBEAT_SECONDS,
     )
     await app.state.broadcaster.start()
-    app.state.inference_channel = grpc.aio.insecure_channel(
+    credentials = grpc.ssl_channel_credentials(
+        root_certificates=settings.TLS_CA_FILE.read_bytes(),
+        private_key=settings.TLS_KEY_FILE.read_bytes(),
+        certificate_chain=settings.TLS_CERT_FILE.read_bytes(),
+    )
+    app.state.inference_channel = grpc.aio.secure_channel(
         settings.INFERENCE_TARGET,
+        credentials,
         options=_GRPC_CHANNEL_OPTIONS,
         interceptors=aio_client_interceptors(),
     )
     app.state.inference_stub = InferenceServiceStub(app.state.inference_channel)
-    app.state.alert_channel = grpc.aio.insecure_channel(
+    app.state.alert_channel = grpc.aio.secure_channel(
         settings.NOTIFICATION_TARGET,
+        credentials,
         options=_GRPC_CHANNEL_OPTIONS,
         interceptors=aio_client_interceptors(),
     )
     app.state.alert_stub = AlertServiceStub(app.state.alert_channel)
-    app.state.auth_channel = grpc.aio.insecure_channel(
+    app.state.auth_channel = grpc.aio.secure_channel(
         settings.AUTH_TARGET,
+        credentials,
         options=_GRPC_CHANNEL_OPTIONS,
         interceptors=aio_client_interceptors(),
     )
     app.state.auth_stub = AuthServiceStub(app.state.auth_channel)
-    audit_credentials = grpc.ssl_channel_credentials(
-        root_certificates=settings.AUDIT_TLS_CA_FILE.read_bytes(),
-        private_key=settings.AUDIT_TLS_KEY_FILE.read_bytes(),
-        certificate_chain=settings.AUDIT_TLS_CERT_FILE.read_bytes(),
-    )
     app.state.audit_channel = grpc.aio.secure_channel(
         settings.AUDIT_TARGET,
-        audit_credentials,
+        credentials,
         options=_GRPC_CHANNEL_OPTIONS,
         interceptors=aio_client_interceptors(),
     )

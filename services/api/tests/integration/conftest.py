@@ -8,6 +8,7 @@ from urllib.parse import urlparse, urlunparse
 
 import grpc
 import httpx
+import pytest
 import pytest_asyncio
 import uvicorn
 from fastapi import FastAPI, Request
@@ -92,9 +93,20 @@ async def redis_client() -> AsyncIterator[Redis]:
     await client.aclose()
 
 
+@pytest.fixture(scope="session")
+def channel_credentials() -> grpc.ChannelCredentials:
+    return grpc.ssl_channel_credentials(
+        root_certificates=settings.TLS_CA_FILE.read_bytes(),
+        private_key=settings.TLS_KEY_FILE.read_bytes(),
+        certificate_chain=settings.TLS_CERT_FILE.read_bytes(),
+    )
+
+
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def inference_channel() -> AsyncIterator[grpc.aio.Channel]:
-    channel = grpc.aio.insecure_channel(settings.INFERENCE_TARGET)
+async def inference_channel(
+    channel_credentials: grpc.ChannelCredentials,
+) -> AsyncIterator[grpc.aio.Channel]:
+    channel = grpc.aio.secure_channel(settings.INFERENCE_TARGET, channel_credentials)
     yield channel
     await channel.close()
 
@@ -107,8 +119,10 @@ async def inference_stub(
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def alert_channel() -> AsyncIterator[grpc.aio.Channel]:
-    channel = grpc.aio.insecure_channel(settings.NOTIFICATION_TARGET)
+async def alert_channel(
+    channel_credentials: grpc.ChannelCredentials,
+) -> AsyncIterator[grpc.aio.Channel]:
+    channel = grpc.aio.secure_channel(settings.NOTIFICATION_TARGET, channel_credentials)
     yield channel
     await channel.close()
 

@@ -68,7 +68,7 @@ async def check_append_rate(source_service: int) -> bool:
     except Exception as exc:
         logger.error("rate limit check failed: %s", exc)
         return not get_settings().append_rate_fail_closed
-    
+
 
 async def close_redis() -> None:
     global _client

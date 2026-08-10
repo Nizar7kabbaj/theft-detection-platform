@@ -23,9 +23,11 @@ class PresenceClient:
         connect_timeout_seconds: float,
         retry_backoff_seconds: float,
         retry_backoff_max_seconds: float,
+        credentials: grpc.ChannelCredentials,
         queue_max_depth: int = 64,
     ) -> None:
         self._target = target
+        self._credentials = credentials
         self._camera_id = camera_id
         self._session_id = session_id
         self._connect_timeout = connect_timeout_seconds
@@ -74,7 +76,7 @@ class PresenceClient:
             self._events_sent += 1
             yield event
     def _connect(self) -> None:
-        self._channel = grpc.aio.insecure_channel(self._target)
+        self._channel = grpc.aio.secure_channel(self._target, self._credentials)
         self._stub = presence_pb2_grpc.PresenceServiceStub(self._channel)
     async def _disconnect(self) -> None:
         if self._channel is not None:

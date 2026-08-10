@@ -19,9 +19,11 @@ class Forwarder:
         retry_backoff_seconds: float,
         retry_backoff_max_seconds: float,
         rate_controller: RateController,
+        credentials: grpc.ChannelCredentials,
     ) -> None:
         self._buffer = buffer
         self._target = target
+        self._credentials = credentials
         self._retry_backoff = retry_backoff_seconds
         self._retry_backoff_max = retry_backoff_max_seconds
         self._rate_controller = rate_controller
@@ -38,7 +40,7 @@ class Forwarder:
             "failed_total": self._failed_total,
         }
     def _connect(self) -> None:
-        self._channel = grpc.aio.insecure_channel(self._target)
+        self._channel = grpc.aio.secure_channel(self._target, self._credentials)
         self._stub = inference_pb2_grpc.InferenceServiceStub(self._channel)
         logger.info("forwarder connected target=%s", self._target)
     async def _disconnect(self) -> None:

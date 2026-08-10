@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     redis_password_file: Path = Path("/run/secrets/audit_redis_password")
     redis_connect_timeout_seconds: float = 2.0
     redis_socket_timeout_seconds: float = 2.0
-    
+
     tls_enabled: bool = True
     tls_cert_file: Path = Path("/run/secrets/audit_tls_cert")
     tls_key_file: Path = Path("/run/secrets/audit_tls_key")

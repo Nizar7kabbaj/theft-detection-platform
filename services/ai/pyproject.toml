@@ -10,6 +10,7 @@ requires-python = ">=3.11,<3.12"
 dependencies = [
     "grpcio==1.71.2",
     "grpcio-health-checking==1.71.2",
+    "cryptography==49.0.0",
     "protobuf==5.29.5",
     "pydantic-settings==2.14.2",
     "python-dotenv==1.2.2",
