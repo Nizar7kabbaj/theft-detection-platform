@@ -12,8 +12,8 @@ class FakeAlertRepo:
         doc = {**data, "_id": oid}
         self.store[oid] = doc
         return doc
-    
-    
+
+
     async def list_filtered(
         self,
         severity: str | None = None,
@@ -25,8 +25,8 @@ class FakeAlertRepo:
             docs = [d for d in docs if d.get("severity") == severity]
         docs.sort(key=lambda d: d.get("created_at"), reverse=True)
         return docs[skip : skip + limit]
-    
-    
+
+
     async def acknowledge(self, id_: str) -> tuple[dict[str, Any] | None, bool]:
         doc = self.store.get(id_)
         if doc is None:
@@ -39,7 +39,7 @@ class FakeAlertRepo:
         return self.store.get(id_)
     async def delete(self, id_: str) -> bool:
         return self.store.pop(id_, None) is not None
-    
+
 @pytest.fixture
 def fake_alert_repo() -> FakeAlertRepo:
     return FakeAlertRepo()
@@ -57,7 +57,7 @@ def alert_usecase(fake_alert_repo, mock_redis, mock_alert_client):
         redis=mock_redis,
         alert_client=mock_alert_client,
     )
-    
+
 @pytest.fixture
 def sample_alert_doc() -> dict[str, Any]:
     from datetime import datetime, timezone
@@ -72,7 +72,7 @@ def sample_alert_doc() -> dict[str, Any]:
         "alert_type": "ALERT_TYPE_OBJECT_PROXIMITY",
         "snapshot_path": "snaps/a1.jpg",
     }
-    
+
 class FakeCameraRepo:
     def __init__(self) -> None:
         self.store: dict[str, dict[str, Any]] = {}
@@ -100,7 +100,7 @@ class FakeCameraRepo:
             return False
         self._names.discard(doc.get("name"))
         return True
-    
+
 @pytest.fixture
 def fake_camera_repo() -> FakeCameraRepo:
     return FakeCameraRepo()
@@ -119,7 +119,7 @@ def sample_camera_doc() -> dict[str, Any]:
         "status": "active",
         "created_at": datetime(2026, 6, 12, 10, 0, tzinfo=timezone.utc),
     }
-    
+
 class FakeStatsRepo:
     def __init__(self) -> None:
         self.counts = {

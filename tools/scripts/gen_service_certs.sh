@@ -117,9 +117,15 @@ function is_known_service() {
 }
 
 function is_server_service() {
-    [ "$1" = "audit" ]
+    case "$1" in
+    audit | ai | auth | notification)
+        return 0
+        ;;
+    *)
+        return 1
+        ;;
+    esac
 }
-
 function cert_still_valid() {
     local cert_file="$1"
     local key_file="$2"

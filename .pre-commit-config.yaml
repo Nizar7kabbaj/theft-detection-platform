@@ -44,6 +44,12 @@ repos:
         stages: [manual]
         pass_filenames: true
         files: \.json$
+      - id: grpc-tls
+        name: reject plaintext grpc in service source
+        entry: tools/scripts/check_grpc_tls.sh
+        language: system
+        types: [python]
+        files: ^services/.*\.py$
       - id: pip-audit
         name: pip-audit (service uv.locks)
         entry: tools/scripts/pip_audit_locks.sh

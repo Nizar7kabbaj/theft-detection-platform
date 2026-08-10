@@ -4,13 +4,24 @@ import logging
 import os
 import signal
 from concurrent.futures import ThreadPoolExecutor
-from app.core.config import get_settings
+
+import grpc
+
+from app.core.config import Settings, get_settings
 from app.observability import register_gate_metrics, setup_observability
 from app.capture.camera_source import CameraFrameSource
 from app.capture.frame_source import ClipFrameSource, FrameSource
 from app.capture.detector import PersonDetector
 from app.capture.presence import PresenceEdge, PresenceState, PresenceStateMachine
 from app.capture.presence_client import PresenceClient
+
+
+def _channel_credentials(settings: Settings) -> grpc.ChannelCredentials:
+    return grpc.ssl_channel_credentials(
+        root_certificates=settings.TLS_CA_FILE.read_bytes(),
+        private_key=settings.TLS_KEY_FILE.read_bytes(),
+        certificate_chain=settings.TLS_CERT_FILE.read_bytes(),
+    )
 
 
 _STATE_TO_GAUGE = {
@@ -101,6 +112,7 @@ async def _serve() -> None:
         connect_timeout_seconds=settings.STREAM_SEND_TIMEOUT_SECONDS,
         retry_backoff_seconds=settings.STREAM_RETRY_BACKOFF_SECONDS,
         retry_backoff_max_seconds=settings.STREAM_RETRY_BACKOFF_MAX_SECONDS,
+        credentials=_channel_credentials(settings),
     )
     counters = GateCounters()
     register_gate_metrics(

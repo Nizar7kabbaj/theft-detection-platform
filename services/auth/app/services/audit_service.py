@@ -210,9 +210,9 @@ def open_audit_client() -> AuditClient:
         return _client
     settings = get_settings()
     credentials = grpc.ssl_channel_credentials(
-        root_certificates=settings.audit_tls_ca_file.read_bytes(),
-        private_key=settings.audit_tls_key_file.read_bytes(),
-        certificate_chain=settings.audit_tls_cert_file.read_bytes(),
+        root_certificates=settings.tls_ca_file.read_bytes(),
+        private_key=settings.tls_key_file.read_bytes(),
+        certificate_chain=settings.tls_cert_file.read_bytes(),
     )
     _channel = grpc.aio.secure_channel(
         settings.audit_target,

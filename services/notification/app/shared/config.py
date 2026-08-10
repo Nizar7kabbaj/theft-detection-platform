@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     DLQ_ENABLED: bool = True
     ALERTMANAGER_WEBHOOK_TOKEN_FILE: Path = Path("/run/secrets/webhook_token")
     LOG_LEVEL: str = "INFO"
+
+    TLS_CERT_FILE: Path = Path("/run/secrets/notification_tls_cert")
+    TLS_KEY_FILE: Path = Path("/run/secrets/notification_tls_key")
+    TLS_CA_FILE: Path = Path("/run/secrets/notification_tls_ca")
+    TLS_REQUIRE_CLIENT_AUTH: bool = True
+
     model_config = SettingsConfigDict(extra="ignore")
 
     @property

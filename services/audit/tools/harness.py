@@ -246,7 +246,7 @@ async def _proof_full_rewrite_caught(factory) -> Proof:
         await session.execute(
             text("DROP TRIGGER trg_audit_events_no_update ON audit_events")
         )
-        
+
         rows = (
             await session.execute(
                 text(
@@ -289,7 +289,7 @@ async def _proof_full_rewrite_caught(factory) -> Proof:
                     },
                 )
             prev = chain
-            
+
         chain_result = await AuditRepository(session).verify(None, None)
         checkpoint_result = await verify_checkpoints(AuditRepository(session))
         await session.rollback()

@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     REDIS_PASSWORD_FILE: str = "/run/secrets/ai_redis_password"
     TRACKER_TTL_SECONDS: int = 60
 
+    TLS_CERT_FILE:          Path = Path("/run/secrets/ai_tls_cert")
+    TLS_KEY_FILE:           Path = Path("/run/secrets/ai_tls_key")
+    TLS_CA_FILE:            Path = Path("/run/secrets/ai_tls_ca")
+    TLS_REQUIRE_CLIENT_AUTH: bool = True
+
     model_config = SettingsConfigDict(extra="ignore")
 
     @computed_field

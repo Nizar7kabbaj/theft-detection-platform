@@ -4,7 +4,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
-from app.core.config import get_settings
+
+import grpc
+
+from app.core.config import Settings, get_settings
 from app.observability import register_capture_metrics, setup_observability
 from app.capture.buffer import ForwardBuffer
 from app.capture.device import CameraDevice
@@ -12,6 +15,14 @@ from app.capture.forwarder import Forwarder
 from app.capture.loop import CaptureLoop
 from app.capture.publisher import FramePublisher
 from app.capture.rate import RateController
+
+
+def _channel_credentials(settings: Settings) -> grpc.ChannelCredentials:
+    return grpc.ssl_channel_credentials(
+        root_certificates=settings.TLS_CA_FILE.read_bytes(),
+        private_key=settings.TLS_KEY_FILE.read_bytes(),
+        certificate_chain=settings.TLS_CERT_FILE.read_bytes(),
+    )
 
 
 async def _serve() -> None:
@@ -60,6 +71,7 @@ async def _serve() -> None:
         retry_backoff_seconds=settings.FORWARD_RETRY_BACKOFF_SECONDS,
         retry_backoff_max_seconds=settings.FORWARD_RETRY_BACKOFF_MAX_SECONDS,
         rate_controller=rate_controller,
+        credentials=_channel_credentials(settings),
     )
     register_capture_metrics(
         camera_id=settings.CAMERA_ID,
