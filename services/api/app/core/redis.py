@@ -1,10 +1,11 @@
 import logging
 from functools import lru_cache
 from urllib.parse import quote_plus
+
 from fastapi import Request
 from redis.asyncio import Redis, from_url
-from .config import settings
 
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,10 @@ def _resolve_redis_url() -> str:
     user = quote_plus(settings.REDIS_USER)
     password = quote_plus(_load_redis_password())
     return (
-        f"redis://{user}:{password}@{settings.REDIS_HOST}"
-        f":{settings.REDIS_PORT}/{settings.REDIS_DB}"
+        f"redis://{user}:{password}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
     )
+
+
 async def open_redis() -> Redis:
     mode = (settings.REDIS_MODE or "local").lower()
     logger.info("connecting to redis", extra={"mode": mode})
@@ -51,5 +53,7 @@ async def open_redis() -> Redis:
 async def close_redis(client: Redis) -> None:
     await client.aclose()
     logger.info("redis connection closed")
+
+
 def get_redis(request: Request) -> Redis:
     return request.app.state.redis

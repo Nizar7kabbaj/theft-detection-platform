@@ -10,14 +10,14 @@ from fastapi import WebSocket, WebSocketException, status
 
 from app.core.authz import (
     Permission,
-    TokenMissing,
-    TokenRejected,
+    TokenMissingError,
+    TokenRejectedError,
     _resolve_permissions,
     build_auth_client,
     extract_token,
     verify_connection,
 )
-from app.core.errors import AuthUnavailable
+from app.core.errors import AuthUnavailableError
 from app.grpc_gen import audit_pb2
 from app.schemas.identity import CurrentUser
 from app.services.audit_service import AuditClient
@@ -47,9 +47,7 @@ def _allowed_origins() -> frozenset[str]:
     from app.core.config import settings
 
     normalized = (
-        _normalize_origin(item)
-        for item in settings.WS_ALLOWED_ORIGINS.split(",")
-        if item.strip()
+        _normalize_origin(item) for item in settings.WS_ALLOWED_ORIGINS.split(",") if item.strip()
     )
     return frozenset(item for item in normalized if item is not None)
 
@@ -69,15 +67,15 @@ async def authenticate(ws: WebSocket) -> CurrentUser:
     check_origin(ws)
     try:
         token = extract_token(ws)
-    except TokenMissing as exc:
+    except TokenMissingError as exc:
         logger.info("websocket upgrade refused, no credentials")
         raise WebSocketException(code=_POLICY, reason="not authenticated") from exc
     client = build_auth_client(ws)
     try:
         user = await verify_connection(ws, client, token)
-    except TokenRejected as exc:
+    except TokenRejectedError as exc:
         raise WebSocketException(code=_POLICY, reason="not authenticated") from exc
-    except AuthUnavailable as exc:
+    except AuthUnavailableError as exc:
         logger.warning("websocket upgrade failed, auth service unavailable")
         raise WebSocketException(code=_INTERNAL, reason="auth unavailable") from exc
     return user
@@ -103,10 +101,9 @@ def require_ws_permission(
                 path=ws.url.path,
                 roles=user.roles,
             )
-            raise WebSocketException(
-                code=_POLICY, reason="insufficient permission"
-            )
+            raise WebSocketException(code=_POLICY, reason="insufficient permission")
         return user
+
     return _guard
 
 
@@ -118,7 +115,7 @@ async def reverify_loop(ws: WebSocket, user: CurrentUser) -> None:
         await asyncio.sleep(settings.WS_REAUTH_SECONDS)
         try:
             active = await client.session_active(user.session_id)
-        except AuthUnavailable:
+        except AuthUnavailableError:
             logger.warning("session recheck skipped, auth service unavailable")
             continue
         except Exception:

@@ -10,7 +10,6 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from app.grpc_gen import inference_pb2 as inf_pb
 from app.grpc_gen.inference_pb2_grpc import InferenceServiceStub
 
-
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.asyncio(loop_scope="session"),

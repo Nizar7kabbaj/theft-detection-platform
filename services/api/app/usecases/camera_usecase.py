@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pymongo.errors import DuplicateKeyError
 from redis.asyncio import Redis
@@ -35,7 +35,7 @@ class CameraUseCase:
 
     async def create(self, payload: CameraCreate) -> CameraResponse:
         doc = payload.model_dump()
-        doc["created_at"] = datetime.now(timezone.utc)
+        doc["created_at"] = datetime.now(UTC)
         try:
             created = await self._repo.create(doc)
         except DuplicateKeyError as exc:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 
@@ -122,7 +122,9 @@ class TestDelete:
 
         await camera_usecase.delete(sample_camera_doc["_id"])
 
-        publish_calls = [c for c in mock_redis.publish.await_args_list if c.args[0] == "cameras:deleted"]
+        publish_calls = [
+            c for c in mock_redis.publish.await_args_list if c.args[0] == "cameras:deleted"
+        ]
         assert len(publish_calls) == 1
         published = json.loads(publish_calls[0].args[1])
         assert published["_id"] == sample_camera_doc["_id"]

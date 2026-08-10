@@ -4,10 +4,10 @@ from urllib.parse import quote_plus
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from .config import settings
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-client: AsyncIOMotorClient = None
+client: AsyncIOMotorClient | None = None
 
 
 @lru_cache(maxsize=1)
@@ -48,6 +48,7 @@ async def close_mongodb_connection():
     global client
     if client:
         client.close()
+        client = None
         logger.info("mongodb connection closed")
 
 

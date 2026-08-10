@@ -12,21 +12,23 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_API_URL = "https://api.telegram.org/bot{token}/{method}"
 _TELEGRAM_TOKEN_URL = re.compile(r"/bot[^/]+/")
+_HTTP_TOO_MANY_REQUESTS = 429
+_HTTP_SERVER_ERROR = 500
 
 
 class TelegramError(Exception):
     pass
 
 
-class TelegramUnreachable(TelegramError):
+class TelegramUnreachableError(TelegramError):
     pass
 
 
-class TelegramTransient(TelegramError):
+class TelegramTransientError(TelegramError):
     pass
 
 
-class TelegramPermanent(TelegramError):
+class TelegramPermanentError(TelegramError):
     pass
 
 
@@ -37,20 +39,22 @@ def _scrub(message: str) -> str:
 def _classify(exc: requests.exceptions.RequestException) -> TelegramError:
     message = _scrub(str(exc))
     if isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
-        return TelegramUnreachable(message)
+        return TelegramUnreachableError(message)
     if isinstance(exc, requests.exceptions.HTTPError):
         response = exc.response
         status = response.status_code if response is not None else None
-        if status is not None and (status == 429 or status >= 500):
-            return TelegramTransient(message)
-        return TelegramPermanent(message)
-    return TelegramPermanent(message)
+        if status is not None and (
+            status == _HTTP_TOO_MANY_REQUESTS or status >= _HTTP_SERVER_ERROR
+        ):
+            return TelegramTransientError(message)
+        return TelegramPermanentError(message)
+    return TelegramPermanentError(message)
 
 
 def _result_label(failure: TelegramError) -> str:
-    if isinstance(failure, TelegramUnreachable):
+    if isinstance(failure, TelegramUnreachableError):
         return "unreachable"
-    if isinstance(failure, TelegramTransient):
+    if isinstance(failure, TelegramTransientError):
         return "transient"
     return "permanent"
 
@@ -87,16 +91,12 @@ def send_message(text: str) -> bool:
         "parse_mode": "HTML",
     }
     try:
-        response = requests.post(
-            url, json=payload, timeout=settings.TELEGRAM_REQUEST_TIMEOUT_SEC
-        )
+        response = requests.post(url, json=payload, timeout=settings.TELEGRAM_REQUEST_TIMEOUT_SEC)
         response.raise_for_status()
     except requests.exceptions.RequestException as exc:
         failure = _classify(exc)
         logger.error("telegram send failed: %s", failure)
-        telegram_messages_total.add(
-            1, {"method": "message", "result": _result_label(failure)}
-        )
+        telegram_messages_total.add(1, {"method": "message", "result": _result_label(failure)})
         raise failure from None
     logger.info("telegram message sent chars=%d", len(text))
     telegram_messages_total.add(1, {"method": "message", "result": "sent"})
@@ -131,9 +131,7 @@ def send_photo(image_path: str, caption: str = "") -> bool:
     except requests.exceptions.RequestException as exc:
         failure = _classify(exc)
         logger.error("telegram photo send failed: %s", failure)
-        telegram_messages_total.add(
-            1, {"method": "photo", "result": _result_label(failure)}
-        )
+        telegram_messages_total.add(1, {"method": "photo", "result": _result_label(failure)})
         raise failure from None
     except OSError as exc:
         logger.error("snapshot file read failed: %s", exc)
@@ -142,6 +140,7 @@ def send_photo(image_path: str, caption: str = "") -> bool:
     logger.info("telegram photo sent file=%s", path.name)
     telegram_messages_total.add(1, {"method": "photo", "result": "sent"})
     return True
+
 
 def probe() -> bool:
     if not is_configured():

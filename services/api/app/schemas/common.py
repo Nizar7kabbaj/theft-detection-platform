@@ -16,7 +16,6 @@ class Keypoint(BaseModel):
 
 
 class MongoModel(BaseModel):
-
     model_config = ConfigDict(populate_by_name=True)
 
     @field_validator("id", mode="before", check_fields=False)

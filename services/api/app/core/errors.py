@@ -16,12 +16,14 @@ class ValidationError(AppError):
 class ConflictError(AppError):
     """write would violate a uniqueness or state constraint."""
 
-class InferenceUnavailable(AppError):
+
+class InferenceUnavailableError(AppError):
     """upstream inference service unreachable or timed out."""
 
 
-class AlertUnavailable(AppError):
+class AlertUnavailableError(AppError):
     """upstream alert service unreachable or timed out."""
 
-class AuthUnavailable(AppError):
+
+class AuthUnavailableError(AppError):
     """auth service unreachable or timed out during token verification."""

@@ -7,7 +7,7 @@ import grpc
 from opentelemetry import trace
 
 from app.core.config import settings
-from app.core.errors import AuthUnavailable
+from app.core.errors import AuthUnavailableError
 from app.grpc_gen import auth_pb2 as pb
 from app.grpc_gen.auth_pb2_grpc import AuthServiceStub
 
@@ -61,7 +61,7 @@ class AuthClient:
                         exc.code().name,
                         exc.details(),
                     )
-                    raise AuthUnavailable("auth service unavailable") from exc
+                    raise AuthUnavailableError("auth service unavailable") from exc
                 raise
             span.set_attribute(
                 "auth.status",
@@ -90,7 +90,7 @@ class AuthClient:
                         exc.code().name,
                         exc.details(),
                     )
-                    raise AuthUnavailable("auth service unavailable") from exc
+                    raise AuthUnavailableError("auth service unavailable") from exc
                 raise
             span.set_attribute("auth.session_active", response.active)
             return response.active

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ASCENDING, ReturnDocument
@@ -17,7 +17,7 @@ from app.shared.schemas.delivery import (
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
@@ -65,9 +65,7 @@ class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
         doc = await self._col.find_one_and_update(
             {
                 "_id": self._oid(intent_id),
-                "status": {
-                    "$nin": [DeliveryStatus.SENT.value, DeliveryStatus.DEAD.value]
-                },
+                "status": {"$nin": [DeliveryStatus.SENT.value, DeliveryStatus.DEAD.value]},
             },
             {
                 "$set": {
@@ -96,9 +94,7 @@ class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
         )
         return self._to_model(doc) if doc else None
 
-    async def mark_failed(
-        self, intent_id: str, last_error: str
-    ) -> DeliveryIntent | None:
+    async def mark_failed(self, intent_id: str, last_error: str) -> DeliveryIntent | None:
         now = _utcnow()
         doc = await self._col.find_one_and_update(
             {"_id": self._oid(intent_id)},
@@ -115,9 +111,7 @@ class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
         )
         return self._to_model(doc) if doc else None
 
-    async def mark_dead(
-        self, intent_id: str, last_error: str
-    ) -> DeliveryIntent | None:
+    async def mark_dead(self, intent_id: str, last_error: str) -> DeliveryIntent | None:
         now = _utcnow()
         doc = await self._col.find_one_and_update(
             {"_id": self._oid(intent_id)},
@@ -133,16 +127,12 @@ class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
         )
         return self._to_model(doc) if doc else None
 
-    async def mark_buffered(
-        self, intent_id: str, last_error: str
-    ) -> DeliveryIntent | None:
+    async def mark_buffered(self, intent_id: str, last_error: str) -> DeliveryIntent | None:
         now = _utcnow()
         doc = await self._col.find_one_and_update(
             {
                 "_id": self._oid(intent_id),
-                "status": {
-                    "$nin": [DeliveryStatus.SENT.value, DeliveryStatus.DEAD.value]
-                },
+                "status": {"$nin": [DeliveryStatus.SENT.value, DeliveryStatus.DEAD.value]},
             },
             {
                 "$set": {
@@ -176,9 +166,7 @@ class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
             released.append(self._to_model(doc))
         return released
 
-    async def mark_requeued(
-        self, intent_id: str, cutoff: datetime
-    ) -> DeliveryIntent | None:
+    async def mark_requeued(self, intent_id: str, cutoff: datetime) -> DeliveryIntent | None:
         now = _utcnow()
         doc = await self._col.find_one_and_update(
             {
@@ -206,8 +194,8 @@ class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
     async def find_stale(
         self, status: DeliveryStatus, cutoff: datetime, limit: int = 100
     ) -> list[DeliveryIntent]:
-        cursor = self._col.find(
-            {"status": status.value, "updated_at": {"$lt": cutoff}}
-        ).limit(limit)
+        cursor = self._col.find({"status": status.value, "updated_at": {"$lt": cutoff}}).limit(
+            limit
+        )
         docs = await cursor.to_list(length=limit)
         return [self._to_model(doc) for doc in docs]

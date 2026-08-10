@@ -1,6 +1,6 @@
 from celery import Celery
-from app.shared.config import settings
 
+from app.shared.config import settings
 
 celery_app = Celery(
     "alerts",

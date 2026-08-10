@@ -120,13 +120,9 @@ def make_create(alert_payload: dict) -> Callable[..., DeliveryIntentCreate]:
 
 @pytest.fixture
 def age_doc(test_db: AsyncIOMotorDatabase) -> Callable[..., object]:
-    async def _age(
-        collection: str, intent_id: str, updated_at: datetime, **extra: object
-    ) -> None:
+    async def _age(collection: str, intent_id: str, updated_at: datetime, **extra: object) -> None:
         changes: dict = {"updated_at": updated_at}
         changes.update(extra)
-        await test_db[collection].update_one(
-            {"_id": ObjectId(intent_id)}, {"$set": changes}
-        )
+        await test_db[collection].update_one({"_id": ObjectId(intent_id)}, {"$set": changes})
 
     return _age

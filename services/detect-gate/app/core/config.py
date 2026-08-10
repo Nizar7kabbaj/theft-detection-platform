@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     FRAME_READ_BLOCK_MS: Annotated[int, Field(ge=100)] = 2000
     FRAME_RETRY_BACKOFF_SECONDS: Annotated[float, Field(gt=0)] = 0.5
     FRAME_RETRY_BACKOFF_MAX_SECONDS: Annotated[float, Field(gt=0)] = 10.0
-    HEARTBEAT_PATH: str = "/tmp/detect_gate_heartbeat"
+    HEARTBEAT_PATH: Path = Path("/app/run/detect_gate_heartbeat")
     HEARTBEAT_MAX_AGE_SECONDS: Annotated[float, Field(gt=0)] = 10.0
     LOG_LEVEL: str = "INFO"
     DEBUG: bool = False

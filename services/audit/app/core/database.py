@@ -32,13 +32,9 @@ def _load_password(path: Path) -> str:
     try:
         password = path.read_text(encoding="utf-8").strip()
     except FileNotFoundError as exc:
-        raise DatabaseCredentialError(
-            f"postgres password file missing at {path}"
-        ) from exc
+        raise DatabaseCredentialError(f"postgres password file missing at {path}") from exc
     except OSError as exc:
-        raise DatabaseCredentialError(
-            f"postgres password file unreadable at {path}"
-        ) from exc
+        raise DatabaseCredentialError(f"postgres password file unreadable at {path}") from exc
     if not password:
         raise DatabaseCredentialError(f"postgres password file empty at {path}")
     return password
@@ -73,9 +69,7 @@ def _server_settings() -> dict[str, str]:
         "application_name": settings.service_name,
         "lock_timeout": f"{settings.lock_timeout_ms}ms",
         "statement_timeout": f"{settings.statement_timeout_ms}ms",
-        "idle_in_transaction_session_timeout": (
-            f"{settings.idle_transaction_timeout_ms}ms"
-        ),
+        "idle_in_transaction_session_timeout": (f"{settings.idle_transaction_timeout_ms}ms"),
     }
 
 
@@ -85,9 +79,7 @@ def _owner_server_settings() -> dict[str, str]:
         "application_name": f"{settings.service_name}-operator",
         "lock_timeout": f"{settings.owner_lock_timeout_ms}ms",
         "statement_timeout": f"{settings.owner_statement_timeout_ms}ms",
-        "idle_in_transaction_session_timeout": (
-            f"{settings.owner_idle_transaction_timeout_ms}ms"
-        ),
+        "idle_in_transaction_session_timeout": (f"{settings.owner_idle_transaction_timeout_ms}ms"),
     }
 
 

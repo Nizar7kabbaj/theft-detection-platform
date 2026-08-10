@@ -6,9 +6,8 @@ import pytest
 import requests
 from bson import ObjectId
 
-from app.shared.config import settings
 from app.shared.recipient import UNCONFIGURED_RECIPIENT
-from app.shared.schemas.delivery import DeliveryStatus, DeliverySource
+from app.shared.schemas.delivery import DeliveryStatus
 from app.worker import tasks
 
 pytestmark = pytest.mark.integration
@@ -78,9 +77,7 @@ async def test_dead_on_transport_error_final(
     assert await dlq_repo.find_by_intent_id(intent.id) is not None
 
 
-async def test_dead_on_render_failure(
-    intent_repo, dlq_repo, make_create, monkeypatch
-) -> None:
+async def test_dead_on_render_failure(intent_repo, dlq_repo, make_create, monkeypatch) -> None:
     dispatch = MagicMock(return_value=True)
     monkeypatch.setattr(tasks, "_dispatch", dispatch)
     broken = {"session_id": 1, "occurred_at": "2026-06-18T00:00:00Z"}

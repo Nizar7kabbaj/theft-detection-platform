@@ -23,10 +23,10 @@ from redis.asyncio import Redis
 from app.api.v1 import alerts, cameras, detections, stats, streams
 from app.core.config import settings
 from app.core.errors import (
-    AlertUnavailable,
+    AlertUnavailableError,
     AppError,
     ConflictError,
-    InferenceUnavailable,
+    InferenceUnavailableError,
     NotFoundError,
     ValidationError,
 )
@@ -35,7 +35,6 @@ from app.dependencies import get_db
 from app.grpc_gen.alert_pb2_grpc import AlertServiceStub
 from app.grpc_gen.inference_pb2_grpc import InferenceServiceStub
 from app.services.broadcast_service import BroadcastService
-
 
 INTEGRATION_REDIS_DB = 15
 TEST_COLLECTION_PREFIX = "test_"
@@ -57,7 +56,6 @@ def _free_port() -> int:
 
 
 class _PrefixedDatabase:
-
     def __init__(self, real: AsyncIOMotorDatabase, prefix: str) -> None:
         self._real = real
         self._prefix = prefix
@@ -145,12 +143,12 @@ def _register_error_handlers(app: FastAPI) -> None:
     async def _val(_: Request, exc: ValidationError) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(exc)})
 
-    @app.exception_handler(InferenceUnavailable)
-    async def _iu(_: Request, exc: InferenceUnavailable) -> JSONResponse:
+    @app.exception_handler(InferenceUnavailableError)
+    async def _iu(_: Request, exc: InferenceUnavailableError) -> JSONResponse:
         return JSONResponse(status_code=503, content={"detail": str(exc)})
 
-    @app.exception_handler(AlertUnavailable)
-    async def _au(_: Request, exc: AlertUnavailable) -> JSONResponse:
+    @app.exception_handler(AlertUnavailableError)
+    async def _au(_: Request, exc: AlertUnavailableError) -> JSONResponse:
         return JSONResponse(status_code=503, content={"detail": str(exc)})
 
     @app.exception_handler(AppError)
@@ -198,9 +196,7 @@ async def test_app(
 @pytest_asyncio.fixture(loop_scope="session")
 async def client(test_app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=test_app)
-    async with httpx.AsyncClient(
-        transport=transport, base_url="http://test"
-    ) as c:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
 
 

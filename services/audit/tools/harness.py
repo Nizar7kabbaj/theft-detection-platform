@@ -32,12 +32,8 @@ from tools.operator import erase_subject
 
 logger = logging.getLogger("harness")
 
-LIFECYCLE_PAYLOAD_KIND = audit_pb2.AuditEvent.DESCRIPTOR.fields_by_name[
-    "service_lifecycle"
-].number
-ERASURE_PAYLOAD_KIND = audit_pb2.AuditEvent.DESCRIPTOR.fields_by_name[
-    "data_subject_erasure"
-].number
+LIFECYCLE_PAYLOAD_KIND = audit_pb2.AuditEvent.DESCRIPTOR.fields_by_name["service_lifecycle"].number
+ERASURE_PAYLOAD_KIND = audit_pb2.AuditEvent.DESCRIPTOR.fields_by_name["data_subject_erasure"].number
 
 
 @dataclass(slots=True)
@@ -127,10 +123,7 @@ async def _reset(factory) -> None:
             text("ALTER TABLE audit_events ALTER COLUMN sequence_number RESTART WITH 1")
         )
         await session.execute(
-            text(
-                "ALTER TABLE audit_chain_segments "
-                "ALTER COLUMN segment_id RESTART WITH 1"
-            )
+            text("ALTER TABLE audit_chain_segments ALTER COLUMN segment_id RESTART WITH 1")
         )
         await session.commit()
 
@@ -212,8 +205,7 @@ async def _proof_operator_erasure_audited(factory) -> Proof:
     return Proof(
         "erasure tombstones rows and records itself in the chain",
         f"exit 0 erased {before} recorded 1 intact True",
-        f"exit {code} erased {erased} recorded {recorded} "
-        f"intact {result.chain_intact}",
+        f"exit {code} erased {erased} recorded {recorded} intact {result.chain_intact}",
     )
 
 
@@ -243,9 +235,7 @@ async def _proof_full_rewrite_caught(factory) -> Proof:
         await session.commit()
 
     async with factory() as session:
-        await session.execute(
-            text("DROP TRIGGER trg_audit_events_no_update ON audit_events")
-        )
+        await session.execute(text("DROP TRIGGER trg_audit_events_no_update ON audit_events"))
 
         rows = (
             await session.execute(
@@ -270,9 +260,9 @@ async def _proof_full_rewrite_caught(factory) -> Proof:
                     {"p": prev, "c": chain, "s": sequence_number},
                 )
             else:
-                payload_bytes = event_bytes + b"\x00forged" if (
-                    sequence_number == target
-                ) else event_bytes
+                payload_bytes = (
+                    event_bytes + b"\x00forged" if (sequence_number == target) else event_bytes
+                )
                 leaf = compute_leaf_hash(payload_bytes)
                 chain = compute_chain_hash(prev, leaf)
                 await session.execute(

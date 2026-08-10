@@ -14,6 +14,8 @@ from app.repositories.user_repository import UserRepository
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("seed_user")
 
+_MIN_PASSWORD_LENGTH = 8
+
 
 def _read_password() -> str:
     password = os.environ.get("SEED_USER_PASSWORD")
@@ -47,8 +49,8 @@ def main() -> None:
     args = parser.parse_args()
 
     password = _read_password()
-    if len(password) < 8:
-        logger.error("password must be at least 8 characters")
+    if len(password) < _MIN_PASSWORD_LENGTH:
+        logger.error("password must be at least %d characters", _MIN_PASSWORD_LENGTH)
         sys.exit(1)
 
     roles = [r.strip() for r in args.roles.split(",") if r.strip()]

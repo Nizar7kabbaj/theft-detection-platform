@@ -10,9 +10,7 @@ class SessionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def create(
-        self, user_id: str, source_ip: str, user_agent: str
-    ) -> Session:
+    async def create(self, user_id: str, source_ip: str, user_agent: str) -> Session:
         login_session = Session(
             user_id=user_id,
             source_ip=source_ip,
@@ -24,9 +22,7 @@ class SessionRepository:
         return login_session
 
     async def get_by_id(self, session_id: str) -> Session | None:
-        result = await self._session.execute(
-            select(Session).where(Session.id == session_id)
-        )
+        result = await self._session.execute(select(Session).where(Session.id == session_id))
         return result.scalar_one_or_none()
 
     async def revoke(self, session_id: str) -> bool:

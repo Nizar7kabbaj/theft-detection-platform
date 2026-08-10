@@ -121,6 +121,8 @@ class FramePublisher:
             except redis.exceptions.RedisError as exc:
                 with self._queue_lock:
                     self._failed_total += 1
-                logger.warning("publish failed error=%s, backing off %.1fs", type(exc).__name__, backoff)
+                logger.warning(
+                    "publish failed error=%s, backing off %.1fs", type(exc).__name__, backoff
+                )
                 time.sleep(backoff)
                 backoff = min(backoff * 2, self._retry_backoff_max)

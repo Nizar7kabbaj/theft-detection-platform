@@ -81,9 +81,12 @@ def _build_refresh_token(jti: str, secret: str) -> str:
     return f"{jti}.{secret}"
 
 
+_REFRESH_TOKEN_PARTS = 2
+
+
 def _split_refresh_token(raw: str) -> tuple[str, str] | None:
     parts = raw.split(".", 1)
-    if len(parts) != 2 or not parts[0] or not parts[1]:
+    if len(parts) != _REFRESH_TOKEN_PARTS or not parts[0] or not parts[1]:
         return None
     return parts[0], parts[1]
 
@@ -117,9 +120,7 @@ def _emit_login_failure(
 
 
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
-async def login(
-    payload: LoginRequest, request: Request, response: Response
-) -> TokenResponse:
+async def login(payload: LoginRequest, request: Request, response: Response) -> TokenResponse:
     settings = get_settings()
     ip = _client_ip(request)
     user_agent = _user_agent(request)
@@ -250,9 +251,7 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
             was_live = await sessions.revoke(stored.session_id)
             await db.commit()
             if was_live:
-                await revoke_sid(
-                    stored.session_id, settings.access_token_ttl_seconds
-                )
+                await revoke_sid(stored.session_id, settings.access_token_ttl_seconds)
             client = audit_client()
             if client is not None:
                 client.emit_refresh_reuse_detected(
@@ -344,9 +343,7 @@ async def logout(request: Request, response: Response) -> LogoutResponse:
             jti = claims.get("jti")
             exp = claims.get("exp")
             if jti and exp:
-                remaining = int(exp) - int(
-                    datetime.now(UTC).timestamp()
-                )
+                remaining = int(exp) - int(datetime.now(UTC).timestamp())
                 if remaining > 0:
                     await revoke_jti(jti, remaining)
                     revoked = True
@@ -357,9 +354,7 @@ async def logout(request: Request, response: Response) -> LogoutResponse:
                     was_live = await SessionRepository(db).revoke(session_id)
                     await db.commit()
                 if was_live:
-                    await revoke_sid(
-                        session_id, settings.access_token_ttl_seconds
-                    )
+                    await revoke_sid(session_id, settings.access_token_ttl_seconds)
                 revoked = True
             if revoked:
                 client = audit_client()

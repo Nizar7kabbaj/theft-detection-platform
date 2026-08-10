@@ -113,9 +113,7 @@ async def erase_subject(subject: str, requested_by: str, dry_run: bool) -> int:
         event.occurred_at.FromDatetime(datetime.now(UTC))
         event.data_subject_erasure.data_subject_hmac = subject_hmac
         event.data_subject_erasure.requested_by = requested_by
-        event.data_subject_erasure.scopes.append(
-            audit_pb2.ERASURE_SCOPE_AUDIT_PAYLOADS
-        )
+        event.data_subject_erasure.scopes.append(audit_pb2.ERASURE_SCOPE_AUDIT_PAYLOADS)
         event.data_subject_erasure.records_erased = len(rows)
         event.data_subject_erasure.completed = True
 
@@ -190,8 +188,7 @@ async def _verify() -> int:
     async with factory() as session:
         result = await AuditRepository(session).verify(None, None)
     logger.info(
-        "chain_intact=%s failure_kind=%d break_at=%s "
-        "events=%d erased=%d checkpoints=%d",
+        "chain_intact=%s failure_kind=%d break_at=%s events=%d erased=%d checkpoints=%d",
         result.chain_intact,
         result.failure_kind,
         result.break_at_sequence_number,

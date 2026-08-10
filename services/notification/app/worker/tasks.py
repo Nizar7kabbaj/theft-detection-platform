@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from opentelemetry import trace
@@ -16,9 +16,11 @@ from app.core.database import (
 )
 from app.repositories.dead_letter import DeadLetterRepository
 from app.repositories.delivery_intent import DeliveryIntentRepository
+from app.shared import gate
 from app.shared.celery_app import celery_app
 from app.shared.config import settings
 from app.shared.observability import extract_context
+from app.shared.recipient import UNCONFIGURED_RECIPIENT
 from app.shared.schemas.delivery import (
     DeadLetterCreate,
     DeliveryIntent,
@@ -26,15 +28,13 @@ from app.shared.schemas.delivery import (
 )
 from app.shared.telegram_service import (
     TelegramError,
-    TelegramPermanent,
-    TelegramTransient,
-    TelegramUnreachable,
+    TelegramPermanentError,
+    TelegramTransientError,
+    TelegramUnreachableError,
     probe,
     send_message,
     send_photo,
 )
-from app.shared.recipient import UNCONFIGURED_RECIPIENT
-from app.shared import gate
 from app.worker.renderers import render
 
 logger = logging.getLogger(__name__)
@@ -42,21 +42,16 @@ tracer = trace.get_tracer("notification.worker")
 
 
 def _dispatch(text: str, photo_path: str | None) -> bool:
-    if photo_path:
-        if send_photo(photo_path, text):
-            return True
+    if photo_path and send_photo(photo_path, text):
+        return True
     return send_message(text)
 
 
 async def _deliver(intent_id: str, final_attempt: bool) -> dict[str, Any]:
     await connect_to_mongodb()
     try:
-        intent_repo = DeliveryIntentRepository(
-            get_collection(settings.DELIVERY_INTENT_COLLECTION)
-        )
-        dlq_repo = DeadLetterRepository(
-            get_collection(settings.DEAD_LETTER_COLLECTION)
-        )
+        intent_repo = DeliveryIntentRepository(get_collection(settings.DELIVERY_INTENT_COLLECTION))
+        dlq_repo = DeadLetterRepository(get_collection(settings.DEAD_LETTER_COLLECTION))
         intent = await intent_repo.get_by_id(intent_id)
         if intent is None:
             logger.error("intent %s not found, dropping", intent_id)
@@ -112,13 +107,13 @@ async def _deliver(intent_id: str, final_attempt: bool) -> dict[str, Any]:
             return {"intent_id": intent_id, "delivered": False, "reason": "render"}
         try:
             sent = await asyncio.to_thread(_dispatch, text, photo_path)
-        except TelegramUnreachable as exc:
+        except TelegramUnreachableError as exc:
             error = str(exc)
             gate.gate_set(error)
             await intent_repo.mark_buffered(intent.id, error)
             logger.warning("intent %s buffered, telegram unreachable: %s", intent_id, error)
             return {"intent_id": intent_id, "delivered": False, "reason": "buffered"}
-        except TelegramPermanent as exc:
+        except TelegramPermanentError as exc:
             error = str(exc)
             await intent_repo.mark_dead(intent.id, error)
             await dlq_repo.create(
@@ -187,7 +182,7 @@ async def _deliver(intent_id: str, final_attempt: bool) -> dict[str, Any]:
     bind=True,
     max_retries=settings.CELERY_TASK_MAX_RETRIES,
     default_retry_delay=settings.CELERY_TASK_RETRY_DELAY_SEC,
-    autoretry_for=(TelegramTransient, TelegramUnreachable),
+    autoretry_for=(TelegramTransientError, TelegramUnreachableError),
     retry_backoff=True,
     retry_backoff_max=60,
     retry_jitter=True,
@@ -237,9 +232,7 @@ async def _requeue_one(
         return "raced"
     ctx = extract_context(intent.trace_carrier)
     link = Link(sweep_span.get_span_context())
-    with tracer.start_as_current_span(
-        "reconcile_requeue", context=ctx, links=[link]
-    ) as span:
+    with tracer.start_as_current_span("reconcile_requeue", context=ctx, links=[link]) as span:
         span.set_attribute("intent.id", intent.id)
         span.set_attribute("intent.source_ref", intent.source_ref)
         span.set_attribute("intent.requeue_count", requeued.requeue_count)
@@ -251,19 +244,11 @@ async def _requeue_one(
 async def _reconcile() -> dict[str, int]:
     await connect_to_mongodb()
     try:
-        intent_repo = DeliveryIntentRepository(
-            get_collection(settings.DELIVERY_INTENT_COLLECTION)
-        )
-        dlq_repo = DeadLetterRepository(
-            get_collection(settings.DEAD_LETTER_COLLECTION)
-        )
-        now = datetime.now(timezone.utc)
-        sending_cutoff = now - timedelta(
-            seconds=settings.DELIVERY_INTENT_SENDING_TIMEOUT_SEC
-        )
-        pending_cutoff = now - timedelta(
-            seconds=settings.DELIVERY_INTENT_PENDING_TIMEOUT_SEC
-        )
+        intent_repo = DeliveryIntentRepository(get_collection(settings.DELIVERY_INTENT_COLLECTION))
+        dlq_repo = DeadLetterRepository(get_collection(settings.DEAD_LETTER_COLLECTION))
+        now = datetime.now(UTC)
+        sending_cutoff = now - timedelta(seconds=settings.DELIVERY_INTENT_SENDING_TIMEOUT_SEC)
+        pending_cutoff = now - timedelta(seconds=settings.DELIVERY_INTENT_PENDING_TIMEOUT_SEC)
         stale = await intent_repo.find_stale(DeliveryStatus.SENDING, sending_cutoff)
         stale += await intent_repo.find_stale(DeliveryStatus.PENDING, pending_cutoff)
         tally = {"requeued": 0, "poison": 0, "raced": 0}
@@ -273,13 +258,9 @@ async def _reconcile() -> dict[str, int]:
             sweep_span.set_attribute("stale.count", len(stale))
             for intent in stale:
                 cutoff = (
-                    sending_cutoff
-                    if intent.status == DeliveryStatus.SENDING
-                    else pending_cutoff
+                    sending_cutoff if intent.status == DeliveryStatus.SENDING else pending_cutoff
                 )
-                outcome = await _requeue_one(
-                    intent, cutoff, intent_repo, dlq_repo, sweep_span
-                )
+                outcome = await _requeue_one(intent, cutoff, intent_repo, dlq_repo, sweep_span)
                 tally[outcome] += 1
             sweep_span.set_attribute("reconcile.requeued", tally["requeued"])
             sweep_span.set_attribute("reconcile.poison", tally["poison"])
@@ -302,12 +283,11 @@ def reconcile_intents_task() -> dict[str, int]:
         return {"requeued": 0, "poison": 0, "raced": 0}
     return asyncio.run(_reconcile())
 
+
 async def _drain_buffer() -> dict[str, int]:
     await connect_to_mongodb()
     try:
-        intent_repo = DeliveryIntentRepository(
-            get_collection(settings.DELIVERY_INTENT_COLLECTION)
-        )
+        intent_repo = DeliveryIntentRepository(get_collection(settings.DELIVERY_INTENT_COLLECTION))
         released = await intent_repo.release_buffered(settings.GATE_DRAIN_BATCH)
         for intent in released:
             ctx = extract_context(intent.trace_carrier)

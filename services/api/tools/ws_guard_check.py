@@ -44,15 +44,11 @@ def login(username: str, password: str) -> str:
             json={"username": username, "password": password},
         )
         if resp.status_code != 200:
-            raise RuntimeError(
-                f"login failed for {username}: http {resp.status_code}"
-            )
+            raise RuntimeError(f"login failed for {username}: http {resp.status_code}")
         token = resp.cookies.get(COOKIE_NAME)
         if not token:
             names = ", ".join(resp.cookies.keys())
-            raise RuntimeError(
-                f"login for {username} returned no access cookie, got: {names}"
-            )
+            raise RuntimeError(f"login for {username} returned no access cookie, got: {names}")
         return token
 
 

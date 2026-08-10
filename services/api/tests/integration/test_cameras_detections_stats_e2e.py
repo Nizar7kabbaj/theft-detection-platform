@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -12,7 +12,6 @@ pytestmark = [
     pytest.mark.integration,
     pytest.mark.asyncio(loop_scope="session"),
 ]
-
 
 
 _TINY_JPEG_B64 = (
@@ -55,9 +54,8 @@ def _detection_payload(session_id: int = 1, frame_index: int = 0) -> dict[str, A
 
 # cameras
 
-async def test_create_camera_persists_and_returns_201(
-    client: httpx.AsyncClient, test_db
-) -> None:
+
+async def test_create_camera_persists_and_returns_201(client: httpx.AsyncClient, test_db) -> None:
     resp = await client.post("/api/v1/cameras", json=_camera_payload("cam-create"))
 
     assert resp.status_code == 201
@@ -100,9 +98,7 @@ async def test_get_missing_camera_returns_404(client: httpx.AsyncClient) -> None
     assert resp.status_code == 404
 
 
-async def test_delete_camera_removes_doc(
-    client: httpx.AsyncClient, test_db
-) -> None:
+async def test_delete_camera_removes_doc(client: httpx.AsyncClient, test_db) -> None:
     create = await client.post("/api/v1/cameras", json=_camera_payload("cam-d"))
     cam_id = create.json()["_id"]
 
@@ -125,6 +121,7 @@ async def test_duplicate_camera_name_returns_409(
 
 # detections
 
+
 async def test_create_detection_persists_and_returns_201(
     client: httpx.AsyncClient, test_db
 ) -> None:
@@ -142,9 +139,7 @@ async def test_create_detection_persists_and_returns_201(
 
 async def test_list_detections_returns_all(client: httpx.AsyncClient) -> None:
     for i in range(3):
-        await client.post(
-            "/api/v1/detections", json=_detection_payload(frame_index=i)
-        )
+        await client.post("/api/v1/detections", json=_detection_payload(frame_index=i))
 
     resp = await client.get("/api/v1/detections", params={"limit": 50, "skip": 0})
 
@@ -167,9 +162,7 @@ async def test_list_detections_by_session_filters(
     assert all(d["session_id"] == 10 for d in items)
 
 
-async def test_delete_detection_removes_doc(
-    client: httpx.AsyncClient, test_db
-) -> None:
+async def test_delete_detection_removes_doc(client: httpx.AsyncClient, test_db) -> None:
     create = await client.post("/api/v1/detections", json=_detection_payload())
     det_id = create.json()["_id"]
 
@@ -219,6 +212,7 @@ async def test_analyze_frame_end_to_end_through_inference_grpc(
 
 # stats
 
+
 async def test_stats_on_empty_db_returns_zeros(client: httpx.AsyncClient) -> None:
     resp = await client.get("/api/v1/stats")
 
@@ -229,20 +223,22 @@ async def test_stats_on_empty_db_returns_zeros(client: httpx.AsyncClient) -> Non
     assert body["total_cameras"] == 0
 
 
-async def test_stats_counts_reflect_seeded_data(
-    client: httpx.AsyncClient, test_db
-) -> None:
-    await test_db.cameras.insert_many(
-        [{"name": "c1"}, {"name": "c2"}]
-    )
-    await test_db.detections.insert_many(
-        [{"session_id": i} for i in range(3)]
-    )
-    today = datetime.now(timezone.utc)
+async def test_stats_counts_reflect_seeded_data(client: httpx.AsyncClient, test_db) -> None:
+    await test_db.cameras.insert_many([{"name": "c1"}, {"name": "c2"}])
+    await test_db.detections.insert_many([{"session_id": i} for i in range(3)])
+    today = datetime.now(UTC)
     await test_db.alerts.insert_many(
         [
-            {"severity": "SEVERITY_WARNING", "created_at": today, "object": {"class_name": "phone"}},
-            {"severity": "SEVERITY_WARNING", "created_at": today, "object": {"class_name": "phone"}},
+            {
+                "severity": "SEVERITY_WARNING",
+                "created_at": today,
+                "object": {"class_name": "phone"},
+            },
+            {
+                "severity": "SEVERITY_WARNING",
+                "created_at": today,
+                "object": {"class_name": "phone"},
+            },
             {"severity": "SEVERITY_NOTICE", "created_at": today, "object": {"class_name": "bag"}},
             {"severity": "SEVERITY_INFO", "created_at": today, "object": {"class_name": "bag"}},
         ]
@@ -259,11 +255,9 @@ async def test_stats_counts_reflect_seeded_data(
     assert body["medium_severity"] == 1
 
 
-async def test_stats_alerts_today_counts_only_today(
-    client: httpx.AsyncClient, test_db
-) -> None:
-    today = datetime.now(timezone.utc)
-    old = datetime(2020, 1, 1, tzinfo=timezone.utc)
+async def test_stats_alerts_today_counts_only_today(client: httpx.AsyncClient, test_db) -> None:
+    today = datetime.now(UTC)
+    old = datetime(2020, 1, 1, tzinfo=UTC)
     await test_db.alerts.insert_many(
         [
             {"severity": "SEVERITY_WARNING", "created_at": today},

@@ -41,7 +41,7 @@ return {1, 0}
 """
 
 
-class RateLimited(Exception):
+class RateLimitedError(Exception):
     def __init__(self, retry_after: int) -> None:
         self.retry_after = retry_after
         super().__init__("rate limit exceeded")
@@ -84,4 +84,4 @@ async def rate_limit(
     if not allowed:
         retry_after = max(1, math.ceil(retry_ms / 1000))
         logger.info("rate limit hit user=%s retry_after=%ss", user.user_id, retry_after)
-        raise RateLimited(retry_after)
+        raise RateLimitedError(retry_after)

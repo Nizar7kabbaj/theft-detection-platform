@@ -216,9 +216,7 @@ class AuditRepository:
         after_sequence_number: int | None,
     ) -> list[AuditEvent]:
         stmt = select(AuditEvent)
-        stmt = self._apply_filters(
-            stmt, from_time, to_time, source_service, actor, min_severity
-        )
+        stmt = self._apply_filters(stmt, from_time, to_time, source_service, actor, min_severity)
         if after_sequence_number is not None:
             stmt = stmt.where(AuditEvent.sequence_number > after_sequence_number)
         stmt = stmt.order_by(AuditEvent.sequence_number.asc()).limit(page_size)
@@ -229,9 +227,7 @@ class AuditRepository:
         if from_sequence_number is None:
             segment = await self._last_segment()
             first = await self._session.execute(
-                select(AuditEvent.prev_hash)
-                .order_by(AuditEvent.sequence_number.asc())
-                .limit(1)
+                select(AuditEvent.prev_hash).order_by(AuditEvent.sequence_number.asc()).limit(1)
             )
             head = first.scalar_one_or_none()
             if head is None:
@@ -308,9 +304,7 @@ class AuditRepository:
                     )
                 verified += 1
 
-            if not chain_matches(
-                row.prev_hash, row.leaf_hash, row.chain_hash, row.hash_algorithm
-            ):
+            if not chain_matches(row.prev_hash, row.leaf_hash, row.chain_hash, row.hash_algorithm):
                 return VerifyResult(
                     False,
                     row.sequence_number,
@@ -322,23 +316,17 @@ class AuditRepository:
 
             expected_prev = row.chain_hash
 
-        return VerifyResult(
-            True, None, VERIFY_FAILURE_NONE, verified, erased_verified, 0
-        )
+        return VerifyResult(True, None, VERIFY_FAILURE_NONE, verified, erased_verified, 0)
 
     async def latest_checkpoint(self) -> AuditCheckpoint | None:
         result = await self._session.execute(
-            select(AuditCheckpoint)
-            .order_by(AuditCheckpoint.checkpoint_id.desc())
-            .limit(1)
+            select(AuditCheckpoint).order_by(AuditCheckpoint.checkpoint_id.desc()).limit(1)
         )
         return result.scalar_one_or_none()
 
     async def checkpoint_by_id(self, checkpoint_id: int) -> AuditCheckpoint | None:
         result = await self._session.execute(
-            select(AuditCheckpoint).where(
-                AuditCheckpoint.checkpoint_id == checkpoint_id
-            )
+            select(AuditCheckpoint).where(AuditCheckpoint.checkpoint_id == checkpoint_id)
         )
         return result.scalar_one_or_none()
 
@@ -386,9 +374,7 @@ class AuditRepository:
         return GENESIS_CHECKPOINT_HASH
 
     async def count(self) -> int:
-        result = await self._session.execute(
-            select(func.count()).select_from(AuditEvent)
-        )
+        result = await self._session.execute(select(func.count()).select_from(AuditEvent))
         return int(result.scalar_one())
 
     async def count_since(self, sequence_number: int) -> int:

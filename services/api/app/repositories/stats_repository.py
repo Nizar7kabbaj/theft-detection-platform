@@ -1,12 +1,10 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 
 class StatsRepository:
-
-
     def __init__(self, db: AsyncIOMotorDatabase) -> None:
         self._db = db
 
@@ -20,7 +18,7 @@ class StatsRepository:
         return await self._db.cameras.count_documents({})
 
     async def count_alerts_today(self) -> int:
-        start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         return await self._db.alerts.count_documents({"created_at": {"$gte": start}})
 
     async def count_by_severity(self, severity: str) -> int:

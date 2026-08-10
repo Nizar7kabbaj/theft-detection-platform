@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pytest
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -31,7 +31,7 @@ def _alert(alert_id: str = "a-1") -> alert_pb2.Alert:
         .enum_type.values_by_name["ALERT_TYPE_BENDING"]
         .number,
     )
-    request.occurred_at.FromDatetime(datetime(2026, 6, 18, tzinfo=timezone.utc))
+    request.occurred_at.FromDatetime(datetime(2026, 6, 18, tzinfo=UTC))
     return request
 
 

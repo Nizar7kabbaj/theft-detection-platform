@@ -1,13 +1,13 @@
 from __future__ import annotations
+
 import threading
+
 import numpy as np
 import redis
-
 
 _BBOX_LEN = 4
 _KP_SHAPE = (17, 3)
 _KP_LEN = _KP_SHAPE[0] * _KP_SHAPE[1]
-
 
 
 class TrackerStore:
@@ -17,6 +17,7 @@ class TrackerStore:
         self._ttl = ttl_seconds
         self._lock = threading.Lock()
         self._client: redis.Redis | None = None
+
     def _get_client(self) -> redis.Redis:
         if self._client is None:
             with self._lock:
@@ -31,6 +32,7 @@ class TrackerStore:
     @staticmethod
     def _key(camera_id: str, track_id: int) -> str:
         return f"ai:track:{camera_id}:{track_id}"
+
     def append(
         self,
         camera_id: str,
@@ -58,6 +60,7 @@ class TrackerStore:
         )
         pipe.expire(key, self._ttl)
         pipe.execute()
+
     def read_window(
         self,
         camera_id: str,
@@ -78,10 +81,12 @@ class TrackerStore:
                 continue
             out.append((bbox.copy(), kp.reshape(_KP_SHAPE).copy()))
         return out
+
     def drop(self, camera_id: str, track_id: int) -> None:
         key = self._key(camera_id, track_id)
         client = self._get_client()
         client.delete(key)
+
     def close(self) -> None:
         if self._client is not None:
             self._client.close()

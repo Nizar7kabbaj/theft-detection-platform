@@ -12,26 +12,26 @@ def _read_secret(path: str) -> str:
 
 
 class Settings(BaseSettings):
-    GRPC_HOST:       str = "0.0.0.0"
-    GRPC_PORT:       int = 50051
+    GRPC_HOST: str = "0.0.0.0"
+    GRPC_PORT: int = 50051
     YOLO_MODEL_NAME: str = "yolov8n-pose.pt"
     LSTM_MODEL_PATH: str = "/app/ai-model/models/shoplifting_classifier.pt"
-    DEVICE:          str = "cuda"
-    LOG_LEVEL:       str = "INFO"
-    DEBUG:           bool = False
-    ANOMALY_THRESHOLD:   float = 0.6
-    YOLO_PERSON_CLASS:   int = 0
+    DEVICE: str = "cuda"
+    LOG_LEVEL: str = "INFO"
+    DEBUG: bool = False
+    ANOMALY_THRESHOLD: float = 0.6
+    YOLO_PERSON_CLASS: int = 0
 
-    REDIS_HOST:          str = "redis-stream"
-    REDIS_PORT:          int = 6379
-    REDIS_DB:            int = 2
-    REDIS_USER:          str = "ai"
+    REDIS_HOST: str = "redis-stream"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 2
+    REDIS_USER: str = "ai"
     REDIS_PASSWORD_FILE: str = "/run/secrets/ai_redis_password"
     TRACKER_TTL_SECONDS: int = 60
 
-    TLS_CERT_FILE:          Path = Path("/run/secrets/ai_tls_cert")
-    TLS_KEY_FILE:           Path = Path("/run/secrets/ai_tls_key")
-    TLS_CA_FILE:            Path = Path("/run/secrets/ai_tls_ca")
+    TLS_CERT_FILE: Path = Path("/run/secrets/ai_tls_cert")
+    TLS_KEY_FILE: Path = Path("/run/secrets/ai_tls_key")
+    TLS_CA_FILE: Path = Path("/run/secrets/ai_tls_ca")
     TLS_REQUIRE_CLIENT_AUTH: bool = True
 
     model_config = SettingsConfigDict(extra="ignore")

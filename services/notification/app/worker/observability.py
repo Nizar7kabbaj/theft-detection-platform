@@ -5,6 +5,7 @@ from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.trace import Span
 from requests import PreparedRequest
+
 from app.shared.observability import setup_base
 
 _TELEGRAM_TOKEN_URL = re.compile(r"/bot[^/]+/")

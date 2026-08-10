@@ -216,12 +216,8 @@ async def test_idempotency_key_reuse_with_different_payload_conflicts(
 ) -> None:
     headers = {"Idempotency-Key": "key-conflict"}
 
-    first = await client.post(
-        "/api/v1/alerts", json=_alert_payload("test-a-c1"), headers=headers
-    )
-    second = await client.post(
-        "/api/v1/alerts", json=_alert_payload("test-a-c2"), headers=headers
-    )
+    first = await client.post("/api/v1/alerts", json=_alert_payload("test-a-c1"), headers=headers)
+    second = await client.post("/api/v1/alerts", json=_alert_payload("test-a-c2"), headers=headers)
 
     assert first.status_code == 201
     assert second.status_code == 409

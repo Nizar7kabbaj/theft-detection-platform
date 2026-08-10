@@ -236,9 +236,7 @@ async def drain_pending_appends() -> None:
         pending, timeout=get_settings().audit_drain_timeout_seconds
     )
     if still_running:
-        logger.warning(
-            "audit appends abandoned at shutdown count=%d", len(still_running)
-        )
+        logger.warning("audit appends abandoned at shutdown count=%d", len(still_running))
 
 
 async def close_audit_client() -> None:

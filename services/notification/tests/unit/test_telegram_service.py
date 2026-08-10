@@ -14,9 +14,7 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture
 def configured(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        telegram_service.settings, "TELEGRAM_BOT_TOKEN", SecretStr("bot-token")
-    )
+    monkeypatch.setattr(telegram_service.settings, "TELEGRAM_BOT_TOKEN", SecretStr("bot-token"))
     monkeypatch.setattr(telegram_service.settings, "TELEGRAM_CHAT_ID", "123456")
 
 

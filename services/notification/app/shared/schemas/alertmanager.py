@@ -26,9 +26,7 @@ class AlertmanagerWebhook(BaseModel):
     receiver: str
     group_labels: dict[str, str] = Field(default_factory=dict, alias="groupLabels")
     common_labels: dict[str, str] = Field(default_factory=dict, alias="commonLabels")
-    common_annotations: dict[str, str] = Field(
-        default_factory=dict, alias="commonAnnotations"
-    )
+    common_annotations: dict[str, str] = Field(default_factory=dict, alias="commonAnnotations")
     external_url: str = Field(alias="externalURL")
     alerts: list[Alert]
 
