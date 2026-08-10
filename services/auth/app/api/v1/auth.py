@@ -17,6 +17,7 @@ from app.core.redis import (
     record_failure,
     reset_failures,
     revoke_jti,
+    revoke_sid,
 )
 from app.core.security import hash_password, verify_password
 from app.core.tokens import (
@@ -243,10 +244,15 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
             )
         if stored.revoked:
             await refresh_tokens.revoke_family(stored.family_id)
-            await db.commit()
             sessions = SessionRepository(db)
             reused_session = await sessions.get_by_id(stored.session_id)
             subject_id = reused_session.user_id if reused_session is not None else ""
+            was_live = await sessions.revoke(stored.session_id)
+            await db.commit()
+            if was_live:
+                await revoke_sid(
+                    stored.session_id, settings.access_token_ttl_seconds
+                )
             client = audit_client()
             if client is not None:
                 client.emit_refresh_reuse_detected(
@@ -348,8 +354,12 @@ async def logout(request: Request, response: Response) -> LogoutResponse:
             if session_id:
                 factory = get_sessionmaker()
                 async with factory() as db:
-                    await SessionRepository(db).revoke(session_id)
+                    was_live = await SessionRepository(db).revoke(session_id)
                     await db.commit()
+                if was_live:
+                    await revoke_sid(
+                        session_id, settings.access_token_ttl_seconds
+                    )
                 revoked = True
             if revoked:
                 client = audit_client()

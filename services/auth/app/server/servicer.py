@@ -8,7 +8,8 @@ from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.database import get_sessionmaker
-from app.core.redis import is_revoked
+from app.core.config import get_settings
+from app.core.redis import is_token_revoked, revoke_sid
 from app.core.tokens import TokenError, TokenFailure, decode_access_token
 from app.repositories.session_repository import SessionRepository
 from app.server.grpc_gen import audit_pb2 as pb
@@ -42,8 +43,9 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
         except TokenError as exc:
             return auth_pb2.VerifyTokenReply(status=_FAILURE_STATUS[exc.failure])
         jti = claims["jti"]
+        session_id = claims["sid"]
         try:
-            revoked = await is_revoked(jti)
+            revoked = await is_token_revoked(jti, session_id)
         except RedisError:
             logger.warning("revocation check unavailable, jti=%s", jti)
             await context.abort(
@@ -106,13 +108,9 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
             async with factory() as db:
                 sessions = SessionRepository(db)
                 revoked_session = await sessions.get_by_id(request.session_id)
-                if revoked_session is None:
-                    subject_id = ""
-                    was_live = False
-                else:
-                    subject_id = revoked_session.user_id
-                    was_live = not revoked_session.revoked
-                await sessions.revoke(request.session_id)
+                subject_id = "" if revoked_session is None else revoked_session.user_id
+                existed = revoked_session is not None
+                was_live = await sessions.revoke(request.session_id)
                 await db.commit()
         except SQLAlchemyError:
             logger.warning(
@@ -121,6 +119,16 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
             await context.abort(
                 grpc.StatusCode.UNAVAILABLE, "session store unavailable"
             )
+        if was_live:
+            try:
+                await revoke_sid(
+                    request.session_id, get_settings().access_token_ttl_seconds
+                )
+            except RedisError:
+                logger.error(
+                    "session revoked in store but not in cache, session_id=%s",
+                    request.session_id,
+                )
         client = audit_client()
         if client is not None and was_live:
             client.emit_session_ended(
@@ -136,6 +144,6 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
                     session_id=request.session_id,
                 )
         return auth_pb2.RevokeSessionReply(
-            revoked=True,
+            revoked=existed,
             revoked_at=_now_timestamp(),
         )

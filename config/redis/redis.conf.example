@@ -8,7 +8,7 @@ requirepass __REDIS_PASSWORD_PLACEHOLDER__
 user default on >SET_PASSWORD ~* &* -@all +ping +@connection
 user api on sanitize-payload <KEEP_YOUR_EXISTING_HASH> ~cache:* ~idem:* ~rl:* resetchannels &alerts:* &cameras:* -@all +@connection +get +set +del +scan +time +eval +evalsha +script +publish +subscribe +unsubscribe +psubscribe +punsubscribe
 user exporter on >SET_PASSWORD resetchannels ~* -@all +@connection +info +client +ping +latency +slowlog
-user auth on >SET_PASSWORD resetchannels ~revoked:jti:* ~login:fail:* -@all +@connection +set +exists +eval +evalsha +script +incr +get +pttl +pexpire +del
+user auth on >SET_PASSWORD resetchannels ~revoked:jti:* ~revoked:sid:* ~login:fail:* -@all +@connection +set +exists +eval +evalsha +script +incr +get +pttl +pexpire +del
 user audit on >SET_PASSWORD resetchannels ~audit:rl:* -@all +@connection +incrby +pexpire +pttl +ttl
 
 # Persistence
