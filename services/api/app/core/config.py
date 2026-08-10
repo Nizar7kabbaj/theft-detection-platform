@@ -13,7 +13,8 @@ class Settings(BaseSettings):
     REDIS_URL_LOCAL: str = ""
     REDIS_MODE: str = "local"
     REDIS_HOST: str = "redis"
-    REDIS_PORT: int = 6379
+    REDIS_PORT: int = 6380
+    REDIS_TLS: bool = True
     REDIS_DB: int = 0
     REDIS_USER: str = "api"
     REDIS_PASSWORD_FILE: Path = Path("/run/secrets/api_redis_password")
