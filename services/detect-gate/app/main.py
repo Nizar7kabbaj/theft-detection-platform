@@ -98,6 +98,7 @@ async def _serve() -> None:
     if settings.FRAME_SOURCE == "camera":
         source = CameraFrameSource(
             redis_url=settings.REDIS_URL,
+            connection_kwargs=settings.redis_tls_options,
             stream_key=settings.frame_stream_key,
             read_block_ms=settings.FRAME_READ_BLOCK_MS,
             retry_backoff_seconds=settings.FRAME_RETRY_BACKOFF_SECONDS,

@@ -87,6 +87,8 @@ services:
     build: ./services/ai
     image: theft-ai:dev
     container_name: theft-ai
+    env_file:
+      - ./services/ai/.env
     networks:
       - observability
       - data
@@ -123,6 +125,8 @@ services:
     build: ./services/camera
     image: theft-camera:dev
     container_name: theft-camera
+    env_file:
+      - ./services/camera/.env
     networks:
       - observability
       - data
@@ -158,6 +162,8 @@ services:
     build: ./services/detect-gate
     image: theft-detect-gate:dev
     container_name: theft-detect-gate
+    env_file:
+      - ./services/detect-gate/.env
     networks:
       - observability
       - data

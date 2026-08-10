@@ -21,12 +21,14 @@ class FramePublisher:
         queue_depth: int,
         retry_backoff_seconds: float,
         retry_backoff_max_seconds: float,
+        connection_kwargs: dict[str, object] | None = None,
     ) -> None:
         self._redis_url = redis_url
         self._stream_key = stream_key
         self._maxlen = maxlen
         self._retry_backoff = retry_backoff_seconds
         self._retry_backoff_max = retry_backoff_max_seconds
+        self._connection_kwargs = dict(connection_kwargs or {})
         self._queue: deque[CapturedFrame] = deque(maxlen=queue_depth)
         self._queue_lock = threading.Lock()
         self._wakeup = threading.Event()
@@ -55,6 +57,7 @@ class FramePublisher:
                     pool = redis.ConnectionPool.from_url(
                         self._redis_url,
                         max_connections=4,
+                        **self._connection_kwargs,
                     )
                     self._client = redis.Redis(connection_pool=pool)
         return self._client

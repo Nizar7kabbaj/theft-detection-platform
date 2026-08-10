@@ -20,19 +20,25 @@ class CameraFrameSource:
         read_block_ms: int,
         retry_backoff_seconds: float,
         retry_backoff_max_seconds: float,
+        connection_kwargs: dict[str, object] | None = None,
     ) -> None:
         self._redis_url = redis_url
         self._stream_key = stream_key
         self._read_block_ms = read_block_ms
         self._retry_backoff = retry_backoff_seconds
         self._retry_backoff_max = retry_backoff_max_seconds
+        self._connection_kwargs = dict(connection_kwargs or {})
         self._backoff = retry_backoff_seconds
         self._client: redis.Redis | None = None
         self._connected_logged = False
 
     def _get_client(self) -> redis.Redis:
         if self._client is None:
-            pool = redis.ConnectionPool.from_url(self._redis_url, max_connections=4)
+            pool = redis.ConnectionPool.from_url(
+                self._redis_url,
+                max_connections=4,
+                **self._connection_kwargs,
+            )
             self._client = redis.Redis(connection_pool=pool)
         return self._client
 

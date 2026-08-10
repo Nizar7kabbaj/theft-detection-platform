@@ -63,6 +63,7 @@ class LSTMDetector:
     def load(self) -> None:
         self._store = TrackerStore(
             redis_url=settings.REDIS_URL,
+            connection_kwargs=settings.redis_tls_options,
             window=30,
             ttl_seconds=settings.TRACKER_TTL_SECONDS,
         )
