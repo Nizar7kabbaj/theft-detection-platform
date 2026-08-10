@@ -439,6 +439,9 @@ services:
       - ./config/telegram/bot_token:/run/secrets/telegram_bot_token:ro
       - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
       - ./config/redis/notify_redis_password:/run/secrets/notify_redis_password:ro
+      - ./config/pki/notification/tls.crt:/run/secrets/notification_tls_cert:ro
+      - ./config/pki/notification/tls.key:/run/secrets/notification_tls_key:ro
+      - ./config/pki/ca/ca.crt:/run/secrets/notification_tls_ca:ro
     depends_on:
       redis-broker:
         condition: service_healthy
@@ -475,6 +478,9 @@ services:
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
       - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
       - ./config/redis/notify_redis_password:/run/secrets/notify_redis_password:ro
+      - ./config/pki/notification/tls.crt:/run/secrets/notification_tls_cert:ro
+      - ./config/pki/notification/tls.key:/run/secrets/notification_tls_key:ro
+      - ./config/pki/ca/ca.crt:/run/secrets/notification_tls_ca:ro
     depends_on:
       redis-broker:
         condition: service_healthy

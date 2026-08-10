@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     HTTP_HOST: str = "0.0.0.0"
     HTTP_PORT: int = 8000
     REDIS_HOST: str = "theft-redis-broker"
-    REDIS_PORT: int = 6379
+    REDIS_PORT: int = 6380
+    REDIS_TLS: bool = True
     REDIS_USER: str = "broker"
     REDIS_PASSWORD_FILE: Path = Path("/run/secrets/broker_redis_password")
     NOTIFY_REDIS_USER: str = "notify"
@@ -54,12 +55,16 @@ class Settings(BaseSettings):
         return self.REDIS_PASSWORD_FILE.read_text().strip()
 
     @property
+    def _redis_scheme(self) -> str:
+        return "rediss" if self.REDIS_TLS else "redis"
+
+    @property
     def REDIS_URL(self) -> str:
-        return f"redis://{self.REDIS_USER}:{self._redis_password}@{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+        return f"{self._redis_scheme}://{self.REDIS_USER}:{self._redis_password}@{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
     @property
     def RESULT_BACKEND_URL(self) -> str:
-        return f"redis://{self.REDIS_USER}:{self._redis_password}@{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+        return f"{self._redis_scheme}://{self.REDIS_USER}:{self._redis_password}@{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
     @property
     def _notify_redis_password(self) -> str:
@@ -67,7 +72,7 @@ class Settings(BaseSettings):
 
     @property
     def NOTIFY_REDIS_URL(self) -> str:
-        return f"redis://{self.NOTIFY_REDIS_USER}:{self._notify_redis_password}@{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+        return f"{self._redis_scheme}://{self.NOTIFY_REDIS_USER}:{self._notify_redis_password}@{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
 
 settings = Settings()
