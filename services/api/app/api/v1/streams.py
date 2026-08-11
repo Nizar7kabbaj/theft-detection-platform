@@ -11,11 +11,17 @@ from app.schemas.identity import CurrentUser
 from app.services.broadcast_service import BroadcastService
 
 logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
 def _get_broadcaster(ws: WebSocket) -> BroadcastService:
     return ws.app.state.broadcaster
+
+
+async def _reader(ws: WebSocket) -> None:
+    while True:
+        await ws.receive_text()
 
 
 async def _serve(ws: WebSocket, topic: str, user: CurrentUser) -> None:
@@ -25,15 +31,23 @@ async def _serve(ws: WebSocket, topic: str, user: CurrentUser) -> None:
     if not registered:
         return
     watchdog = asyncio.create_task(reverify_loop(ws, user))
+    reader = asyncio.create_task(_reader(ws))
     try:
-        while True:
-            await ws.receive_text()
-    except WebSocketDisconnect:
-        pass
-    except Exception as exc:
-        logger.warning("websocket loop error topic=%s: %s", topic, exc)
+        done, pending = await asyncio.wait(
+            (watchdog, reader),
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in pending:
+            task.cancel()
+        for task in done:
+            exc = task.exception()
+            if exc is None or isinstance(exc, WebSocketDisconnect):
+                continue
+            logger.warning("websocket task ended topic=%s: %s", topic, exc)
+            await ws.close(code=1011, reason="stream error")
     finally:
-        watchdog.cancel()
+        for task in (watchdog, reader):
+            task.cancel()
         broadcaster.unregister(ws, topic)
 
 

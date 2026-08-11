@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
+import time
 from collections.abc import Callable, Coroutine
 from typing import Any
 from urllib.parse import urlsplit
@@ -27,6 +29,8 @@ logger = logging.getLogger(__name__)
 _POLICY = status.WS_1008_POLICY_VIOLATION
 _INTERNAL = status.WS_1011_INTERNAL_ERROR
 _DEFAULT_PORTS = {"http": 80, "https": 443}
+_JITTER_STEPS = 100
+_JITTER_FLOOR = 90
 
 
 def _normalize_origin(value: str) -> str | None:
@@ -107,24 +111,43 @@ def require_ws_permission(
     return _guard
 
 
+def _next_delay(interval: int) -> float:
+    factor = _JITTER_FLOOR + secrets.randbelow(_JITTER_STEPS - _JITTER_FLOOR + 1)
+    return interval * factor / _JITTER_STEPS
+
+
 async def reverify_loop(ws: WebSocket, user: CurrentUser) -> None:
     from app.core.config import settings
 
     client = build_auth_client(ws)
+    grace = settings.WS_REAUTH_GRACE_SECONDS
+    last_verified = time.monotonic()
+
     while True:
-        await asyncio.sleep(settings.WS_REAUTH_SECONDS)
+        await asyncio.sleep(_next_delay(settings.WS_REAUTH_SECONDS))
         try:
             active = await client.session_active(user.session_id)
         except AuthUnavailableError:
-            logger.warning("session recheck skipped, auth service unavailable")
-            continue
+            logger.warning("session recheck failed user=%s, auth unavailable", user.username)
         except Exception:
             logger.exception("session recheck failed user=%s", user.username)
+        else:
+            if not active:
+                logger.info(
+                    "websocket closed user=%s, session no longer active",
+                    user.username,
+                )
+                await ws.close(code=_POLICY, reason="session revoked")
+                return
+            last_verified = time.monotonic()
             continue
-        if not active:
-            logger.info(
-                "websocket closed user=%s, session no longer active",
+
+        unverified = time.monotonic() - last_verified
+        if unverified >= grace:
+            logger.warning(
+                "websocket closed user=%s, session unverified for %.0fs",
                 user.username,
+                unverified,
             )
-            await ws.close(code=_POLICY, reason="session revoked")
+            await ws.close(code=_INTERNAL, reason="session unverified")
             return
