@@ -21,7 +21,7 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.rate_limit import RateLimitedError, rate_limit
-from app.core.redis import close_redis, open_redis
+from app.core.redis import close_redis, open_pubsub_redis, open_redis
 from app.grpc_gen.alert_pb2_grpc import AlertServiceStub
 from app.grpc_gen.audit_pb2_grpc import AuditServiceStub
 from app.grpc_gen.auth_pb2_grpc import AuthServiceStub
@@ -29,6 +29,7 @@ from app.grpc_gen.inference_pb2_grpc import InferenceServiceStub
 from app.observability import setup_observability
 from app.services.audit_drain import run_drain
 from app.services.broadcast_service import BroadcastService
+from app.services.revocation_service import RevocationService
 
 logger = logging.getLogger(__name__)
 _GRPC_CHANNEL_OPTIONS = [
@@ -59,11 +60,15 @@ async def lifespan(app: FastAPI):
         heartbeat_seconds=settings.WS_HEARTBEAT_SECONDS,
     )
     await app.state.broadcaster.start()
+    app.state.revocation_redis = await open_pubsub_redis()
+    app.state.revocations = RevocationService(app.state.revocation_redis)
+    await app.state.revocations.start()
     credentials = grpc.ssl_channel_credentials(
         root_certificates=settings.TLS_CA_FILE.read_bytes(),
         private_key=settings.TLS_KEY_FILE.read_bytes(),
         certificate_chain=settings.TLS_CERT_FILE.read_bytes(),
     )
+
     app.state.inference_channel = grpc.aio.secure_channel(
         settings.INFERENCE_TARGET,
         credentials,
@@ -105,6 +110,8 @@ async def lifespan(app: FastAPI):
     await app.state.alert_channel.close(grace=2)
     await app.state.inference_channel.close(grace=2)
     await app.state.broadcaster.stop()
+    await app.state.revocations.stop()
+    await close_redis(app.state.revocation_redis)
     await close_redis(app.state.redis)
     await close_mongodb_connection()
     logger.info("backend stopped")

@@ -64,6 +64,20 @@ async def open_redis() -> Redis:
     return client
 
 
+async def open_pubsub_redis() -> Redis:
+    client = from_url(
+        _resolve_redis_url(),
+        encoding="utf-8",
+        decode_responses=True,
+        health_check_interval=30,
+        socket_keepalive=True,
+        **_tls_options(),
+    )
+    await client.ping()
+    logger.info("pubsub redis connection ready")
+    return client
+
+
 async def close_redis(client: Redis) -> None:
     await client.aclose()
     logger.info("redis connection closed")

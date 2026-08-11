@@ -9,14 +9,21 @@ from app.core.authz import Permission
 from app.core.ws_authz import require_ws_permission, reverify_loop
 from app.schemas.identity import CurrentUser
 from app.services.broadcast_service import BroadcastService
+from app.services.revocation_service import RevocationService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_POLICY = 1008
+
 
 def _get_broadcaster(ws: WebSocket) -> BroadcastService:
     return ws.app.state.broadcaster
+
+
+def _get_revocations(ws: WebSocket) -> RevocationService:
+    return ws.app.state.revocations
 
 
 async def _reader(ws: WebSocket) -> None:
@@ -30,15 +37,23 @@ async def _serve(ws: WebSocket, topic: str, user: CurrentUser) -> None:
     registered = await broadcaster.register(ws, topic)
     if not registered:
         return
+    revocations = _get_revocations(ws)
+    revoked = revocations.register(user.session_id)
     watchdog = asyncio.create_task(reverify_loop(ws, user))
     reader = asyncio.create_task(_reader(ws))
+    pushed = asyncio.create_task(revoked.wait(), name="revocation-wait")
+    tasks = (watchdog, reader, pushed)
     try:
         done, pending = await asyncio.wait(
-            (watchdog, reader),
+            tasks,
             return_when=asyncio.FIRST_COMPLETED,
         )
         for task in pending:
             task.cancel()
+        if pushed in done:
+            logger.info("websocket closed user=%s, session revoked", user.username)
+            await ws.close(code=_POLICY, reason="session revoked")
+            return
         for task in done:
             exc = task.exception()
             if exc is None or isinstance(exc, WebSocketDisconnect):
@@ -46,8 +61,9 @@ async def _serve(ws: WebSocket, topic: str, user: CurrentUser) -> None:
             logger.warning("websocket task ended topic=%s: %s", topic, exc)
             await ws.close(code=1011, reason="stream error")
     finally:
-        for task in (watchdog, reader):
+        for task in tasks:
             task.cancel()
+        revocations.unregister(user.session_id, revoked)
         broadcaster.unregister(ws, topic)
 
 
