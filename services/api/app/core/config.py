@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     WS_HEARTBEAT_SECONDS: int = 30
     WS_ALLOWED_ORIGINS: str = "http://localhost:3000"
     WS_REAUTH_SECONDS: int = 60
+    WS_REAUTH_GRACE_SECONDS: int = 180
     ALERT_THRESHOLD: float = 0.7
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_REQUESTS: int = 100
