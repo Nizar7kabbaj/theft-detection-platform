@@ -1,22 +1,21 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
-import grpc
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from opentelemetry import trace
 
 from app.core.config import settings
 from app.grpc_gen import audit_pb2 as pb
 from app.grpc_gen import common_pb2
-from app.grpc_gen.audit_pb2_grpc import AuditServiceStub
+from app.repositories.audit_outbox_repository import AuditOutboxRepository
 
 logger = logging.getLogger(__name__)
+
 _SCHEMA_VERSION = 1
-_MAX_INFLIGHT_APPENDS = 256
-_DRAIN_TIMEOUT_SECONDS = 3.0
 _ROLE_BY_NAME = {
     "admin": common_pb2.ROLE_ADMIN,
     "operator": common_pb2.ROLE_OPERATOR,
@@ -24,7 +23,13 @@ _ROLE_BY_NAME = {
     "ml_engineer": common_pb2.ROLE_ML_ENGINEER,
     "compliance": common_pb2.ROLE_COMPLIANCE,
 }
-_live_tasks: set[asyncio.Task[None]] = set()
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedEvent:
+    event_id: str
+    event_bytes: bytes
+    occurred_at: datetime
 
 
 def _current_trace_id() -> str:
@@ -39,20 +44,63 @@ def _roles_to_enum(roles: frozenset[str]) -> list[int]:
     return [_ROLE_BY_NAME[name] for name in roles if name in _ROLE_BY_NAME]
 
 
-async def drain_pending_appends() -> None:
-    if not _live_tasks:
-        return
-    pending = tuple(_live_tasks)
-    _done, still_running = await asyncio.wait(pending, timeout=_DRAIN_TIMEOUT_SECONDS)
-    if still_running:
-        logger.warning("audit appends abandoned at shutdown count=%d", len(still_running))
+def _freeze(event: pb.AuditEvent, occurred_at: datetime) -> PreparedEvent:
+    return PreparedEvent(
+        event_id=event.event_id,
+        event_bytes=event.SerializeToString(),
+        occurred_at=occurred_at,
+    )
+
+
+def _new_event(actor: str, severity: int, occurred_at: datetime) -> pb.AuditEvent:
+    event = pb.AuditEvent(
+        schema_version=_SCHEMA_VERSION,
+        event_id=str(uuid.uuid4()),
+        source_service=common_pb2.SOURCE_SERVICE_API,
+        trace_id=_current_trace_id(),
+        actor=actor,
+        severity=severity,
+    )
+    event.occurred_at.FromDatetime(occurred_at)
+    return event
+
+
+def authorization_denied(
+    subject_id: str,
+    required_permission: str,
+    channel: int,
+    method: str,
+    path: str,
+    roles: frozenset[str],
+) -> PreparedEvent:
+    occurred_at = datetime.now(UTC)
+    event = _new_event(subject_id, common_pb2.SEVERITY_WARNING, occurred_at)
+    denial = event.authorization_denied
+    denial.subject_id = subject_id
+    denial.required_permission = required_permission
+    denial.channel = channel
+    denial.method = method
+    denial.path = path
+    denial.subject_roles.extend(_roles_to_enum(roles))
+    return _freeze(event, occurred_at)
+
+
+def events_shed(dropped: int) -> PreparedEvent:
+    occurred_at = datetime.now(UTC)
+    event = _new_event("", common_pb2.SEVERITY_ERROR, occurred_at)
+    throttle = event.auth_throttle_triggered
+    throttle.bucket = common_pb2.THROTTLE_BUCKET_GLOBAL
+    throttle.observed_count = dropped
+    throttle.threshold = settings.AUDIT_OUTBOX_MAX_PENDING
+    throttle.window_seconds = 0
+    return _freeze(event, occurred_at)
 
 
 class AuditClient:
-    def __init__(self, stub: AuditServiceStub) -> None:
-        self._stub = stub
+    def __init__(self, database: AsyncIOMotorDatabase) -> None:
+        self._outbox = AuditOutboxRepository(database)
 
-    def emit_authorization_denied(
+    async def emit_authorization_denied(
         self,
         subject_id: str,
         required_permission: str,
@@ -61,45 +109,31 @@ class AuditClient:
         path: str,
         roles: frozenset[str],
     ) -> None:
-        event = pb.AuditEvent(
-            schema_version=_SCHEMA_VERSION,
-            event_id=str(uuid.uuid4()),
-            source_service=common_pb2.SOURCE_SERVICE_API,
-            trace_id=_current_trace_id(),
-            actor=subject_id,
-            severity=common_pb2.SEVERITY_WARNING,
+        prepared = authorization_denied(
+            subject_id=subject_id,
+            required_permission=required_permission,
+            channel=channel,
+            method=method,
+            path=path,
+            roles=roles,
         )
-        event.occurred_at.FromDatetime(datetime.now(UTC))
-        denial = event.authorization_denied
-        denial.subject_id = subject_id
-        denial.required_permission = required_permission
-        denial.channel = channel
-        denial.method = method
-        denial.path = path
-        denial.subject_roles.extend(_roles_to_enum(roles))
-        self._schedule(event)
+        await self._enqueue(prepared)
 
-    def _schedule(self, event: pb.AuditEvent) -> None:
-        if len(_live_tasks) >= _MAX_INFLIGHT_APPENDS:
-            logger.warning("audit append shed, in-flight limit reached")
-            return
+    async def _enqueue(self, prepared: PreparedEvent) -> None:
         try:
-            task = asyncio.create_task(self._append(event))
-        except RuntimeError:
-            logger.warning("audit append not scheduled, no running loop")
-            return
-        _live_tasks.add(task)
-        task.add_done_callback(_live_tasks.discard)
-
-    async def _append(self, event: pb.AuditEvent) -> None:
-        try:
-            reply = await self._stub.AppendEvent(
-                event,
-                timeout=settings.AUDIT_APPEND_TIMEOUT_SECONDS,
+            pending = await self._outbox.pending_count()
+            if pending >= settings.AUDIT_OUTBOX_MAX_PENDING:
+                await self._shed()
+                return
+            await self._outbox.enqueue(
+                prepared.event_id, prepared.event_bytes, prepared.occurred_at
             )
-            if reply.status != pb.APPEND_STATUS_ACCEPTED:
-                logger.warning("audit append refused status=%s", reply.status)
-        except grpc.aio.AioRpcError as exc:
-            logger.warning("audit append dropped code=%s", exc.code().name)
         except Exception:
-            logger.warning("audit append dropped, unexpected error")
+            logger.error("audit event lost, outbox write failed event_id=%s", prepared.event_id)
+
+    async def _shed(self) -> None:
+        marker = events_shed(1)
+        try:
+            await self._outbox.enqueue(marker.event_id, marker.event_bytes, marker.occurred_at)
+        except Exception:
+            logger.error("audit shed marker lost, outbox write failed")

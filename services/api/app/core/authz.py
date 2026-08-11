@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import Depends, HTTPException, Request, status
 from starlette.requests import HTTPConnection
 
+from app.core.database import get_database
 from app.grpc_gen import audit_pb2
 from app.schemas.identity import CurrentUser
 from app.services.audit_service import AuditClient
@@ -160,8 +161,8 @@ def require_permission(
     ) -> CurrentUser:
         granted = _resolve_permissions(user.roles)
         if permission not in granted:
-            audit = AuditClient(request.app.state.audit_stub)
-            audit.emit_authorization_denied(
+            audit = AuditClient(get_database())
+            await audit.emit_authorization_denied(
                 subject_id=user.user_id,
                 required_permission=permission.value,
                 channel=audit_pb2.AUTHORIZATION_CHANNEL_HTTP,

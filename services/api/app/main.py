@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -26,7 +27,7 @@ from app.grpc_gen.audit_pb2_grpc import AuditServiceStub
 from app.grpc_gen.auth_pb2_grpc import AuthServiceStub
 from app.grpc_gen.inference_pb2_grpc import InferenceServiceStub
 from app.observability import setup_observability
-from app.services.audit_service import drain_pending_appends
+from app.services.audit_drain import run_drain
 from app.services.broadcast_service import BroadcastService
 
 logger = logging.getLogger(__name__)
@@ -91,9 +92,14 @@ async def lifespan(app: FastAPI):
         interceptors=aio_client_interceptors(),
     )
     app.state.audit_stub = AuditServiceStub(app.state.audit_channel)
+    app.state.audit_drain_stop = asyncio.Event()
+    app.state.audit_drain_task = asyncio.create_task(
+        run_drain(get_database(), app.state.audit_stub, app.state.audit_drain_stop)
+    )
     logger.info("backend ready")
     yield
-    await drain_pending_appends()
+    app.state.audit_drain_stop.set()
+    await app.state.audit_drain_task
     await app.state.audit_channel.close(grace=2)
     await app.state.auth_channel.close(grace=2)
     await app.state.alert_channel.close(grace=2)
