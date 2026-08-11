@@ -1,6 +1,6 @@
 # Network
 bind 0.0.0.0
-port 6379
+port 0
 protected-mode yes
 
 # Security
