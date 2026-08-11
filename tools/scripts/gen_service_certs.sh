@@ -16,6 +16,7 @@ CA_VALIDITY_DAYS=3650
 LEAF_VALIDITY_DAYS=90
 RENEW_THRESHOLD_SECONDS=$((14 * 86400))
 SERVER_KEY_GROUP="redis-conf"
+EXPORTER_KEY_UID="59000"
 SERVICES=(api auth ai camera detect-gate notification audit redis redis-broker redis-stream exporter)
 
 function usage() {
@@ -109,6 +110,13 @@ function main() {
         fi
     done
 
+    for name in "${selected[@]}"; do
+        if needs_uid_owned_key "${name}"; then
+            exit_on_missing_privilege
+            break
+        fi
+    done
+
     ensure_ca "${force}"
 
     for name in "${selected[@]}"; do
@@ -141,6 +149,17 @@ function is_server_service() {
 function needs_group_readable_key() {
     case "$1" in
     redis | redis-broker | redis-stream)
+        return 0
+        ;;
+    *)
+        return 1
+        ;;
+    esac
+}
+
+function needs_uid_owned_key() {
+    case "$1" in
+    exporter)
         return 0
         ;;
     *)
@@ -290,6 +309,12 @@ EOM
     if needs_group_readable_key "${name}"; then
         chgrp "${SERVER_KEY_GROUP}" "${key_file}"
         chmod 640 "${key_file}"
+    elif needs_uid_owned_key "${name}"; then
+        chmod 600 "${key_file}"
+        if ! sudo chown "${EXPORTER_KEY_UID}:${EXPORTER_KEY_UID}" "${key_file}"; then
+            echo "error: could not set ownership on ${key_file}" >&2
+            exit 1
+        fi
     else
         chmod 600 "${key_file}"
     fi
@@ -304,6 +329,14 @@ function exit_on_missing_group() {
         return 0
     fi
     printf "error: group '%s' does not exist, datastore keys cannot be made readable to the server\n" "${group}" >&2
+    exit 1
+}
+
+function exit_on_missing_privilege() {
+    if sudo -n true 2>/dev/null; then
+        return 0
+    fi
+    printf "error: root privilege required to set ownership on the exporter key\n" >&2
     exit 1
 }
 
