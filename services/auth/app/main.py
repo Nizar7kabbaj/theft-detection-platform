@@ -18,11 +18,8 @@ from app.core.redis import close_redis
 from app.server.grpc_gen import auth_pb2, auth_pb2_grpc
 from app.server.interceptors import IdentityInterceptor
 from app.server.servicer import AuthServicer
-from app.services.audit_service import (
-    close_audit_client,
-    drain_pending_appends,
-    open_audit_client,
-)
+from app.services.audit_drain import run_drain
+from app.services.audit_service import close_audit_client, open_audit_client
 
 AUTH_SERVICE_FULL_NAME = "theftdetection.v1.AuthService"
 
@@ -140,6 +137,7 @@ async def _serve() -> None:
 
     grpc_task = asyncio.create_task(_run_grpc(stop_event))
     http_task = asyncio.create_task(_run_http(stop_event))
+    drain_task = asyncio.create_task(run_drain(stop_event))
     tasks = (grpc_task, http_task)
     try:
         done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -153,7 +151,7 @@ async def _serve() -> None:
                 raise exc
     finally:
         stop_event.set()
-        await drain_pending_appends()
+        await drain_task
         await close_redis()
         await dispose_engine()
         await close_audit_client()

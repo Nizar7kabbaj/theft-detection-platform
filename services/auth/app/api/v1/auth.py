@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from ipaddress import ip_address
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.cookies import (
@@ -28,6 +29,7 @@ from app.core.tokens import (
     new_refresh_secret,
     sign_access_token,
 )
+from app.repositories.audit_outbox_repository import AuditOutboxRepository
 from app.repositories.refresh_token_repository import RefreshTokenRepository
 from app.repositories.session_repository import SessionRepository
 from app.repositories.user_repository import UserRepository
@@ -37,7 +39,7 @@ from app.schemas.auth import (
     TokenResponse,
 )
 from app.server.grpc_gen import audit_pb2 as pb
-from app.services.audit_service import audit_client
+from app.services import audit_service as audit_events
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -91,7 +93,8 @@ def _split_refresh_token(raw: str) -> tuple[str, str] | None:
     return parts[0], parts[1]
 
 
-def _emit_login_failure(
+async def _enqueue_login_failure(
+    db: AsyncSession,
     username: str,
     reason: int,
     tripped: bool,
@@ -99,24 +102,27 @@ def _emit_login_failure(
     ip: str,
     user_agent: str,
 ) -> None:
-    client = audit_client()
-    if client is None:
-        return
     settings = get_settings()
-    client.emit_login_failure(
+    outbox = AuditOutboxRepository(db)
+    failure = audit_events.login_failure(
         username=username,
         reason=reason,
         attempt_count=attempts,
         source_ip=ip,
         user_agent=user_agent,
     )
-    if tripped:
-        client.emit_throttle_triggered(
-            username=username,
-            observed_count=attempts,
-            threshold=settings.login_max_attempts,
-            window_seconds=settings.login_window_seconds,
-        )
+    if failure is not None:
+        await outbox.enqueue(failure.event_id, failure.event_bytes, failure.occurred_at)
+    if not tripped:
+        return
+    throttle = audit_events.throttle_triggered(
+        username=username,
+        observed_count=attempts,
+        threshold=settings.login_max_attempts,
+        window_seconds=settings.login_window_seconds,
+    )
+    if throttle is not None:
+        await outbox.enqueue(throttle.event_id, throttle.event_bytes, throttle.occurred_at)
 
 
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
@@ -139,7 +145,8 @@ async def login(payload: LoginRequest, request: Request, response: Response) -> 
         if user is None:
             verify_password(_DUMMY_HASH, payload.password)
             tripped, attempts = await record_failure(ip, payload.username)
-            _emit_login_failure(
+            await _enqueue_login_failure(
+                db,
                 payload.username,
                 pb.AUTH_FAILURE_REASON_UNKNOWN_SUBJECT,
                 tripped,
@@ -147,13 +154,15 @@ async def login(payload: LoginRequest, request: Request, response: Response) -> 
                 ip,
                 user_agent,
             )
+            await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=_INVALID_CREDENTIALS,
             )
         if not verify_password(user.password_hash, payload.password):
             tripped, attempts = await record_failure(ip, payload.username)
-            _emit_login_failure(
+            await _enqueue_login_failure(
+                db,
                 payload.username,
                 pb.AUTH_FAILURE_REASON_BAD_CREDENTIAL,
                 tripped,
@@ -161,6 +170,7 @@ async def login(payload: LoginRequest, request: Request, response: Response) -> 
                 ip,
                 user_agent,
             )
+            await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=_INVALID_CREDENTIALS,
@@ -192,17 +202,18 @@ async def login(payload: LoginRequest, request: Request, response: Response) -> 
             token_hash=hash_refresh_secret(secret),
             expires_at=refresh_expires_at,
         )
+        success = audit_events.login_success(
+            subject_id=user.id,
+            session_id=login_session.id,
+            roles=user.roles,
+            source_ip=ip,
+            user_agent=user_agent,
+        )
+        await AuditOutboxRepository(db).enqueue(
+            success.event_id, success.event_bytes, success.occurred_at
+        )
         await db.commit()
         await reset_failures(ip, payload.username)
-        client = audit_client()
-        if client is not None:
-            client.emit_login_success(
-                subject_id=user.id,
-                session_id=login_session.id,
-                roles=user.roles,
-                source_ip=ip,
-                user_agent=user_agent,
-            )
         set_auth_cookies(
             response=response,
             access_token=access_token,
@@ -249,18 +260,19 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
             reused_session = await sessions.get_by_id(stored.session_id)
             subject_id = reused_session.user_id if reused_session is not None else ""
             was_live = await sessions.revoke(stored.session_id)
+            reuse = audit_events.refresh_reuse_detected(
+                subject_id=subject_id,
+                session_id=stored.session_id,
+                family_id=stored.family_id,
+                source_ip=ip,
+                user_agent=user_agent,
+            )
+            await AuditOutboxRepository(db).enqueue(
+                reuse.event_id, reuse.event_bytes, reuse.occurred_at
+            )
             await db.commit()
             if was_live:
                 await revoke_sid(stored.session_id, settings.access_token_ttl_seconds)
-            client = audit_client()
-            if client is not None:
-                client.emit_refresh_reuse_detected(
-                    subject_id=subject_id,
-                    session_id=stored.session_id,
-                    family_id=stored.family_id,
-                    source_ip=ip,
-                    user_agent=user_agent,
-                )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=_INVALID_REFRESH,
@@ -306,16 +318,17 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
             expires_at=next_expires_at,
             rotated_from=stored.jti,
         )
+        refreshed = audit_events.token_refreshed(
+            subject_id=user.id,
+            session_id=login_session.id,
+            family_id=stored.family_id,
+            source_ip=ip,
+            user_agent=user_agent,
+        )
+        await AuditOutboxRepository(db).enqueue(
+            refreshed.event_id, refreshed.event_bytes, refreshed.occurred_at
+        )
         await db.commit()
-        client = audit_client()
-        if client is not None:
-            client.emit_token_refreshed(
-                subject_id=user.id,
-                session_id=login_session.id,
-                family_id=stored.family_id,
-                source_ip=ip,
-                user_agent=user_agent,
-            )
         set_auth_cookies(
             response=response,
             access_token=access_token,
@@ -347,24 +360,26 @@ async def logout(request: Request, response: Response) -> LogoutResponse:
                 if remaining > 0:
                     await revoke_jti(jti, remaining)
                     revoked = True
-            session_id = claims.get("sid")
-            if session_id:
-                factory = get_sessionmaker()
-                async with factory() as db:
+            session_id = claims.get("sid", "")
+            was_live = False
+            factory = get_sessionmaker()
+            async with factory() as db:
+                if session_id:
                     was_live = await SessionRepository(db).revoke(session_id)
-                    await db.commit()
-                if was_live:
-                    await revoke_sid(session_id, settings.access_token_ttl_seconds)
-                revoked = True
-            if revoked:
-                client = audit_client()
-                if client is not None:
-                    client.emit_session_ended(
+                    revoked = True
+                if revoked:
+                    ended = audit_events.session_ended(
                         subject_id=claims.get("sub", ""),
-                        session_id=claims.get("sid", ""),
+                        session_id=session_id,
                         kind=pb.SESSION_END_KIND_USER_LOGOUT,
                         source_ip=ip,
                         user_agent=user_agent,
                     )
+                    await AuditOutboxRepository(db).enqueue(
+                        ended.event_id, ended.event_bytes, ended.occurred_at
+                    )
+                await db.commit()
+            if was_live:
+                await revoke_sid(session_id, settings.access_token_ttl_seconds)
     clear_auth_cookies(response)
     return LogoutResponse(revoked=revoked)
