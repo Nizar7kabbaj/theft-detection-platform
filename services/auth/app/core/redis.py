@@ -5,6 +5,7 @@ from functools import lru_cache
 
 from redis.asyncio import Redis
 from redis.commands.core import AsyncScript
+from redis.exceptions import RedisError
 
 from app.core.config import get_settings
 
@@ -13,6 +14,8 @@ logger = logging.getLogger(__name__)
 _client: Redis | None = None
 _check_script: AsyncScript | None = None
 _record_script: AsyncScript | None = None
+
+REVOCATION_CHANNEL = "session:revoked"
 
 _CHECK_LUA = """
 local count = tonumber(redis.call('get', KEYS[1]) or '0')
@@ -143,6 +146,10 @@ async def revoke_jti(jti: str, ttl_seconds: int) -> None:
 
 async def revoke_sid(session_id: str, ttl_seconds: int) -> None:
     await get_redis().set(f"revoked:sid:{session_id}", 1, ex=ttl_seconds)
+    try:
+        await get_redis().publish(REVOCATION_CHANNEL, session_id)
+    except RedisError:
+        logger.warning("revocation publish failed session_id=%s", session_id)
 
 
 async def is_token_revoked(jti: str, session_id: str) -> bool:
