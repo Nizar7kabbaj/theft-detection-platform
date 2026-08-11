@@ -548,7 +548,7 @@ services:
       - ./config/pki/redis/tls.key:/etc/redis/tls/tls.key:ro
       - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis.conf)\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis.conf)\" ping | grep -q PONG"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -571,7 +571,7 @@ services:
       - ./config/pki/redis-broker/tls.key:/etc/redis/tls/tls.key:ro
       - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-broker.conf)\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-broker.conf)\" ping | grep -q PONG"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -594,7 +594,7 @@ services:
       - ./config/pki/redis-stream/tls.key:/etc/redis/tls/tls.key:ro
       - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-stream.conf)\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-stream.conf)\" ping | grep -q PONG"]
       interval: 30s
       timeout: 10s
       retries: 5
