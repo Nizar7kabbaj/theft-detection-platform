@@ -32,6 +32,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "grpcio-tools==1.71.2",
+    "ruff==0.16.2",
 ]
 
 [tool.hatch.build.targets.wheel]
