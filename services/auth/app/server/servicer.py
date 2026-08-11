@@ -11,10 +11,11 @@ from app.core.config import get_settings
 from app.core.database import get_sessionmaker
 from app.core.redis import is_token_revoked, revoke_sid
 from app.core.tokens import TokenError, TokenFailure, decode_access_token
+from app.repositories.audit_outbox_repository import AuditOutboxRepository
 from app.repositories.session_repository import SessionRepository
 from app.server.grpc_gen import audit_pb2 as pb
 from app.server.grpc_gen import auth_pb2, auth_pb2_grpc
-from app.services.audit_service import audit_client
+from app.services import audit_service as audit_events
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,22 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
                 subject_id = "" if revoked_session is None else revoked_session.user_id
                 existed = revoked_session is not None
                 was_live = await sessions.revoke(request.session_id)
+                if was_live:
+                    outbox = AuditOutboxRepository(db)
+                    ended = audit_events.session_ended(
+                        subject_id=subject_id,
+                        session_id=request.session_id,
+                        kind=pb.SESSION_END_KIND_REVOKED,
+                        source_ip="",
+                        user_agent="",
+                    )
+                    await outbox.enqueue(ended.event_id, ended.event_bytes, ended.occurred_at)
+                    if request.revoked_by:
+                        admin = audit_events.admin_session_revoked(
+                            actor_user_id=request.revoked_by,
+                            session_id=request.session_id,
+                        )
+                        await outbox.enqueue(admin.event_id, admin.event_bytes, admin.occurred_at)
                 await db.commit()
         except SQLAlchemyError:
             logger.warning("session store unavailable, session_id=%s", request.session_id)
@@ -114,20 +131,6 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
                 logger.error(
                     "session revoked in store but not in cache, session_id=%s",
                     request.session_id,
-                )
-        client = audit_client()
-        if client is not None and was_live:
-            client.emit_session_ended(
-                subject_id=subject_id,
-                session_id=request.session_id,
-                kind=pb.SESSION_END_KIND_REVOKED,
-                source_ip="",
-                user_agent="",
-            )
-            if request.revoked_by:
-                client.emit_admin_session_revoked(
-                    actor_user_id=request.revoked_by,
-                    session_id=request.session_id,
                 )
         return auth_pb2.RevokeSessionReply(
             revoked=existed,

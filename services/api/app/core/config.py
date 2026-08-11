@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     AUTH_VERIFY_TIMEOUT_SECONDS: float = 2.0
     AUDIT_TARGET: str = "audit:50054"
     AUDIT_APPEND_TIMEOUT_SECONDS: float = 2.0
+    AUDIT_OUTBOX_MAX_PENDING: int = 10000
+    AUDIT_OUTBOX_POLL_SECONDS: float = 5.0
     TLS_CERT_FILE: Path = Path("/run/secrets/api_tls_cert")
     TLS_KEY_FILE: Path = Path("/run/secrets/api_tls_key")
     TLS_CA_FILE: Path = Path("/run/secrets/api_tls_ca")

@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     schema_version: int = 1
     min_accepted_schema_version: int = 1
     max_clock_skew_seconds: int = 300
-    max_backdate_seconds: int = 86400
+    max_backdate_seconds: int = 604800
 
     pseudonym_key_file: Path = Path("/run/secrets/audit_pseudonym_key")
     pseudonym_key_id: str = "p1"
