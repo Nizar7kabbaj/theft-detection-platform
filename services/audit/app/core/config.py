@@ -30,7 +30,8 @@ class Settings(BaseSettings):
     postgres_owner_password_file: Path = Path("/run/secrets/audit_owner_postgres_password")
 
     redis_host: str = "redis"
-    redis_port: int = 6379
+    redis_port: int = 6380
+    redis_tls: bool = True
     redis_user: str = "audit"
     redis_db: int = 0
     redis_password_file: Path = Path("/run/secrets/audit_redis_password")

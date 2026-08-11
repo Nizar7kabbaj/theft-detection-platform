@@ -1,6 +1,19 @@
+import ssl
+
 from celery import Celery
 
 from app.shared.config import settings
+
+_ssl_options = (
+    {
+        "ssl_cert_reqs": ssl.CERT_REQUIRED,
+        "ssl_ca_certs": str(settings.TLS_CA_FILE),
+        "ssl_certfile": str(settings.TLS_CERT_FILE),
+        "ssl_keyfile": str(settings.TLS_KEY_FILE),
+    }
+    if settings.REDIS_TLS
+    else None
+)
 
 celery_app = Celery(
     "alerts",
@@ -8,7 +21,6 @@ celery_app = Celery(
     backend=settings.RESULT_BACKEND_URL,
     include=["app.worker.tasks"],
 )
-
 
 celery_app.conf.update(
     task_serializer="json",
@@ -20,6 +32,8 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
     result_backend_transport_options={"global_keyprefix": "results:"},
+    broker_use_ssl=_ssl_options,
+    redis_backend_use_ssl=_ssl_options,
 )
 
 

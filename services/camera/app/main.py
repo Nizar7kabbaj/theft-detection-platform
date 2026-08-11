@@ -45,6 +45,7 @@ async def _serve() -> None:
     )
     publisher = FramePublisher(
         redis_url=settings.REDIS_URL,
+        connection_kwargs=settings.redis_tls_options,
         stream_key=settings.frame_stream_key,
         maxlen=settings.FRAME_STREAM_MAXLEN,
         queue_depth=settings.PUBLISH_QUEUE_DEPTH,

@@ -30,11 +30,24 @@ def _resolve_redis_url() -> str:
     mode = (settings.REDIS_MODE or "local").lower()
     if mode == "cloud":
         return settings.REDIS_URL
+    scheme = "rediss" if settings.REDIS_TLS else "redis"
     user = quote_plus(settings.REDIS_USER)
     password = quote_plus(_load_redis_password())
     return (
-        f"redis://{user}:{password}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
+        f"{scheme}://{user}:{password}@"
+        f"{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
     )
+
+
+def _tls_options() -> dict[str, object]:
+    if not settings.REDIS_TLS:
+        return {}
+    return {
+        "ssl_ca_certs": str(settings.TLS_CA_FILE),
+        "ssl_certfile": str(settings.TLS_CERT_FILE),
+        "ssl_keyfile": str(settings.TLS_KEY_FILE),
+        "ssl_cert_reqs": "required",
+    }
 
 
 async def open_redis() -> Redis:
@@ -44,6 +57,7 @@ async def open_redis() -> Redis:
         _resolve_redis_url(),
         encoding="utf-8",
         decode_responses=True,
+        **_tls_options(),
     )
     await client.ping()
     logger.info("connected to redis", extra={"mode": mode})

@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     jwt_audience: str = "theft-detection-platform"
 
     redis_host: str = "redis"
-    redis_port: int = 6379
+    redis_port: int = 6380
+    redis_tls: bool = True
     redis_user: str = "auth"
     redis_db: int = 0
     redis_password_file: Path = Path("/run/secrets/auth_redis_password")

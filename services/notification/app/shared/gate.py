@@ -15,11 +15,20 @@ _client: redis.Redis | None = None
 def _redis() -> redis.Redis:
     global _client
     if _client is None:
+        options: dict[str, object] = {}
+        if settings.REDIS_TLS:
+            options = {
+                "ssl_ca_certs": str(settings.TLS_CA_FILE),
+                "ssl_certfile": str(settings.TLS_CERT_FILE),
+                "ssl_keyfile": str(settings.TLS_KEY_FILE),
+                "ssl_cert_reqs": "required",
+            }
         _client = redis.Redis.from_url(
             settings.NOTIFY_REDIS_URL,
             socket_connect_timeout=2.0,
             socket_timeout=2.0,
             decode_responses=True,
+            **options,
         )
     return _client
 

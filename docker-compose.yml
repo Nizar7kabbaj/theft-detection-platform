@@ -87,6 +87,8 @@ services:
     build: ./services/ai
     image: theft-ai:dev
     container_name: theft-ai
+    env_file:
+      - ./services/ai/.env
     networks:
       - observability
       - data
@@ -123,6 +125,8 @@ services:
     build: ./services/camera
     image: theft-camera:dev
     container_name: theft-camera
+    env_file:
+      - ./services/camera/.env
     networks:
       - observability
       - data
@@ -158,6 +162,8 @@ services:
     build: ./services/detect-gate
     image: theft-detect-gate:dev
     container_name: theft-detect-gate
+    env_file:
+      - ./services/detect-gate/.env
     networks:
       - observability
       - data
@@ -439,6 +445,9 @@ services:
       - ./config/telegram/bot_token:/run/secrets/telegram_bot_token:ro
       - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
       - ./config/redis/notify_redis_password:/run/secrets/notify_redis_password:ro
+      - ./config/pki/notification/tls.crt:/run/secrets/notification_tls_cert:ro
+      - ./config/pki/notification/tls.key:/run/secrets/notification_tls_key:ro
+      - ./config/pki/ca/ca.crt:/run/secrets/notification_tls_ca:ro
     depends_on:
       redis-broker:
         condition: service_healthy
@@ -475,6 +484,9 @@ services:
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
       - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
       - ./config/redis/notify_redis_password:/run/secrets/notify_redis_password:ro
+      - ./config/pki/notification/tls.crt:/run/secrets/notification_tls_cert:ro
+      - ./config/pki/notification/tls.key:/run/secrets/notification_tls_key:ro
+      - ./config/pki/ca/ca.crt:/run/secrets/notification_tls_ca:ro
     depends_on:
       redis-broker:
         condition: service_healthy
@@ -532,8 +544,11 @@ services:
     volumes:
       - redis_data:/data
       - ./config/redis/redis.conf:/etc/redis/redis.conf:ro
+      - ./config/pki/redis/tls.crt:/etc/redis/tls/tls.crt:ro
+      - ./config/pki/redis/tls.key:/etc/redis/tls/tls.key:ro
+      - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis.conf)\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis.conf)\" ping | grep -q PONG"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -552,8 +567,11 @@ services:
     volumes:
       - redis_broker_data:/data
       - ./config/redis/redis-broker.conf:/etc/redis/redis-broker.conf:ro
+      - ./config/pki/redis-broker/tls.crt:/etc/redis/tls/tls.crt:ro
+      - ./config/pki/redis-broker/tls.key:/etc/redis/tls/tls.key:ro
+      - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-broker.conf)\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-broker.conf)\" ping | grep -q PONG"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -572,8 +590,11 @@ services:
     command: ["redis-server", "/etc/redis/redis-stream.conf"]
     volumes:
       - ./config/redis/redis-stream.conf:/etc/redis/redis-stream.conf:ro
+      - ./config/pki/redis-stream/tls.crt:/etc/redis/tls/tls.crt:ro
+      - ./config/pki/redis-stream/tls.key:/etc/redis/tls/tls.key:ro
+      - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-stream.conf)\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-stream.conf)\" ping | grep -q PONG"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -663,10 +684,16 @@ services:
       - observability
     environment:
       REDIS_USER: "exporter"
-      REDIS_ADDR: "redis://theft-redis:6379"
+      REDIS_ADDR: "rediss://theft-redis:6380"
       REDIS_PASSWORD_FILE: "/run/secrets/exporter_pw"
+      REDIS_EXPORTER_TLS_CLIENT_CERT_FILE: "/run/secrets/exporter_tls_cert"
+      REDIS_EXPORTER_TLS_CLIENT_KEY_FILE: "/run/secrets/exporter_tls_key"
+      REDIS_EXPORTER_TLS_CA_CERT_FILE: "/run/secrets/exporter_tls_ca"
     volumes:
       - ./config/redis/exporter_redis_password:/run/secrets/exporter_pw:ro
+      - ./config/pki/exporter/tls.crt:/run/secrets/exporter_tls_cert:ro
+      - ./config/pki/exporter/tls.key:/run/secrets/exporter_tls_key:ro
+      - ./config/pki/ca/ca.crt:/run/secrets/exporter_tls_ca:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -681,10 +708,16 @@ services:
       - observability
     environment:
       REDIS_USER: "exporter"
-      REDIS_ADDR: "redis://theft-redis-broker:6379"
+      REDIS_ADDR: "rediss://theft-redis-broker:6380"
       REDIS_PASSWORD_FILE: "/run/secrets/broker_exporter_pw"
+      REDIS_EXPORTER_TLS_CLIENT_CERT_FILE: "/run/secrets/exporter_tls_cert"
+      REDIS_EXPORTER_TLS_CLIENT_KEY_FILE: "/run/secrets/exporter_tls_key"
+      REDIS_EXPORTER_TLS_CA_CERT_FILE: "/run/secrets/exporter_tls_ca"
     volumes:
       - ./config/redis/broker_exporter_redis_password:/run/secrets/broker_exporter_pw:ro
+      - ./config/pki/exporter/tls.crt:/run/secrets/exporter_tls_cert:ro
+      - ./config/pki/exporter/tls.key:/run/secrets/exporter_tls_key:ro
+      - ./config/pki/ca/ca.crt:/run/secrets/exporter_tls_ca:ro
     depends_on:
       redis-broker:
         condition: service_healthy
@@ -699,10 +732,16 @@ services:
       - observability
     environment:
       REDIS_USER: "exporter"
-      REDIS_ADDR: "redis://theft-redis-stream:6379"
+      REDIS_ADDR: "rediss://theft-redis-stream:6380"
       REDIS_PASSWORD_FILE: "/run/secrets/stream_exporter_pw"
+      REDIS_EXPORTER_TLS_CLIENT_CERT_FILE: "/run/secrets/exporter_tls_cert"
+      REDIS_EXPORTER_TLS_CLIENT_KEY_FILE: "/run/secrets/exporter_tls_key"
+      REDIS_EXPORTER_TLS_CA_CERT_FILE: "/run/secrets/exporter_tls_ca"
     volumes:
       - ./config/redis/stream_exporter_redis_password:/run/secrets/stream_exporter_pw:ro
+      - ./config/pki/exporter/tls.crt:/run/secrets/exporter_tls_cert:ro
+      - ./config/pki/exporter/tls.key:/run/secrets/exporter_tls_key:ro
+      - ./config/pki/ca/ca.crt:/run/secrets/exporter_tls_ca:ro
     depends_on:
       redis-stream:
         condition: service_healthy

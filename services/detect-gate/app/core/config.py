@@ -34,7 +34,8 @@ class Settings(BaseSettings):
     STREAM_RETRY_BACKOFF_SECONDS: Annotated[float, Field(gt=0)] = 0.5
     STREAM_RETRY_BACKOFF_MAX_SECONDS: Annotated[float, Field(gt=0)] = 10.0
     REDIS_HOST: str = "redis-stream"
-    REDIS_PORT: int = 6379
+    REDIS_PORT: int = 6380
+    REDIS_TLS: bool = True
     REDIS_DB: int = 2
     REDIS_USER: str = "gate"
     REDIS_PASSWORD_FILE: str = "/run/secrets/gate_redis_password"
@@ -46,7 +47,6 @@ class Settings(BaseSettings):
     HEARTBEAT_MAX_AGE_SECONDS: Annotated[float, Field(gt=0)] = 10.0
     LOG_LEVEL: str = "INFO"
     DEBUG: bool = False
-
     TLS_CERT_FILE: Path = Path("/run/secrets/gate_tls_cert")
     TLS_KEY_FILE: Path = Path("/run/secrets/gate_tls_key")
     TLS_CA_FILE: Path = Path("/run/secrets/gate_tls_ca")
@@ -89,7 +89,19 @@ class Settings(BaseSettings):
     @property
     def REDIS_URL(self) -> str:
         password = quote(_read_secret(self.REDIS_PASSWORD_FILE), safe="")
-        return f"redis://{self.REDIS_USER}:{password}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+        scheme = "rediss" if self.REDIS_TLS else "redis"
+        return f"{scheme}://{self.REDIS_USER}:{password}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
+    @property
+    def redis_tls_options(self) -> dict[str, object]:
+        if not self.REDIS_TLS:
+            return {}
+        return {
+            "ssl_ca_certs": str(self.TLS_CA_FILE),
+            "ssl_certfile": str(self.TLS_CERT_FILE),
+            "ssl_keyfile": str(self.TLS_KEY_FILE),
+            "ssl_cert_reqs": "required",
+        }
 
     @property
     def frame_stream_key(self) -> str:

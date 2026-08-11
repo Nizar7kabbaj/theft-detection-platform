@@ -3,7 +3,7 @@ set -euo pipefail
 
 DEPENDENCIES=(openssl)
 SCRIPT_NAME=$(basename "$0")
-VERSION="1.0.0"
+VERSION="1.1.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PKI_DIR="${REPO_ROOT}/config/pki"
@@ -15,11 +15,13 @@ CURVE="P-256"
 CA_VALIDITY_DAYS=3650
 LEAF_VALIDITY_DAYS=90
 RENEW_THRESHOLD_SECONDS=$((14 * 86400))
-SERVICES=(api auth ai camera detect-gate notification audit)
+SERVER_KEY_GROUP="redis-conf"
+EXPORTER_KEY_UID="59000"
+SERVICES=(api auth ai camera detect-gate notification audit redis redis-broker redis-stream exporter)
 
 function usage() {
     cat <<EOM
-generate a local certificate authority and per-service client certificates.
+generate a local certificate authority and per-service certificates.
 
 usage: ${SCRIPT_NAME} [options]
 
@@ -43,11 +45,14 @@ certificate details:
     leaf:       ${LEAF_VALIDITY_DAYS} days
     identity:   spiffe://${TRUST_DOMAIN}/service/<name> as a uri subject alternative name
 
+datastore keys are owned by group ${SERVER_KEY_GROUP} at mode 640 so the
+server process can read them without the key becoming world readable.
+
 services: ${SERVICES[*]}
 
 examples:
     ${SCRIPT_NAME}
-    ${SCRIPT_NAME} --service audit --force
+    ${SCRIPT_NAME} --service redis --force
 EOM
     exit 1
 }
@@ -98,6 +103,20 @@ function main() {
         fi
     done
 
+    for name in "${selected[@]}"; do
+        if needs_group_readable_key "${name}"; then
+            exit_on_missing_group "${SERVER_KEY_GROUP}"
+            break
+        fi
+    done
+
+    for name in "${selected[@]}"; do
+        if needs_uid_owned_key "${name}"; then
+            exit_on_missing_privilege
+            break
+        fi
+    done
+
     ensure_ca "${force}"
 
     for name in "${selected[@]}"; do
@@ -118,7 +137,7 @@ function is_known_service() {
 
 function is_server_service() {
     case "$1" in
-    audit | ai | auth | notification)
+    audit | ai | auth | notification | redis | redis-broker | redis-stream)
         return 0
         ;;
     *)
@@ -126,6 +145,46 @@ function is_server_service() {
         ;;
     esac
 }
+
+function needs_group_readable_key() {
+    case "$1" in
+    redis | redis-broker | redis-stream)
+        return 0
+        ;;
+    *)
+        return 1
+        ;;
+    esac
+}
+
+function needs_uid_owned_key() {
+    case "$1" in
+    exporter)
+        return 0
+        ;;
+    *)
+        return 1
+        ;;
+    esac
+}
+
+function service_dns_names() {
+    case "$1" in
+    redis)
+        echo "redis theft-redis"
+        ;;
+    redis-broker)
+        echo "redis-broker theft-redis-broker"
+        ;;
+    redis-stream)
+        echo "redis-stream theft-redis-stream"
+        ;;
+    *)
+        echo "$1"
+        ;;
+    esac
+}
+
 function cert_still_valid() {
     local cert_file="$1"
     local key_file="$2"
@@ -194,8 +253,13 @@ function ensure_leaf() {
 
     local san="URI:spiffe://${TRUST_DOMAIN}/service/${name}"
     local eku="clientAuth"
+
     if is_server_service "${name}"; then
-        san="${san},DNS:${name},DNS:localhost,IP:127.0.0.1"
+        local dns
+        for dns in $(service_dns_names "${name}"); do
+            san="${san},DNS:${dns}"
+        done
+        san="${san},DNS:localhost,IP:127.0.0.1"
         eku="serverAuth,clientAuth"
     fi
 
@@ -241,9 +305,39 @@ EOM
     mv "${tmp_key}" "${key_file}"
     rm -f "${tmp_csr}" "${tmp_ext}"
     chmod 644 "${cert_file}"
-    chmod 600 "${key_file}"
+
+    if needs_group_readable_key "${name}"; then
+        chgrp "${SERVER_KEY_GROUP}" "${key_file}"
+        chmod 640 "${key_file}"
+    elif needs_uid_owned_key "${name}"; then
+        chmod 600 "${key_file}"
+        if ! sudo chown "${EXPORTER_KEY_UID}:${EXPORTER_KEY_UID}" "${key_file}"; then
+            echo "error: could not set ownership on ${key_file}" >&2
+            exit 1
+        fi
+    else
+        chmod 600 "${key_file}"
+    fi
+
     trap - EXIT
     echo "${name} certificate generated at ${cert_file}"
+}
+
+function exit_on_missing_group() {
+    local group="$1"
+    if getent group "${group}" >/dev/null 2>&1; then
+        return 0
+    fi
+    printf "error: group '%s' does not exist, datastore keys cannot be made readable to the server\n" "${group}" >&2
+    exit 1
+}
+
+function exit_on_missing_privilege() {
+    if sudo -n true 2>/dev/null; then
+        return 0
+    fi
+    printf "error: root privilege required to set ownership on the exporter key\n" >&2
+    exit 1
 }
 
 function exit_on_missing_tools() {

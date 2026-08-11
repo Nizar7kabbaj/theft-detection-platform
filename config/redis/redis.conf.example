@@ -1,6 +1,6 @@
 # Network
 bind 0.0.0.0
-port 6379
+port 0
 protected-mode yes
 
 # Security
@@ -22,3 +22,10 @@ logfile ""
 
 # Misc
 databases 16
+
+tls-port 6380
+tls-cert-file /etc/redis/tls/tls.crt
+tls-key-file /etc/redis/tls/tls.key
+tls-ca-cert-file /etc/redis/tls/ca.crt
+tls-auth-clients yes
+tls-protocols "TLSv1.3"

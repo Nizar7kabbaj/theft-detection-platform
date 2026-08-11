@@ -63,6 +63,19 @@ def _load_redis_password() -> str:
     return password
 
 
+def _tls_options() -> dict[str, object]:
+    settings = get_settings()
+    if not settings.redis_tls:
+        return {}
+    return {
+        "ssl": True,
+        "ssl_ca_certs": str(settings.tls_ca_file),
+        "ssl_certfile": str(settings.tls_cert_file),
+        "ssl_keyfile": str(settings.tls_key_file),
+        "ssl_cert_reqs": "required",
+    }
+
+
 def get_redis() -> Redis:
     global _client
     if _client is None:
@@ -75,6 +88,7 @@ def get_redis() -> Redis:
             db=settings.redis_db,
             decode_responses=True,
             health_check_interval=30,
+            **_tls_options(),
         )
         logger.info("redis client created")
     return _client

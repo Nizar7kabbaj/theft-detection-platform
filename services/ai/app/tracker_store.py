@@ -11,10 +11,17 @@ _KP_LEN = _KP_SHAPE[0] * _KP_SHAPE[1]
 
 
 class TrackerStore:
-    def __init__(self, redis_url: str, window: int, ttl_seconds: int) -> None:
+    def __init__(
+        self,
+        redis_url: str,
+        window: int,
+        ttl_seconds: int,
+        connection_kwargs: dict[str, object] | None = None,
+    ) -> None:
         self._redis_url = redis_url
         self._window = window
         self._ttl = ttl_seconds
+        self._connection_kwargs = dict(connection_kwargs or {})
         self._lock = threading.Lock()
         self._client: redis.Redis | None = None
 
@@ -25,6 +32,7 @@ class TrackerStore:
                     pool = redis.ConnectionPool.from_url(
                         self._redis_url,
                         max_connections=16,
+                        **self._connection_kwargs,
                     )
                     self._client = redis.Redis(connection_pool=pool)
         return self._client
