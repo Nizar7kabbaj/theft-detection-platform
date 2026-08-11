@@ -32,6 +32,10 @@ services:
         condition: service_healthy
       notification-service:
         condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      audit-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)\""]
       interval: 30s
@@ -411,6 +415,8 @@ services:
       - ./config/pki/ca/ca.crt:/run/secrets/notification_tls_ca:ro
     depends_on:
       redis-broker:
+        condition: service_healthy
+      mongo:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=notification:50052", "-tls", "-tls-ca-cert=/run/secrets/notification_tls_ca", "-tls-client-cert=/run/secrets/notification_tls_cert", "-tls-client-key=/run/secrets/notification_tls_key"]
