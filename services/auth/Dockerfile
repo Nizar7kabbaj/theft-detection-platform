@@ -33,6 +33,7 @@ COPY --chown=auth:auth app /app/app
 COPY --chown=auth:auth alembic.ini /app/alembic.ini
 COPY --chown=auth:auth migrations /app/migrations
 COPY --chown=auth:auth scripts /app/scripts
+COPY --chown=auth:auth tools /app/tools
 USER auth
 EXPOSE 8000
 EXPOSE 50053

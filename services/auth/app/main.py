@@ -13,6 +13,8 @@ from grpc_reflection.v1alpha import reflection
 
 from app.api.v1.auth import router as auth_router
 from app.core.config import get_settings
+from app.core.database import dispose_engine
+from app.core.redis import close_redis
 from app.server.grpc_gen import auth_pb2, auth_pb2_grpc
 from app.server.interceptors import IdentityInterceptor
 from app.server.servicer import AuthServicer
@@ -135,20 +137,26 @@ async def _serve() -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _on_signal, sig.name)
+
     grpc_task = asyncio.create_task(_run_grpc(stop_event))
     http_task = asyncio.create_task(_run_http(stop_event))
     tasks = (grpc_task, http_task)
-    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-    stop_event.set()
-    for task in pending:
-        await task
-    await drain_pending_appends()
-    await close_audit_client()
-    for task in done:
-        exc = task.exception()
-        if exc is not None:
-            logger.error("server task failed: %s", exc)
-            raise exc
+    try:
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        stop_event.set()
+        for task in pending:
+            await task
+        for task in done:
+            exc = task.exception()
+            if exc is not None:
+                logger.error("server task failed: %s", exc)
+                raise exc
+    finally:
+        stop_event.set()
+        await drain_pending_appends()
+        await close_redis()
+        await dispose_engine()
+        await close_audit_client()
     logger.info("auth server stopped")
 
 

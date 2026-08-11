@@ -247,6 +247,7 @@ services:
         - "traefik.http.routers.auth.middlewares=gateway-chain@file"
         - "traefik.http.services.auth.loadbalancer.server.port=8000"
       restart: unless-stopped
+      stop_grace_period: 20s
 
   audit-service:
         build:
