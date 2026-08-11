@@ -24,6 +24,12 @@ dependencies = [
     "opentelemetry-instrumentation-logging==0.50b0",
 ]
 
+
+[project.optional-dependencies]
+dev = [
+    "ruff==0.16.2",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
 

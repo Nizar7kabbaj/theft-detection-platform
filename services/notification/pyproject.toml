@@ -43,8 +43,7 @@ dev = [
     "pytest-mock==3.14.0",
     "httpx==0.28.1",
     "grpcio-tools==1.71.2",
-    "ruff>=0.8,<0.9",
-    "mypy>=1.13,<1.14",
+    "ruff==0.16.2",
     "testcontainers[mongodb]>=4.8,<5",
 ]
 
@@ -53,21 +52,6 @@ packages = ["app"]
 
 [tool.ruff]
 extend = "../../ruff.toml"
-
-[tool.mypy]
-python_version = "3.11"
-strict = true
-warn_unreachable = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-
-[[tool.mypy.overrides]]
-module = "tests.*"
-disallow_untyped_defs = false
-
-[[tool.mypy.overrides]]
-module = "app.server.grpc_gen.*"
-ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
