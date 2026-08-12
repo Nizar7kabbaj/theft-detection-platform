@@ -75,7 +75,7 @@ class AuthClient:
                 session_id=response.session_id,
             )
 
-    async def session_active(self, session_id: str) -> bool:
+    async def session_active(self, session_id: str) -> tuple[bool, frozenset[str]]:
         request = pb.IntrospectSessionRequest(session_id=session_id)
         with tracer.start_as_current_span("auth.introspect_session") as span:
             try:
@@ -93,4 +93,4 @@ class AuthClient:
                     raise AuthUnavailableError("auth service unavailable") from exc
                 raise
             span.set_attribute("auth.session_active", response.active)
-            return response.active
+            return response.active, frozenset(response.roles)

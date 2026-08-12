@@ -31,7 +31,7 @@ async def _reader(ws: WebSocket) -> None:
         await ws.receive_text()
 
 
-async def _serve(ws: WebSocket, topic: str, user: CurrentUser) -> None:
+async def _serve(ws: WebSocket, topic: str, user: CurrentUser, permission: Permission) -> None:
     await ws.accept()
     broadcaster = _get_broadcaster(ws)
     registered = await broadcaster.register(ws, topic)
@@ -39,7 +39,7 @@ async def _serve(ws: WebSocket, topic: str, user: CurrentUser) -> None:
         return
     revocations = _get_revocations(ws)
     revoked = revocations.register(user.session_id)
-    watchdog = asyncio.create_task(reverify_loop(ws, user))
+    watchdog = asyncio.create_task(reverify_loop(ws, user, permission))
     reader = asyncio.create_task(_reader(ws))
     pushed = asyncio.create_task(revoked.wait(), name="revocation-wait")
     tasks = (watchdog, reader, pushed)
@@ -72,7 +72,7 @@ async def alerts_stream(
     ws: WebSocket,
     user: CurrentUser = Depends(require_ws_permission(Permission.ALERT_READ)),
 ) -> None:
-    await _serve(ws, "alerts", user)
+    await _serve(ws, "alerts", user, Permission.ALERT_READ)
 
 
 @router.websocket("/ws/cameras")
@@ -80,4 +80,4 @@ async def cameras_stream(
     ws: WebSocket,
     user: CurrentUser = Depends(require_ws_permission(Permission.CAMERA_READ)),
 ) -> None:
-    await _serve(ws, "cameras", user)
+    await _serve(ws, "cameras", user, Permission.CAMERA_READ)

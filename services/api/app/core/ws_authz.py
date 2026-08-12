@@ -127,7 +127,7 @@ def _next_delay(interval: int) -> float:
     return interval * factor / _JITTER_STEPS
 
 
-async def reverify_loop(ws: WebSocket, user: CurrentUser) -> None:
+async def reverify_loop(ws: WebSocket, user: CurrentUser, permission: Permission) -> None:
     from app.core.config import settings
 
     client = build_auth_client(ws)
@@ -137,7 +137,7 @@ async def reverify_loop(ws: WebSocket, user: CurrentUser) -> None:
     while True:
         await asyncio.sleep(_next_delay(settings.WS_REAUTH_SECONDS))
         try:
-            active = await client.session_active(user.session_id)
+            active, roles = await client.session_active(user.session_id)
         except AuthUnavailableError:
             logger.warning("session recheck failed user=%s, auth unavailable", user.username)
         except Exception:
@@ -149,6 +149,13 @@ async def reverify_loop(ws: WebSocket, user: CurrentUser) -> None:
                     user.username,
                 )
                 await ws.close(code=_POLICY, reason="session revoked")
+                return
+            if permission not in _resolve_permissions(roles):
+                logger.info(
+                    "websocket closed user=%s, permission withdrawn",
+                    user.username,
+                )
+                await ws.close(code=_POLICY, reason="insufficient permission")
                 return
             last_verified = time.monotonic()
             continue

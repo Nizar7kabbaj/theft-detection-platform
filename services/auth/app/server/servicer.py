@@ -13,6 +13,7 @@ from app.core.redis import is_token_revoked, revoke_sid
 from app.core.tokens import TokenError, TokenFailure, decode_access_token
 from app.repositories.audit_outbox_repository import AuditOutboxRepository
 from app.repositories.session_repository import SessionRepository
+from app.repositories.user_repository import UserRepository
 from app.server.grpc_gen import audit_pb2 as pb
 from app.server.grpc_gen import auth_pb2, auth_pb2_grpc
 from app.services import audit_service as audit_events
@@ -73,6 +74,12 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
             async with factory() as db:
                 sessions = SessionRepository(db)
                 login_session = await sessions.get_by_id(request.session_id)
+                roles: list[str] = []
+                if login_session is not None:
+                    users = UserRepository(db)
+                    user = await users.get_by_id(login_session.user_id)
+                    if user is not None and user.is_active:
+                        roles = list(user.roles)
         except SQLAlchemyError:
             logger.warning("session store unavailable, session_id=%s", request.session_id)
             await context.abort(grpc.StatusCode.UNAVAILABLE, "session store unavailable")
@@ -89,6 +96,7 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
             last_used_at=last_used_at,
             source_ip=login_session.source_ip,
             user_agent=login_session.user_agent,
+            roles=roles,
         )
 
     async def RevokeSession(
