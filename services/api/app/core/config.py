@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     WS_ALLOWED_ORIGINS: str = "https://localhost"
     WS_REAUTH_SECONDS: int = 60
     WS_REAUTH_GRACE_SECONDS: int = 180
+    WS_RATE_UPGRADES: int = 30
+    WS_RATE_WINDOW_SECONDS: int = 60
+    WS_RATE_BURST: int = 10
     ALERT_THRESHOLD: float = 0.7
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_REQUESTS: int = 100

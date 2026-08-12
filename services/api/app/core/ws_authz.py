@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import WebSocket, WebSocketException, status
+from redis.asyncio import Redis
 
 from app.core.authz import (
     Permission,
@@ -21,6 +22,7 @@ from app.core.authz import (
 )
 from app.core.database import get_database
 from app.core.errors import AuthUnavailableError
+from app.core.rate_limit import check_ws_upgrade
 from app.grpc_gen import audit_pb2
 from app.schemas.identity import CurrentUser
 from app.services.audit_service import AuditClient
@@ -68,6 +70,10 @@ def check_origin(ws: WebSocket) -> None:
         raise WebSocketException(code=_POLICY, reason="origin not allowed")
 
 
+def _ws_redis(ws: WebSocket) -> Redis:
+    return ws.app.state.redis
+
+
 async def authenticate(ws: WebSocket) -> CurrentUser:
     check_origin(ws)
     try:
@@ -83,6 +89,10 @@ async def authenticate(ws: WebSocket) -> CurrentUser:
     except AuthUnavailableError as exc:
         logger.warning("websocket upgrade failed, auth service unavailable")
         raise WebSocketException(code=_INTERNAL, reason="auth unavailable") from exc
+    allowed = await check_ws_upgrade(_ws_redis(ws), user.user_id)
+    if not allowed:
+        logger.info("websocket upgrade refused, rate limited user=%s", user.username)
+        raise WebSocketException(code=_POLICY, reason="too many connections")
     return user
 
 

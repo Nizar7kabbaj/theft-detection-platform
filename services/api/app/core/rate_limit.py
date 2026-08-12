@@ -58,6 +58,26 @@ def _rate_key(user_id: str) -> str:
     return f"rl:{user_id}"
 
 
+def _ws_rate_key(user_id: str) -> str:
+    return f"rl:ws:{user_id}"
+
+
+async def check_ws_upgrade(client: Redis, user_id: str) -> bool:
+    if not settings.RATE_LIMIT_ENABLED:
+        return True
+    try:
+        script = _register(client)
+        period_ms = (settings.WS_RATE_WINDOW_SECONDS * 1000) / settings.WS_RATE_UPGRADES
+        result = await script(
+            keys=[_ws_rate_key(user_id)],
+            args=[period_ms, settings.WS_RATE_BURST],
+        )
+    except RedisError:
+        logger.warning("websocket rate limit skipped on redis error user=%s", user_id)
+        return True
+    return bool(int(result[0]))
+
+
 async def _check(client: Redis, user_id: str) -> tuple[bool, int]:
     script = _register(client)
     period_ms = (settings.RATE_LIMIT_WINDOW_SECONDS * 1000) / settings.RATE_LIMIT_REQUESTS
