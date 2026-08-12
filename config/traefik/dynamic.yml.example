@@ -16,23 +16,6 @@ http:
         sourceCriterion:
           ipStrategy:
             depth: 1
-    cors:
-      headers:
-        accessControlAllowOriginList:
-          - http://localhost:3000
-        accessControlAllowCredentials: true
-        accessControlAllowMethods:
-          - GET
-          - POST
-          - PUT
-          - PATCH
-          - DELETE
-          - OPTIONS
-        accessControlAllowHeaders:
-          - content-type
-          - X-CSRF-Token
-        accessControlMaxAge: 600
-        addVaryHeader: true
     security-headers:
       headers:
         frameDeny: true
@@ -52,5 +35,4 @@ http:
       chain:
         middlewares:
           - rate-limit-per-ip
-          - cors
           - security-headers
