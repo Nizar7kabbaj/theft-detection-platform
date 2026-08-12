@@ -16,4 +16,6 @@ export const ANALYTICS_GC_MS = 24 * HOUR
 
 export const DEFAULT_STALE_MS = 30 * SECOND
 export const DEFAULT_GC_MS = 5 * MINUTE
-export const DEFAULT_RETRY_COUNT = 2
+export const MAX_RETRY_COUNT = 2
+export const RETRY_BASE_DELAY_MS = SECOND
+export const RETRY_MAX_DELAY_MS = 30 * SECOND

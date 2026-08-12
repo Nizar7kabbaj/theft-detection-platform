@@ -3,51 +3,56 @@ set -euo pipefail
 
 DEPENDENCIES=(openssl)
 SCRIPT_NAME=$(basename "$0")
-VERSION="1.0.0"
-
+VERSION="2.0.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 CERT_DIR="${REPO_ROOT}/config/traefik/certs"
+CA_CERT="${CERT_DIR}/ca.crt"
+CA_KEY="${CERT_DIR}/ca.key"
 CERT_FILE="${CERT_DIR}/localhost.crt"
 KEY_FILE="${CERT_DIR}/localhost.key"
-VALIDITY_DAYS=365
+CA_VALIDITY_DAYS=3650
+LEAF_VALIDITY_DAYS=365
 RENEW_THRESHOLD_SECONDS=$((7 * 86400))
 
 function usage() {
     cat <<EOM
-
-generate a self-signed tls cert for local traefik.
+generate a local certificate authority and a traefik leaf certificate.
 
 usage: ${SCRIPT_NAME} [options]
 
 options:
-    -f|--force                   regenerate even if existing cert is still valid
+    -f|--force                   regenerate even if the existing leaf is still valid
     -h|--help                    show this help message
     --version                    show version information
 
 dependencies: ${DEPENDENCIES[*]}
 
 output:
+    ${CA_CERT}
+    ${CA_KEY}
     ${CERT_FILE}
     ${KEY_FILE}
 
 cert details:
     algorithm: rsa-2048, sha-256
-    validity:  ${VALIDITY_DAYS} days
+    ca validity:   ${CA_VALIDITY_DAYS} days
+    leaf validity: ${LEAF_VALIDITY_DAYS} days
     subject:   CN=localhost
     san:       DNS:localhost, DNS:*.localhost, IP:127.0.0.1
+
+import ${CA_CERT} into the browser trust store once. leaf renewals need no
+further import.
 
 examples:
     ${SCRIPT_NAME}
     ${SCRIPT_NAME} --force
-
 EOM
     exit 1
 }
 
 function main() {
     local force=false
-
     while [ $# -gt 0 ]; do
         case $1 in
         -f | --force)
@@ -69,24 +74,37 @@ function main() {
     done
 
     exit_on_missing_tools "${DEPENDENCIES[@]}"
+    mkdir -p "${CERT_DIR}"
 
-    if [ "$force" = "false" ] && cert_still_valid; then
-        echo "cert valid for at least 7 more days, skipping"
+    if [ "$force" = "false" ] && leaf_still_valid && ca_still_valid; then
+        echo "leaf valid for at least 7 more days, skipping"
         return 0
     fi
 
-    generate_cert
-    echo "cert generated at ${CERT_FILE}"
+    if [ "$force" = "true" ] || ! ca_still_valid; then
+        generate_ca
+        echo "ca generated at ${CA_CERT}, import it into the browser trust store"
+    fi
+
+    generate_leaf
+    echo "leaf generated at ${CERT_FILE}"
 }
 
-function cert_still_valid() {
+function ca_still_valid() {
+    if [ ! -f "${CA_CERT}" ] || [ ! -f "${CA_KEY}" ]; then
+        return 1
+    fi
+    openssl x509 -in "${CA_CERT}" -noout -checkend "${RENEW_THRESHOLD_SECONDS}" >/dev/null 2>&1
+}
+
+function leaf_still_valid() {
     if [ ! -f "${CERT_FILE}" ] || [ ! -f "${KEY_FILE}" ]; then
         return 1
     fi
     openssl x509 -in "${CERT_FILE}" -noout -checkend "${RENEW_THRESHOLD_SECONDS}" >/dev/null 2>&1
 }
 
-function generate_cert() {
+function generate_ca() {
     local tmp_key tmp_crt
     tmp_key=$(mktemp)
     tmp_crt=$(mktemp)
@@ -95,31 +113,68 @@ function generate_cert() {
     if ! openssl req -x509 -nodes \
         -newkey rsa:2048 \
         -sha256 \
-        -days "${VALIDITY_DAYS}" \
+        -days "${CA_VALIDITY_DAYS}" \
         -keyout "${tmp_key}" \
         -out "${tmp_crt}" \
-        -subj "/CN=localhost" \
-        -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1" \
+        -subj "/CN=theft-detection-platform local ca" \
+        -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
+        -addext "keyUsage=critical,keyCertSign,cRLSign" \
         >/dev/null 2>&1; then
-        echo "error: openssl cert generation failed" >&2
+        echo "error: openssl ca generation failed" >&2
         exit 1
     fi
 
-    mkdir -p "${CERT_DIR}"
+    mv "${tmp_crt}" "${CA_CERT}"
+    mv "${tmp_key}" "${CA_KEY}"
+    chmod 644 "${CA_CERT}"
+    chmod 600 "${CA_KEY}"
+    trap - EXIT
+}
 
-    if ! mv "${tmp_crt}" "${CERT_FILE}"; then
-        echo "error: failed to move cert to ${CERT_FILE}" >&2
+function generate_leaf() {
+    local tmp_key tmp_csr tmp_crt tmp_ext
+    tmp_key=$(mktemp)
+    tmp_csr=$(mktemp)
+    tmp_crt=$(mktemp)
+    tmp_ext=$(mktemp)
+    trap "rm -f '${tmp_key}' '${tmp_csr}' '${tmp_crt}' '${tmp_ext}'" EXIT
+
+    cat >"${tmp_ext}" <<'EOM'
+basicConstraints=critical,CA:FALSE
+keyUsage=critical,digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1
+EOM
+
+    if ! openssl req -nodes -new \
+        -newkey rsa:2048 \
+        -sha256 \
+        -keyout "${tmp_key}" \
+        -out "${tmp_csr}" \
+        -subj "/CN=localhost" \
+        >/dev/null 2>&1; then
+        echo "error: openssl leaf request failed" >&2
         exit 1
     fi
 
-    if ! mv "${tmp_key}" "${KEY_FILE}"; then
-        echo "error: failed to move key to ${KEY_FILE}" >&2
+    if ! openssl x509 -req \
+        -in "${tmp_csr}" \
+        -CA "${CA_CERT}" \
+        -CAkey "${CA_KEY}" \
+        -CAcreateserial \
+        -sha256 \
+        -days "${LEAF_VALIDITY_DAYS}" \
+        -extfile "${tmp_ext}" \
+        -out "${tmp_crt}" \
+        >/dev/null 2>&1; then
+        echo "error: openssl leaf signing failed" >&2
         exit 1
     fi
 
+    mv "${tmp_crt}" "${CERT_FILE}"
+    mv "${tmp_key}" "${KEY_FILE}"
     chmod 644 "${CERT_FILE}"
     chmod 600 "${KEY_FILE}"
-
     trap - EXIT
 }
 
