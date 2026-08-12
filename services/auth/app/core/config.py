@@ -60,6 +60,7 @@ class Settings(BaseSettings):
 
     access_token_ttl_seconds: int = 900
     refresh_token_ttl_seconds: int = 1209600
+    refresh_rotation_grace_seconds: int = 30
     access_cookie_name: str = "__Host-access_token"
     refresh_cookie_name: str = "__Host-refresh_token"
     csrf_cookie_name: str = "__Host-csrf"

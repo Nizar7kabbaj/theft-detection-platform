@@ -13,13 +13,8 @@ async def csrf_protect(connection: HTTPConnection) -> None:
 
     if connection.scope["type"] != "http":
         return
-
     if connection.scope["method"] in _SAFE_METHODS:
         return
-
-    if settings.ACCESS_COOKIE_NAME not in connection.cookies:
-        return
-
     cookie_value = connection.cookies.get(settings.CSRF_COOKIE_NAME)
     header_value = connection.headers.get(settings.CSRF_HEADER_NAME)
     if not cookie_value or not header_value:

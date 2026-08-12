@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,11 +44,15 @@ class RefreshTokenRepository:
         )
         return result.scalar_one_or_none()
 
-    async def mark_rotated(self, jti: str) -> None:
+    async def get_by_jti(self, jti: str) -> RefreshToken | None:
+        result = await self._session.execute(select(RefreshToken).where(RefreshToken.jti == jti))
+        return result.scalar_one_or_none()
+
+    async def mark_rotated(self, jti: str, replaced_by: str) -> None:
         await self._session.execute(
             update(RefreshToken)
             .where(RefreshToken.jti == jti)
-            .values(revoked=True)
+            .values(revoked=True, rotated_at=datetime.now(UTC), replaced_by=replaced_by)
             .execution_options(synchronize_session=False)
         )
 

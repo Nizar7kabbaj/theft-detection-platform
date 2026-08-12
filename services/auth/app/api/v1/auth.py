@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from ipaddress import ip_address
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -12,6 +12,7 @@ from app.core.cookies import (
     new_csrf_token,
     set_auth_cookies,
 )
+from app.core.csrf import csrf_protect
 from app.core.database import get_sessionmaker
 from app.core.redis import (
     check_login,
@@ -29,6 +30,7 @@ from app.core.tokens import (
     new_refresh_secret,
     sign_access_token,
 )
+from app.db.models.refresh_token import RefreshToken
 from app.repositories.audit_outbox_repository import AuditOutboxRepository
 from app.repositories.refresh_token_repository import RefreshTokenRepository
 from app.repositories.session_repository import SessionRepository
@@ -44,9 +46,21 @@ from app.services import audit_service as audit_events
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _INVALID_CREDENTIALS = "invalid credentials"
-_INVALID_REFRESH = "invalid refresh token"
+_CODE_SESSION_INVALID = "session_invalid"
+_CODE_ACCOUNT_DISABLED = "account_disabled"
+
+
+def _refresh_rejected(code: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={"message": "invalid refresh token", "code": code},
+    )
+
+
 _LOCKED_OUT = "too many failed login attempts"
 _DUMMY_HASH = hash_password("timing-defense-dummy")
+_REFRESH_TOKEN_PARTS = 2
+_MAX_SUCCESSOR_HOPS = 3
 
 
 def _client_ip(request: Request) -> str:
@@ -83,14 +97,62 @@ def _build_refresh_token(jti: str, secret: str) -> str:
     return f"{jti}.{secret}"
 
 
-_REFRESH_TOKEN_PARTS = 2
-
-
 def _split_refresh_token(raw: str) -> tuple[str, str] | None:
     parts = raw.split(".", 1)
     if len(parts) != _REFRESH_TOKEN_PARTS or not parts[0] or not parts[1]:
         return None
     return parts[0], parts[1]
+
+
+async def _resolve_presented_refresh(
+    *,
+    stored: RefreshToken,
+    refresh_tokens: RefreshTokenRepository,
+    now: datetime,
+    grace_seconds: int,
+) -> RefreshToken | None:
+    if not stored.revoked:
+        return stored
+    if stored.rotated_at is None or now - stored.rotated_at > timedelta(seconds=grace_seconds):
+        return None
+    cursor = stored
+    for _ in range(_MAX_SUCCESSOR_HOPS):
+        if cursor.replaced_by is None:
+            return None
+        candidate = await refresh_tokens.get_by_jti(cursor.replaced_by)
+        if candidate is None:
+            return None
+        if not candidate.revoked and candidate.expires_at > now:
+            return candidate
+        cursor = candidate
+    return None
+
+
+async def _kill_family_on_reuse(
+    *,
+    db: AsyncSession,
+    refresh_tokens: RefreshTokenRepository,
+    stored: RefreshToken,
+    ip: str,
+    user_agent: str,
+    access_ttl: int,
+) -> None:
+    await refresh_tokens.revoke_family(stored.family_id)
+    sessions = SessionRepository(db)
+    reused_session = await sessions.get_by_id(stored.session_id)
+    subject_id = reused_session.user_id if reused_session is not None else ""
+    was_live = await sessions.revoke(stored.session_id)
+    reuse = audit_events.refresh_reuse_detected(
+        subject_id=subject_id,
+        session_id=stored.session_id,
+        family_id=stored.family_id,
+        source_ip=ip,
+        user_agent=user_agent,
+    )
+    await AuditOutboxRepository(db).enqueue(reuse.event_id, reuse.event_bytes, reuse.occurred_at)
+    await db.commit()
+    if was_live:
+        await revoke_sid(stored.session_id, access_ttl)
 
 
 async def _enqueue_login_failure(
@@ -225,23 +287,22 @@ async def login(payload: LoginRequest, request: Request, response: Response) -> 
         return TokenResponse(expires_in=settings.access_token_ttl_seconds)
 
 
-@router.post("/refresh", response_model=TokenResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/refresh",
+    response_model=TokenResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(csrf_protect)],
+)
 async def refresh(request: Request, response: Response) -> TokenResponse:
     settings = get_settings()
     ip = _client_ip(request)
     user_agent = _user_agent(request)
     raw = request.cookies.get(settings.refresh_cookie_name)
     if not raw:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=_INVALID_REFRESH,
-        )
+        raise _refresh_rejected(_CODE_SESSION_INVALID)
     split = _split_refresh_token(raw)
     if split is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=_INVALID_REFRESH,
-        )
+        raise _refresh_rejected(_CODE_SESSION_INVALID)
     presented_jti, presented_secret = split
     factory = get_sessionmaker()
     async with factory() as db:
@@ -250,62 +311,47 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
             presented_jti, hash_refresh_secret(presented_secret)
         )
         if stored is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=_INVALID_REFRESH,
-            )
-        if stored.revoked:
-            await refresh_tokens.revoke_family(stored.family_id)
-            sessions = SessionRepository(db)
-            reused_session = await sessions.get_by_id(stored.session_id)
-            subject_id = reused_session.user_id if reused_session is not None else ""
-            was_live = await sessions.revoke(stored.session_id)
-            reuse = audit_events.refresh_reuse_detected(
-                subject_id=subject_id,
-                session_id=stored.session_id,
-                family_id=stored.family_id,
-                source_ip=ip,
-                user_agent=user_agent,
-            )
-            await AuditOutboxRepository(db).enqueue(
-                reuse.event_id, reuse.event_bytes, reuse.occurred_at
-            )
-            await db.commit()
-            if was_live:
-                await revoke_sid(stored.session_id, settings.access_token_ttl_seconds)
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=_INVALID_REFRESH,
-            )
+            raise _refresh_rejected(_CODE_SESSION_INVALID)
         now = datetime.now(UTC)
+        usable = await _resolve_presented_refresh(
+            stored=stored,
+            refresh_tokens=refresh_tokens,
+            now=now,
+            grace_seconds=settings.refresh_rotation_grace_seconds,
+        )
+        if usable is None:
+            if stored.rotated_at is not None:
+                await _kill_family_on_reuse(
+                    db=db,
+                    refresh_tokens=refresh_tokens,
+                    stored=stored,
+                    ip=ip,
+                    user_agent=user_agent,
+                    access_ttl=settings.access_token_ttl_seconds,
+                )
+            raise _refresh_rejected(_CODE_SESSION_INVALID)
+        stored = usable
         if stored.expires_at <= now:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=_INVALID_REFRESH,
-            )
+            raise _refresh_rejected(_CODE_SESSION_INVALID)
         sessions = SessionRepository(db)
         login_session = await sessions.get_by_id(stored.session_id)
         if login_session is None or login_session.revoked:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=_INVALID_REFRESH,
-            )
+            raise _refresh_rejected(_CODE_SESSION_INVALID)
         users = UserRepository(db)
         user = await users.get_by_id(login_session.user_id)
         if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=_INVALID_REFRESH,
-            )
-        await refresh_tokens.mark_rotated(stored.jti)
+            raise _refresh_rejected(_CODE_SESSION_INVALID)
+        if not user.is_active:
+            raise _refresh_rejected(_CODE_ACCOUNT_DISABLED)
+        next_jti = new_jti()
+        next_secret = new_refresh_secret()
+        await refresh_tokens.mark_rotated(stored.jti, next_jti)
         access_token, _, _ = sign_access_token(
             user_id=user.id,
             username=user.username,
             roles=user.roles,
             session_id=login_session.id,
         )
-        next_jti = new_jti()
-        next_secret = new_refresh_secret()
         next_expires_at = datetime.fromtimestamp(
             now.timestamp() + settings.refresh_token_ttl_seconds,
             tz=UTC,
@@ -340,7 +386,12 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
         return TokenResponse(expires_in=settings.access_token_ttl_seconds)
 
 
-@router.post("/logout", response_model=LogoutResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/logout",
+    response_model=LogoutResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(csrf_protect)],
+)
 async def logout(request: Request, response: Response) -> LogoutResponse:
     settings = get_settings()
     ip = _client_ip(request)
