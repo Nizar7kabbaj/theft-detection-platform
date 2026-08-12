@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from ipaddress import ip_address
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -12,6 +12,7 @@ from app.core.cookies import (
     new_csrf_token,
     set_auth_cookies,
 )
+from app.core.csrf import csrf_protect
 from app.core.database import get_sessionmaker
 from app.core.redis import (
     check_login,
@@ -286,7 +287,12 @@ async def login(payload: LoginRequest, request: Request, response: Response) -> 
         return TokenResponse(expires_in=settings.access_token_ttl_seconds)
 
 
-@router.post("/refresh", response_model=TokenResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/refresh",
+    response_model=TokenResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(csrf_protect)],
+)
 async def refresh(request: Request, response: Response) -> TokenResponse:
     settings = get_settings()
     ip = _client_ip(request)
@@ -380,7 +386,12 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
         return TokenResponse(expires_in=settings.access_token_ttl_seconds)
 
 
-@router.post("/logout", response_model=LogoutResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/logout",
+    response_model=LogoutResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(csrf_protect)],
+)
 async def logout(request: Request, response: Response) -> LogoutResponse:
     settings = get_settings()
     ip = _client_ip(request)
