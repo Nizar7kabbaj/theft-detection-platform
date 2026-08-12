@@ -73,8 +73,8 @@ async def check_ws_upgrade(client: Redis, user_id: str) -> bool:
             args=[period_ms, settings.WS_RATE_BURST],
         )
     except RedisError:
-        logger.warning("websocket rate limit skipped on redis error user=%s", user_id)
-        return True
+        logger.error("websocket rate limit refused on redis error user=%s", user_id)
+        return False
     return bool(int(result[0]))
 
 
@@ -99,8 +99,8 @@ async def rate_limit(
     try:
         allowed, retry_ms = await _check(redis, user.user_id)
     except RedisError:
-        logger.warning("rate limit skipped on redis error user=%s", user.user_id)
-        return
+        logger.error("rate limit refused on redis error user=%s", user.user_id)
+        raise RateLimitedError(1) from None
     if not allowed:
         retry_after = max(1, math.ceil(retry_ms / 1000))
         logger.info("rate limit hit user=%s retry_after=%ss", user.user_id, retry_after)
