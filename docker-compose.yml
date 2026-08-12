@@ -97,7 +97,6 @@ services:
     ports:
       - "127.0.0.1:80:80"
       - "127.0.0.1:443:443"
-      - "127.0.0.1:8080:8080"
     volumes:
       - ./config/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./config/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
@@ -273,6 +272,12 @@ services:
         - "traefik.http.routers.auth.entrypoints=websecure"
         - "traefik.http.routers.auth.tls=true"
         - "traefik.http.routers.auth.middlewares=gateway-chain@file"
+        - "traefik.http.routers.authlogin.rule=Host(`localhost`) && Path(`/auth/login`)"
+        - "traefik.http.routers.authlogin.priority=200"
+        - "traefik.http.routers.authlogin.entrypoints=websecure"
+        - "traefik.http.routers.authlogin.tls=true"
+        - "traefik.http.routers.authlogin.middlewares=login-chain@file"
+        - "traefik.http.routers.authlogin.service=auth"
         - "traefik.http.services.auth.loadbalancer.server.port=8000"
       restart: unless-stopped
       stop_grace_period: 20s

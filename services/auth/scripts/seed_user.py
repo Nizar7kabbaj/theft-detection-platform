@@ -6,6 +6,9 @@ import getpass
 import logging
 import os
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.database import dispose_engine, get_sessionmaker
 from app.core.security import hash_password

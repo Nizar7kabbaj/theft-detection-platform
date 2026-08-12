@@ -1,5 +1,7 @@
 import logging
 import os
+import socket
+from urllib.parse import urlsplit
 
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -19,7 +21,9 @@ def setup_observability(app, service_name: str) -> None:
     resource = Resource.create({"service.name": service_name})
 
     tracer_provider = TracerProvider(resource=resource)
-    tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    exporting = _collector_reachable()
+    if exporting:
+        tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
     trace.set_tracer_provider(tracer_provider)
 
     metric_reader = PrometheusMetricReader()
@@ -38,6 +42,22 @@ def setup_observability(app, service_name: str) -> None:
     root.handlers.clear()
     root.addHandler(handler)
     root.setLevel(logging.INFO)
+    if not exporting:
+        logging.getLogger(__name__).info("trace export disabled, collector not resolvable")
 
     FastAPIInstrumentor.instrument_app(app)
     PymongoInstrumentor().instrument()
+
+
+def _collector_reachable() -> bool:
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+    if not endpoint:
+        return False
+    host = urlsplit(endpoint).hostname
+    if not host:
+        return False
+    try:
+        socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    return True

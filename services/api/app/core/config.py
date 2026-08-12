@@ -36,9 +36,12 @@ class Settings(BaseSettings):
     TLS_CA_FILE: Path = Path("/run/secrets/api_tls_ca")
     WS_MAX_CONNECTIONS: int = 100
     WS_HEARTBEAT_SECONDS: int = 30
-    WS_ALLOWED_ORIGINS: str = "http://localhost:3000"
+    WS_ALLOWED_ORIGINS: str = "https://localhost"
     WS_REAUTH_SECONDS: int = 60
     WS_REAUTH_GRACE_SECONDS: int = 180
+    WS_RATE_UPGRADES: int = 30
+    WS_RATE_WINDOW_SECONDS: int = 60
+    WS_RATE_BURST: int = 10
     ALERT_THRESHOLD: float = 0.7
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_REQUESTS: int = 100

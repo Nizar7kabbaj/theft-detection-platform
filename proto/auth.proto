@@ -42,6 +42,7 @@ message IntrospectSessionReply {
   google.protobuf.Timestamp last_used_at = 4;
   string source_ip = 5;
   string user_agent = 6;
+  repeated string roles = 7;
 }
 
 message RevokeSessionRequest {

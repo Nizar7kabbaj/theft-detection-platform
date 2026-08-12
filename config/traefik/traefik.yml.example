@@ -10,8 +10,8 @@ accessLog:
   format: json
 
 api:
-  insecure: true
-  dashboard: true
+  insecure: false
+  dashboard: false
 
 ping: {}
 

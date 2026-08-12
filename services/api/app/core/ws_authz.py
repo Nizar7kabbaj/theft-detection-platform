@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import WebSocket, WebSocketException, status
+from redis.asyncio import Redis
 
 from app.core.authz import (
     Permission,
@@ -21,6 +22,7 @@ from app.core.authz import (
 )
 from app.core.database import get_database
 from app.core.errors import AuthUnavailableError
+from app.core.rate_limit import check_ws_upgrade
 from app.grpc_gen import audit_pb2
 from app.schemas.identity import CurrentUser
 from app.services.audit_service import AuditClient
@@ -68,6 +70,10 @@ def check_origin(ws: WebSocket) -> None:
         raise WebSocketException(code=_POLICY, reason="origin not allowed")
 
 
+def _ws_redis(ws: WebSocket) -> Redis:
+    return ws.app.state.redis
+
+
 async def authenticate(ws: WebSocket) -> CurrentUser:
     check_origin(ws)
     try:
@@ -83,6 +89,10 @@ async def authenticate(ws: WebSocket) -> CurrentUser:
     except AuthUnavailableError as exc:
         logger.warning("websocket upgrade failed, auth service unavailable")
         raise WebSocketException(code=_INTERNAL, reason="auth unavailable") from exc
+    allowed = await check_ws_upgrade(_ws_redis(ws), user.user_id)
+    if not allowed:
+        logger.info("websocket upgrade refused, rate limited user=%s", user.username)
+        raise WebSocketException(code=_POLICY, reason="too many connections")
     return user
 
 
@@ -117,7 +127,7 @@ def _next_delay(interval: int) -> float:
     return interval * factor / _JITTER_STEPS
 
 
-async def reverify_loop(ws: WebSocket, user: CurrentUser) -> None:
+async def reverify_loop(ws: WebSocket, user: CurrentUser, permission: Permission) -> None:
     from app.core.config import settings
 
     client = build_auth_client(ws)
@@ -127,7 +137,7 @@ async def reverify_loop(ws: WebSocket, user: CurrentUser) -> None:
     while True:
         await asyncio.sleep(_next_delay(settings.WS_REAUTH_SECONDS))
         try:
-            active = await client.session_active(user.session_id)
+            active, roles = await client.session_active(user.session_id)
         except AuthUnavailableError:
             logger.warning("session recheck failed user=%s, auth unavailable", user.username)
         except Exception:
@@ -139,6 +149,13 @@ async def reverify_loop(ws: WebSocket, user: CurrentUser) -> None:
                     user.username,
                 )
                 await ws.close(code=_POLICY, reason="session revoked")
+                return
+            if permission not in _resolve_permissions(roles):
+                logger.info(
+                    "websocket closed user=%s, permission withdrawn",
+                    user.username,
+                )
+                await ws.close(code=_POLICY, reason="insufficient permission")
                 return
             last_verified = time.monotonic()
             continue

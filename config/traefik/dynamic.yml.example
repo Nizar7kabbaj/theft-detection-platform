@@ -6,12 +6,18 @@ tls:
     default:
       minVersion: VersionTLS13
       sniStrict: false
+
 http:
   middlewares:
     rate-limit-per-ip:
       rateLimit:
         average: 10
         burst: 50
+        period: 1s
+    login-rate-limit:
+      rateLimit:
+        average: 5
+        burst: 10
         period: 1s
     security-headers:
       headers:
@@ -32,4 +38,9 @@ http:
       chain:
         middlewares:
           - rate-limit-per-ip
+          - security-headers
+    login-chain:
+      chain:
+        middlewares:
+          - login-rate-limit
           - security-headers
