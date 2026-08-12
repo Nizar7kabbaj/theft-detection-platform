@@ -7,7 +7,7 @@ from alembic import context
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
-from app.core.database import _resolve_postgres_url
+from app.core.database import resolve_owner_url
 from app.db import models  # noqa: F401
 from app.db.base import Base
 
@@ -21,7 +21,7 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=_resolve_postgres_url(),
+        url=resolve_owner_url(),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -38,7 +38,7 @@ def do_run_migrations(connection) -> None:
 
 async def run_migrations_online() -> None:
     engine = async_engine_from_config(
-        {"sqlalchemy.url": _resolve_postgres_url()},
+        {"sqlalchemy.url": resolve_owner_url()},
         prefix="sqlalchemy.",
         poolclass=NullPool,
     )
