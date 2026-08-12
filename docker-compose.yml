@@ -49,6 +49,7 @@ services:
       - "traefik.http.routers.backend.entrypoints=websecure"
       - "traefik.http.routers.backend.tls=true"
       - "traefik.http.routers.backend.middlewares=gateway-chain@file"
+      - "traefik.http.routers.backend.priority=100"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
     volumes:
       - ./services/api/tests:/app/tests
@@ -59,6 +60,32 @@ services:
       - ./config/pki/api/tls.key:/run/secrets/api_tls_key:ro
       - ./config/pki/ca/ca.crt:/run/secrets/api_tls_ca:ro
     restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: theft-web
+    restart: unless-stopped
+    networks:
+      - edge
+    environment:
+      NODE_ENV: production
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=theft-detection-platform_edge"
+      - "traefik.http.routers.web.rule=Host(`localhost`)"
+      - "traefik.http.routers.web.priority=1"
+      - "traefik.http.routers.web.entrypoints=websecure"
+      - "traefik.http.routers.web.tls=true"
+      - "traefik.http.routers.web.middlewares=gateway-chain@file"
+      - "traefik.http.services.web.loadbalancer.server.port=3000"
 
   traefik:
     image: traefik:v3.7.5
@@ -242,6 +269,7 @@ services:
         - "traefik.enable=true"
         - "traefik.docker.network=theft-detection-platform_edge"
         - "traefik.http.routers.auth.rule=Host(`localhost`) && PathPrefix(`/auth`)"
+        - "traefik.http.routers.auth.priority=100"
         - "traefik.http.routers.auth.entrypoints=websecure"
         - "traefik.http.routers.auth.tls=true"
         - "traefik.http.routers.auth.middlewares=gateway-chain@file"
