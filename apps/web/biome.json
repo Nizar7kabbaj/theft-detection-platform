@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!.next", "!node_modules", "!next-env.d.ts"]
+    "includes": ["**", "!.next", "!node_modules", "!next-env.d.ts", "!types/api.d.ts"]
   },
   "formatter": {
     "enabled": true,
@@ -54,7 +54,7 @@
   },
   "overrides": [
     {
-      "includes": ["components/ui/**"],
+      "includes": ["components/ui/chart.tsx"],
       "linter": {
         "rules": {
           "security": {
