@@ -6,7 +6,6 @@ tls:
     default:
       minVersion: VersionTLS13
       sniStrict: false
-
 http:
   middlewares:
     rate-limit-per-ip:
@@ -31,16 +30,27 @@ http:
           Server: ""
           X-Powered-By: ""
           X-XSS-Protection: "0"
-          Content-Security-Policy: "frame-ancestors 'none'"
           Permissions-Policy: "camera=(), microphone=(), geolocation=(), browsing-topics=()"
           Cross-Origin-Resource-Policy: same-site
+          Cross-Origin-Opener-Policy: same-origin
+    json-csp:
+      headers:
+        customResponseHeaders:
+          Content-Security-Policy: "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
     gateway-chain:
       chain:
         middlewares:
           - rate-limit-per-ip
           - security-headers
+    api-chain:
+      chain:
+        middlewares:
+          - rate-limit-per-ip
+          - security-headers
+          - json-csp
     login-chain:
       chain:
         middlewares:
           - login-rate-limit
           - security-headers
+          - json-csp
