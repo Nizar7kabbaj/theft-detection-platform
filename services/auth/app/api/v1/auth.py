@@ -45,7 +45,17 @@ from app.services import audit_service as audit_events
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _INVALID_CREDENTIALS = "invalid credentials"
-_INVALID_REFRESH = "invalid refresh token"
+_CODE_SESSION_INVALID = "session_invalid"
+_CODE_ACCOUNT_DISABLED = "account_disabled"
+
+
+def _refresh_rejected(code: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={"message": "invalid refresh token", "code": code},
+    )
+
+
 _LOCKED_OUT = "too many failed login attempts"
 _DUMMY_HASH = hash_password("timing-defense-dummy")
 _REFRESH_TOKEN_PARTS = 2
@@ -283,16 +293,10 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
     user_agent = _user_agent(request)
     raw = request.cookies.get(settings.refresh_cookie_name)
     if not raw:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=_INVALID_REFRESH,
-        )
+        raise _refresh_rejected(_CODE_SESSION_INVALID)
     split = _split_refresh_token(raw)
     if split is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=_INVALID_REFRESH,
-        )
+        raise _refresh_rejected(_CODE_SESSION_INVALID)
     presented_jti, presented_secret = split
     factory = get_sessionmaker()
     async with factory() as db:
@@ -301,10 +305,7 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
             presented_jti, hash_refresh_secret(presented_secret)
         )
         if stored is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=_INVALID_REFRESH,
-            )
+            raise _refresh_rejected(_CODE_SESSION_INVALID)
         now = datetime.now(UTC)
         usable = await _resolve_presented_refresh(
             stored=stored,
@@ -322,30 +323,20 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
                     user_agent=user_agent,
                     access_ttl=settings.access_token_ttl_seconds,
                 )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=_INVALID_REFRESH,
-            )
+            raise _refresh_rejected(_CODE_SESSION_INVALID)
         stored = usable
         if stored.expires_at <= now:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=_INVALID_REFRESH,
-            )
+            raise _refresh_rejected(_CODE_SESSION_INVALID)
         sessions = SessionRepository(db)
         login_session = await sessions.get_by_id(stored.session_id)
         if login_session is None or login_session.revoked:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=_INVALID_REFRESH,
-            )
+            raise _refresh_rejected(_CODE_SESSION_INVALID)
         users = UserRepository(db)
         user = await users.get_by_id(login_session.user_id)
         if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=_INVALID_REFRESH,
-            )
+            raise _refresh_rejected(_CODE_SESSION_INVALID)
+        if not user.is_active:
+            raise _refresh_rejected(_CODE_ACCOUNT_DISABLED)
         next_jti = new_jti()
         next_secret = new_refresh_secret()
         await refresh_tokens.mark_rotated(stored.jti, next_jti)

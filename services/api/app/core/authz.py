@@ -68,11 +68,27 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
     ),
 }
 
-_UNAUTHENTICATED = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="not authenticated",
-    headers={"WWW-Authenticate": "Bearer"},
-)
+_CODE_EXPIRED = "token_expired"
+_CODE_SESSION_INVALID = "session_invalid"
+_CODE_ACCOUNT_DISABLED = "account_disabled"
+
+
+def _rejection_code(status_value: int) -> str:
+    from app.grpc_gen import auth_pb2 as pb
+
+    if status_value == pb.VerificationStatus.VERIFICATION_STATUS_EXPIRED:
+        return _CODE_EXPIRED
+    if status_value == pb.VerificationStatus.VERIFICATION_STATUS_USER_DISABLED:
+        return _CODE_ACCOUNT_DISABLED
+    return _CODE_SESSION_INVALID
+
+
+def _unauthenticated(code: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={"message": "not authenticated", "code": code},
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 class TokenMissingError(Exception):
@@ -80,7 +96,9 @@ class TokenMissingError(Exception):
 
 
 class TokenRejectedError(Exception):
-    pass
+    def __init__(self, code: str = _CODE_SESSION_INVALID) -> None:
+        super().__init__(code)
+        self.code = code
 
 
 def get_auth_client(request: Request) -> AuthClient:
@@ -125,7 +143,7 @@ async def verify_connection(
             "token rejected status=%s",
             pb.VerificationStatus.Name(result.status),
         )
-        raise TokenRejectedError
+        raise TokenRejectedError(_rejection_code(result.status))
     return CurrentUser(
         user_id=result.user_id,
         username=result.username,
@@ -141,8 +159,10 @@ async def get_current_user(
     try:
         token = extract_token(request)
         return await verify_connection(request, auth_client, token)
-    except (TokenMissingError, TokenRejectedError) as exc:
-        raise _UNAUTHENTICATED from exc
+    except TokenMissingError as exc:
+        raise _unauthenticated(_CODE_SESSION_INVALID) from exc
+    except TokenRejectedError as exc:
+        raise _unauthenticated(exc.code) from exc
 
 
 def _resolve_permissions(roles: frozenset[str]) -> frozenset[Permission]:
