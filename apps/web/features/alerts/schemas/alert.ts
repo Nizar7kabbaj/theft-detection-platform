@@ -42,21 +42,18 @@ export type Alert = z.output<typeof alertResponseSchema>
 
 type Concrete<T> = { [K in keyof T]-?: T[K] }
 
-type MissingFromSchema = Exclude<keyof AlertResponse, keyof Alert>
-type ExtraInSchema = Exclude<keyof Alert, keyof AlertResponse>
-type Mismatched = {
+type FieldsOnlyInContract = Exclude<keyof AlertResponse, keyof Alert>
+type FieldsOnlyInSchema = Exclude<keyof Alert, keyof AlertResponse>
+type FieldsWithChangedType = {
   [K in keyof Concrete<AlertResponse>]: K extends keyof Concrete<Alert>
     ? Concrete<AlertResponse>[K] extends Concrete<Alert>[K]
       ? never
       : K
-    : K
+    : never
 }[keyof Concrete<AlertResponse>]
 
-const noMissingFields: MissingFromSchema = undefined as never
-const noExtraFields: ExtraInSchema = undefined as never
-const noMismatchedTypes: Mismatched = undefined as never
-void noMissingFields
-void noExtraFields
-void noMismatchedTypes
+declare function assertNever<T extends never>(): void
 
-export const alertListSchema = z.array(alertResponseSchema)
+assertNever<FieldsOnlyInContract>()
+assertNever<FieldsOnlyInSchema>()
+assertNever<FieldsWithChangedType>()
