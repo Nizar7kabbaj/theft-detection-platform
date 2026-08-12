@@ -281,7 +281,6 @@ async def login(payload: LoginRequest, request: Request, response: Response) -> 
             access_token=access_token,
             refresh_token=_build_refresh_token(root_jti, secret),
             csrf_token=new_csrf_token(),
-            access_max_age=settings.access_token_ttl_seconds,
             refresh_max_age=settings.refresh_token_ttl_seconds,
         )
         return TokenResponse(expires_in=settings.access_token_ttl_seconds)
@@ -380,7 +379,6 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
             access_token=access_token,
             refresh_token=_build_refresh_token(next_jti, next_secret),
             csrf_token=new_csrf_token(),
-            access_max_age=settings.access_token_ttl_seconds,
             refresh_max_age=settings.refresh_token_ttl_seconds,
         )
         return TokenResponse(expires_in=settings.access_token_ttl_seconds)
