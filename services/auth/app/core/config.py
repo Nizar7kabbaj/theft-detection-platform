@@ -24,9 +24,11 @@ class Settings(BaseSettings):
 
     postgres_host: str = "postgres"
     postgres_port: int = 5432
-    postgres_user: str = "auth"
     postgres_db: str = "authdb"
-    postgres_password_file: Path = Path("/run/secrets/postgres_password")
+    postgres_app_user: str = "auth_app"
+    postgres_app_password_file: Path = Path("/run/secrets/postgres_password")
+    postgres_owner_user: str = "auth_owner"
+    postgres_owner_password_file: Path = Path("/run/secrets/auth_owner_postgres_password")
 
     argon2_time_cost: int = 3
     argon2_memory_cost: int = 65536

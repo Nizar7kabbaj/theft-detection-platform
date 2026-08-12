@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from functools import lru_cache
+from pathlib import Path
 from urllib.parse import quote_plus
 
 from sqlalchemy.ext.asyncio import (
@@ -20,41 +21,57 @@ _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
-@lru_cache(maxsize=1)
-def _load_postgres_password() -> str:
-    path = get_settings().postgres_password_file
+class DatabaseCredentialError(RuntimeError):
+    pass
+
+
+@lru_cache(maxsize=8)
+def _load_password(path: Path) -> str:
     try:
         password = path.read_text(encoding="utf-8").strip()
-    except FileNotFoundError:
-        logger.error("postgres password file missing at %s", path)
-        return ""
+    except FileNotFoundError as exc:
+        raise DatabaseCredentialError(f"postgres password file missing at {path}") from exc
     except OSError as exc:
-        logger.error("postgres password file unreadable at %s: %s", path, exc)
-        return ""
+        raise DatabaseCredentialError(f"postgres password file unreadable at {path}") from exc
     if not password:
-        logger.error("postgres password file empty at %s", path)
+        raise DatabaseCredentialError(f"postgres password file empty at {path}")
     return password
 
 
-def _resolve_postgres_url() -> str:
+def _build_url(user: str, password: str) -> str:
     settings = get_settings()
-    user = quote_plus(settings.postgres_user)
-    password = quote_plus(_load_postgres_password())
     return (
-        f"postgresql+asyncpg://{user}:{password}"
+        f"postgresql+asyncpg://{quote_plus(user)}:{quote_plus(password)}"
         f"@{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
+    )
+
+
+def resolve_app_url() -> str:
+    settings = get_settings()
+    return _build_url(
+        settings.postgres_app_user, _load_password(settings.postgres_app_password_file)
+    )
+
+
+def resolve_owner_url() -> str:
+    settings = get_settings()
+    return _build_url(
+        settings.postgres_owner_user,
+        _load_password(settings.postgres_owner_password_file),
     )
 
 
 def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
+        settings = get_settings()
         _engine = create_async_engine(
-            _resolve_postgres_url(),
+            resolve_app_url(),
             pool_size=5,
             max_overflow=5,
             pool_pre_ping=True,
             echo=False,
+            connect_args={"server_settings": {"application_name": settings.service_name}},
         )
         logger.info("postgres engine created")
     return _engine

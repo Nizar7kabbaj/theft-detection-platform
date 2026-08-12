@@ -217,7 +217,7 @@ services:
       ports:
         - "127.0.0.1:8002:8000"
       volumes:
-        - ./config/postgres/auth_postgres_password:/run/secrets/postgres_password:ro
+        - ./config/postgres/auth_app_postgres_password:/run/secrets/postgres_password:ro
         - ./config/redis/auth_redis_password:/run/secrets/auth_redis_password:ro
         - ./config/auth/jwt_private.pem:/run/secrets/jwt_private_key:ro
         - ./config/auth/jwt_public.pem:/run/secrets/jwt_public_key:ro
@@ -314,6 +314,31 @@ services:
       entrypoint: ["sleep", "infinity"]
       restart: "no"
 
+  auth-operator:
+    build:
+      context: ./services/auth
+    image: auth:dev
+    container_name: auth-operator
+    profiles:
+      - ops
+    networks:
+      - data
+    user: "1000:1000"
+    env_file:
+      - ./services/auth/.env
+    environment:
+      AUTH_POSTGRES_HOST: "postgres"
+    volumes:
+      - ./config/postgres/auth_owner_postgres_password:/run/secrets/auth_owner_postgres_password:ro
+      - ./config/postgres/auth_app_postgres_password:/run/secrets/postgres_password:ro
+      - ./config/auth/jwt_public.pem:/run/secrets/jwt_public_key:ro
+      - ./config/audit/pseudonym_key:/run/secrets/auth_pseudonym_key:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["sleep", "infinity"]
+    restart: "no"
+
   audit-harness:
     build:
       context: ./services/audit
@@ -353,6 +378,10 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./config/postgres/auth_postgres_password:/run/secrets/postgres_password:ro
+      - ./config/postgres/auth_owner_postgres_password:/run/secrets/auth_owner_password:ro
+      - ./config/postgres/auth_app_postgres_password:/run/secrets/auth_app_password:ro
+      - ./config/postgres/auth_bootstrap.sql:/bootstrap/auth_bootstrap.sql:ro
+      - ./config/postgres/cluster_bootstrap.sql:/bootstrap/cluster_bootstrap.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U auth -d authdb"]
       interval: 30s
