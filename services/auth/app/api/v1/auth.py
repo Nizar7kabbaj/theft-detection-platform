@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from ipaddress import ip_address
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
@@ -29,6 +29,7 @@ from app.core.tokens import (
     new_refresh_secret,
     sign_access_token,
 )
+from app.db.models.refresh_token import RefreshToken
 from app.repositories.audit_outbox_repository import AuditOutboxRepository
 from app.repositories.refresh_token_repository import RefreshTokenRepository
 from app.repositories.session_repository import SessionRepository
@@ -47,6 +48,8 @@ _INVALID_CREDENTIALS = "invalid credentials"
 _INVALID_REFRESH = "invalid refresh token"
 _LOCKED_OUT = "too many failed login attempts"
 _DUMMY_HASH = hash_password("timing-defense-dummy")
+_REFRESH_TOKEN_PARTS = 2
+_MAX_SUCCESSOR_HOPS = 3
 
 
 def _client_ip(request: Request) -> str:
@@ -83,14 +86,62 @@ def _build_refresh_token(jti: str, secret: str) -> str:
     return f"{jti}.{secret}"
 
 
-_REFRESH_TOKEN_PARTS = 2
-
-
 def _split_refresh_token(raw: str) -> tuple[str, str] | None:
     parts = raw.split(".", 1)
     if len(parts) != _REFRESH_TOKEN_PARTS or not parts[0] or not parts[1]:
         return None
     return parts[0], parts[1]
+
+
+async def _resolve_presented_refresh(
+    *,
+    stored: RefreshToken,
+    refresh_tokens: RefreshTokenRepository,
+    now: datetime,
+    grace_seconds: int,
+) -> RefreshToken | None:
+    if not stored.revoked:
+        return stored
+    if stored.rotated_at is None or now - stored.rotated_at > timedelta(seconds=grace_seconds):
+        return None
+    cursor = stored
+    for _ in range(_MAX_SUCCESSOR_HOPS):
+        if cursor.replaced_by is None:
+            return None
+        candidate = await refresh_tokens.get_by_jti(cursor.replaced_by)
+        if candidate is None:
+            return None
+        if not candidate.revoked and candidate.expires_at > now:
+            return candidate
+        cursor = candidate
+    return None
+
+
+async def _kill_family_on_reuse(
+    *,
+    db: AsyncSession,
+    refresh_tokens: RefreshTokenRepository,
+    stored: RefreshToken,
+    ip: str,
+    user_agent: str,
+    access_ttl: int,
+) -> None:
+    await refresh_tokens.revoke_family(stored.family_id)
+    sessions = SessionRepository(db)
+    reused_session = await sessions.get_by_id(stored.session_id)
+    subject_id = reused_session.user_id if reused_session is not None else ""
+    was_live = await sessions.revoke(stored.session_id)
+    reuse = audit_events.refresh_reuse_detected(
+        subject_id=subject_id,
+        session_id=stored.session_id,
+        family_id=stored.family_id,
+        source_ip=ip,
+        user_agent=user_agent,
+    )
+    await AuditOutboxRepository(db).enqueue(reuse.event_id, reuse.event_bytes, reuse.occurred_at)
+    await db.commit()
+    if was_live:
+        await revoke_sid(stored.session_id, access_ttl)
 
 
 async def _enqueue_login_failure(
@@ -254,30 +305,28 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=_INVALID_REFRESH,
             )
-        if stored.revoked:
-            await refresh_tokens.revoke_family(stored.family_id)
-            sessions = SessionRepository(db)
-            reused_session = await sessions.get_by_id(stored.session_id)
-            subject_id = reused_session.user_id if reused_session is not None else ""
-            was_live = await sessions.revoke(stored.session_id)
-            reuse = audit_events.refresh_reuse_detected(
-                subject_id=subject_id,
-                session_id=stored.session_id,
-                family_id=stored.family_id,
-                source_ip=ip,
-                user_agent=user_agent,
-            )
-            await AuditOutboxRepository(db).enqueue(
-                reuse.event_id, reuse.event_bytes, reuse.occurred_at
-            )
-            await db.commit()
-            if was_live:
-                await revoke_sid(stored.session_id, settings.access_token_ttl_seconds)
+        now = datetime.now(UTC)
+        usable = await _resolve_presented_refresh(
+            stored=stored,
+            refresh_tokens=refresh_tokens,
+            now=now,
+            grace_seconds=settings.refresh_rotation_grace_seconds,
+        )
+        if usable is None:
+            if stored.rotated_at is not None:
+                await _kill_family_on_reuse(
+                    db=db,
+                    refresh_tokens=refresh_tokens,
+                    stored=stored,
+                    ip=ip,
+                    user_agent=user_agent,
+                    access_ttl=settings.access_token_ttl_seconds,
+                )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=_INVALID_REFRESH,
             )
-        now = datetime.now(UTC)
+        stored = usable
         if stored.expires_at <= now:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -297,15 +346,15 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=_INVALID_REFRESH,
             )
-        await refresh_tokens.mark_rotated(stored.jti)
+        next_jti = new_jti()
+        next_secret = new_refresh_secret()
+        await refresh_tokens.mark_rotated(stored.jti, next_jti)
         access_token, _, _ = sign_access_token(
             user_id=user.id,
             username=user.username,
             roles=user.roles,
             session_id=login_session.id,
         )
-        next_jti = new_jti()
-        next_secret = new_refresh_secret()
         next_expires_at = datetime.fromtimestamp(
             now.timestamp() + settings.refresh_token_ttl_seconds,
             tz=UTC,

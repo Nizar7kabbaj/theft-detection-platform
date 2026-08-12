@@ -30,6 +30,8 @@ class RefreshToken(Base):
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     rotated_from: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     revoked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    replaced_by: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
