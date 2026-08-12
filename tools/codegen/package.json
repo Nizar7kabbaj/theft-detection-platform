@@ -1,0 +1,13 @@
+{
+  "name": "codegen",
+  "version": "0.0.0",
+  "private": true,
+  "description": "openapi to typescript generator, pinned to its own compiler",
+  "scripts": {
+    "generate": "openapi-typescript"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}
