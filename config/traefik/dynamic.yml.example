@@ -13,9 +13,6 @@ http:
         average: 10
         burst: 50
         period: 1s
-        sourceCriterion:
-          ipStrategy:
-            depth: 1
     security-headers:
       headers:
         frameDeny: true
