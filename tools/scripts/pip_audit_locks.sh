@@ -13,6 +13,7 @@ for service in "${services[@]}"; do
     --format requirements-txt \
     | sed -E 's/^([A-Za-z0-9._-]+==[0-9][^+ ]*)\+[A-Za-z0-9.]+/\1/' \
     | grep -vE '^nvidia-[a-z0-9-]+-cu12==' \
+    | grep -vE '^cuda-' \
     > "${requirements}"
 
   printf '\n=== %s\n' "${service}"
