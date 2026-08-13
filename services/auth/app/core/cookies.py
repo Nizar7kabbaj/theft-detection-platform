@@ -17,12 +17,13 @@ def set_auth_cookies(
     refresh_token: str,
     csrf_token: str,
     refresh_max_age: int,
+    access_max_age: int,
 ) -> None:
     settings = get_settings()
     response.set_cookie(
         key=settings.access_cookie_name,
         value=access_token,
-        max_age=refresh_max_age,
+        max_age=access_max_age,
         httponly=True,
         secure=True,
         samesite=settings.cookie_samesite,
