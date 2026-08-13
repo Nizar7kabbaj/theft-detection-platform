@@ -1,3 +1,4 @@
+import "client-only"
 import { CSRF_HEADER_NAME, readCsrfToken } from "@/lib/api/csrf"
 import { ApiError, apiErrorFromResponse } from "@/lib/api/errors"
 

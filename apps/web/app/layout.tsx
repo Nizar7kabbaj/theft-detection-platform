@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next"
 import "./globals.css"
 import { GeistSans } from "geist/font/sans"
 import { headers } from "next/headers"
-import { QueryProvider } from "@/providers/query-provider"
 
 export const metadata: Metadata = {
   title: "theft detection platform",
@@ -18,7 +17,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="en" className={GeistSans.variable}>
       <body className="font-sans" nonce={nonce}>
-        <QueryProvider>{children}</QueryProvider>
+        {children}
       </body>
     </html>
   )

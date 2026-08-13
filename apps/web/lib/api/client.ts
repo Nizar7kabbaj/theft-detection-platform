@@ -1,3 +1,4 @@
+import "client-only"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
 import { CSRF_HEADER_NAME, readCsrfToken } from "@/lib/api/csrf"
 import { ApiError, apiErrorFromResponse, isRefreshable } from "@/lib/api/errors"

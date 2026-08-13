@@ -58,6 +58,12 @@ repos:
         language: system
         types: [python]
         files: ^services/.*\.py$
+      - id: client-boundary
+        name: reject client directive in routing entry points
+        entry: tools/scripts/check_client_boundary.sh
+        language: system
+        pass_filenames: false
+        files: ^apps/web/.*\.tsx$
       - id: pip-audit
         name: pip-audit (service uv.locks)
         entry: tools/scripts/pip_audit_locks.sh

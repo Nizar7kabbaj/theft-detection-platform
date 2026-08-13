@@ -1,3 +1,5 @@
+import "client-only"
+
 const CSRF_COOKIE_NAME = "__Host-csrf"
 export const CSRF_HEADER_NAME = "X-CSRF-Token"
 
