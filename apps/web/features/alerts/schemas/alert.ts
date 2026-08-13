@@ -52,8 +52,8 @@ type FieldsWithChangedType = {
     : never
 }[keyof Concrete<AlertResponse>]
 
-declare function assertNever<T extends never>(): void
-
-assertNever<FieldsOnlyInContract>()
-assertNever<FieldsOnlyInSchema>()
-assertNever<FieldsWithChangedType>()
+type AssertNever<T extends never> = T
+type NoFieldsOnlyInContract = AssertNever<FieldsOnlyInContract>
+type NoFieldsOnlyInSchema = AssertNever<FieldsOnlyInSchema>
+type NoFieldsWithChangedType = AssertNever<FieldsWithChangedType>
+export type ContractDrift = [NoFieldsOnlyInContract, NoFieldsOnlyInSchema, NoFieldsWithChangedType]

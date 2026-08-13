@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,
+  experimental: {
+    taint: true,
+  },
   productionBrowserSourceMaps: false,
   images: {
     formats: ["image/avif", "image/webp"],

@@ -47,6 +47,10 @@ function loosePolicyAllowed(): boolean {
 }
 
 export function proxy(request: NextRequest): NextResponse {
+  if (request.nextUrl.pathname === "/") {
+    const target = new URL("/dashboard", request.nextUrl)
+    return NextResponse.redirect(target, 307)
+  }
   const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("base64")
   const dev = loosePolicyAllowed()
   const policy = directives(nonce, dev)
