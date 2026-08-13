@@ -7,13 +7,14 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1",
+    "dev": "NEXT_PUBLIC_ALLOW_DEV_CSP=1 next dev --hostname 127.0.0.1 --experimental-https --experimental-https-key ../../config/traefik/certs/localhost.key --experimental-https-cert ../../config/traefik/certs/localhost.crt --experimental-https-ca ../../config/traefik/certs/ca.crt",
     "build": "next build",
     "start": "next start",
     "lint": "biome check .",
     "format": "biome check --write .",
     "typecheck": "tsc --noEmit",
-    "gen:api": "../../tools/codegen/node_modules/.bin/openapi-typescript http://127.0.0.1:8001/openapi.json -o types/api.d.ts"
+    "gen:api": "../../tools/codegen/node_modules/.bin/openapi-typescript http://127.0.0.1:8001/openapi.json -o types/api.d.ts",
+    "dev:strict": "next dev --hostname 127.0.0.1 --experimental-https --experimental-https-key ../../config/traefik/certs/localhost.key --experimental-https-cert ../../config/traefik/certs/localhost.crt --experimental-https-ca ../../config/traefik/certs/ca.crt"
   },
   "packageManager": "pnpm@11.20.0+sha512.9a6f330a95b66446ea088faf1521405a8a01f07fde7124cc9958dfed52d4bb436737e65b08f85f37b46fcba375092558ac51262b816844b22f63406ed166bfee",
   "dependencies": {
