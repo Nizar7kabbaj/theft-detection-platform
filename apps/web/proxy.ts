@@ -28,9 +28,27 @@ function directives(nonce: string, dev: boolean): string {
   ].join("; ")
 }
 
+let looseNoticeEmitted = false
+
+function loosePolicyAllowed(): boolean {
+  if (process.env.NODE_ENV === "production") {
+    return false
+  }
+  if (process.env.NEXT_PUBLIC_ALLOW_DEV_CSP !== "1") {
+    return false
+  }
+  if (!looseNoticeEmitted) {
+    looseNoticeEmitted = true
+    process.stdout.write(
+      `${JSON.stringify({ event: "csp_dev_policy_active", at: new Date().toISOString() })}\n`,
+    )
+  }
+  return true
+}
+
 export function proxy(request: NextRequest): NextResponse {
   const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("base64")
-  const dev = process.env.NODE_ENV !== "production"
+  const dev = loosePolicyAllowed()
   const policy = directives(nonce, dev)
 
   const headers = new Headers(request.headers)
