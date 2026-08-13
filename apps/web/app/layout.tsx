@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import "./globals.css"
 import { GeistSans } from "geist/font/sans"
+import { headers } from "next/headers"
 import { cn } from "@/lib/utils"
 import { QueryProvider } from "@/providers/query-provider"
 
@@ -9,16 +10,15 @@ export const metadata: Metadata = {
   description: "retail theft detection and alert review",
   robots: { index: false, follow: false },
 }
-
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
 }
-
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined
   return (
     <html lang="en" className={cn("font-sans", GeistSans.variable)}>
-      <body>
+      <body nonce={nonce}>
         <QueryProvider>{children}</QueryProvider>
       </body>
     </html>
