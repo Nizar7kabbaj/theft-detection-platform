@@ -54,6 +54,12 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
     setSessionFailureHandler(() => {
       queryClient.cancelQueries()
       queryClient.clear()
+      const here = `${window.location.pathname}${window.location.search}`
+      const target = new URL("/login", window.location.origin)
+      if (here !== "/login") {
+        target.searchParams.set("from", here)
+      }
+      window.location.assign(target.toString())
     })
     return () => setSessionFailureHandler(null)
   }, [queryClient])

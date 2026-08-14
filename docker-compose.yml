@@ -92,8 +92,9 @@ services:
     image: traefik:v3.7.5
     container_name: theft-traefik
     networks:
-      - edge
-      - observability
+      edge:
+        ipv4_address: 172.31.240.10
+      observability:
     user: "0:0"
     ports:
       - "127.0.0.1:80:80"
@@ -241,6 +242,7 @@ services:
       environment:
         AUTH_HTTP_PORT: "8000"
         AUTH_GRPC_PORT: "50053"
+        AUTH_TRUSTED_PROXIES: '["127.0.0.0/8","::1/128","172.31.240.10/32"]'
       ports:
         - "127.0.0.1:8002:8000"
       volumes:
@@ -1027,6 +1029,10 @@ services:
 networks:
   edge:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.240.0/24
+          gateway: 172.31.240.1
   data:
     driver: bridge
     internal: true
