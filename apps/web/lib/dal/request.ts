@@ -1,6 +1,6 @@
 import "server-only"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
-import { ApiError, apiErrorFromResponse } from "@/lib/api/errors"
+import { ApiError, apiErrorFromResponse, NetworkError, ResponseShapeError } from "@/lib/api/errors"
 import { readAccessToken } from "@/lib/dal/session"
 
 const ACCESS_COOKIE_NAME = "__Host-access_token"
@@ -8,18 +8,6 @@ const ACCESS_COOKIE_NAME = "__Host-access_token"
 type ServerReadOptions<T> = {
   signal?: AbortSignal
   schema?: StandardSchemaV1<unknown, T>
-}
-
-export class ResponseShapeError extends Error {
-  readonly path: string
-  readonly issues: readonly StandardSchemaV1.Issue[]
-
-  constructor(path: string, issues: readonly StandardSchemaV1.Issue[]) {
-    super("response did not match the expected shape")
-    this.name = "ResponseShapeError"
-    this.path = path
-    this.issues = issues
-  }
 }
 
 function apiBaseUrl(): string {
@@ -67,7 +55,15 @@ export async function serverRead<T>(path: string, options: ServerReadOptions<T> 
   if (options.signal !== undefined) {
     init.signal = options.signal
   }
-  const response = await fetch(`${apiBaseUrl()}${path}`, init)
+  let response: Response
+  try {
+    response = await fetch(`${apiBaseUrl()}${path}`, init)
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === "AbortError") {
+      throw cause
+    }
+    throw new NetworkError(cause)
+  }
   if (!response.ok) {
     throw await apiErrorFromResponse(response)
   }
