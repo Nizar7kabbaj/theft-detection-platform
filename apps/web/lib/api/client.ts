@@ -1,7 +1,13 @@
 import "client-only"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
 import { CSRF_HEADER_NAME, readCsrfToken } from "@/lib/api/csrf"
-import { ApiError, apiErrorFromResponse, isRefreshable } from "@/lib/api/errors"
+import {
+  ApiError,
+  apiErrorFromResponse,
+  isRefreshable,
+  NetworkError,
+  ResponseShapeError,
+} from "@/lib/api/errors"
 import { refreshSession } from "@/lib/api/refresh"
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"])
@@ -20,18 +26,6 @@ let onSessionFailure: SessionFailureHandler | null = null
 
 export function setSessionFailureHandler(handler: SessionFailureHandler | null): void {
   onSessionFailure = handler
-}
-
-export class ResponseShapeError extends Error {
-  readonly path: string
-  readonly issues: readonly StandardSchemaV1.Issue[]
-
-  constructor(path: string, issues: readonly StandardSchemaV1.Issue[]) {
-    super("response did not match the expected shape")
-    this.name = "ResponseShapeError"
-    this.path = path
-    this.issues = issues
-  }
 }
 
 function buildHeaders(method: string, extra: Record<string, string>, hasBody: boolean): Headers {
@@ -72,8 +66,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions<T> = {
   const method = (options.method ?? "GET").toUpperCase()
   const serialized = options.body === undefined ? null : JSON.stringify(options.body)
   const extra = options.headers ?? {}
-
-  const send = (): Promise<Response> => {
+  const send = async (): Promise<Response> => {
     const init: RequestInit = {
       method,
       credentials: "same-origin",
@@ -86,19 +79,23 @@ export async function apiRequest<T>(path: string, options: RequestOptions<T> = {
     if (options.signal !== undefined) {
       init.signal = options.signal
     }
-    return fetch(path, init)
+    try {
+      return await fetch(path, init)
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") {
+        throw cause
+      }
+      throw new NetworkError(cause)
+    }
   }
-
   const first = await send()
   if (first.ok) {
     return readPayload<T>(first, path, options.schema)
   }
-
   const error = await apiErrorFromResponse(first)
   if (!isRefreshable(error)) {
     throw error
   }
-
   try {
     await refreshSession()
   } catch (refreshError) {
@@ -107,12 +104,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions<T> = {
     }
     throw refreshError
   }
-
   const retried = await send()
   if (retried.ok) {
     return readPayload<T>(retried, path, options.schema)
   }
-
   const retryError = await apiErrorFromResponse(retried)
   if (retryError.status === 401) {
     onSessionFailure?.(retryError)

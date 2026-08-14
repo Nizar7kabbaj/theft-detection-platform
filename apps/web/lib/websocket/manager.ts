@@ -1,5 +1,10 @@
 import { apiRequest } from "@/lib/api/client"
-import { needsLogin } from "@/lib/api/errors"
+import { isNetworkError, needsLogin } from "@/lib/api/errors"
+import {
+  getReachability,
+  reportTransportFailure,
+  subscribeReachability,
+} from "@/lib/network/connectivity"
 import {
   backoffDelay,
   MAX_ATTEMPTS,
@@ -14,7 +19,7 @@ const PROBE_PATH = "/api/v1/stats"
 const TERMINAL_REASONS = new Set(["session revoked", "insufficient permission", "unknown topic"])
 
 export type StreamTopic = "alerts" | "cameras"
-export type StreamStatus = "idle" | "connecting" | "open" | "waiting" | "stopped"
+export type StreamStatus = "idle" | "connecting" | "open" | "waiting" | "offline" | "stopped"
 
 type Listener = (envelope: StreamEnvelope) => void
 type StatusListener = () => void
@@ -91,12 +96,18 @@ function teardown(channel: Channel): void {
   }
 }
 
+function park(channel: Channel): void {
+  clearTimers(channel)
+  setStatus(channel, "offline")
+}
+
 function armWatchdog(topic: StreamTopic, channel: Channel): void {
   if (channel.watchdog !== null) {
     clearTimeout(channel.watchdog)
   }
   channel.watchdog = setTimeout(() => {
     teardown(channel)
+    reportTransportFailure()
     scheduleReconnect(topic, channel)
   }, WATCHDOG_MS)
 }
@@ -104,6 +115,10 @@ function armWatchdog(topic: StreamTopic, channel: Channel): void {
 function scheduleReconnect(topic: StreamTopic, channel: Channel): void {
   if (channel.refcount === 0) {
     setStatus(channel, "idle")
+    return
+  }
+  if (getReachability() === "offline") {
+    park(channel)
     return
   }
   if (channel.attempt >= MAX_ATTEMPTS) {
@@ -127,6 +142,11 @@ async function diagnose(topic: StreamTopic, channel: Channel): Promise<void> {
       setStatus(channel, "stopped")
       return
     }
+    if (isNetworkError(error)) {
+      reportTransportFailure()
+      park(channel)
+      return
+    }
   }
   scheduleReconnect(topic, channel)
 }
@@ -138,8 +158,8 @@ function connect(topic: StreamTopic, channel: Channel): void {
   if (typeof window === "undefined") {
     return
   }
-  if (window.navigator.onLine === false) {
-    setStatus(channel, "waiting")
+  if (getReachability() === "offline") {
+    park(channel)
     return
   }
   const generation = channel.generation
@@ -153,7 +173,6 @@ function connect(topic: StreamTopic, channel: Channel): void {
   }
   channel.socket = socket
   setStatus(channel, "connecting")
-
   socket.onopen = () => {
     if (channel.generation !== generation) {
       return
@@ -163,7 +182,6 @@ function connect(topic: StreamTopic, channel: Channel): void {
     setStatus(channel, "open")
     armWatchdog(topic, channel)
   }
-
   socket.onmessage = (event: MessageEvent<string>) => {
     if (channel.generation !== generation) {
       return
@@ -177,9 +195,7 @@ function connect(topic: StreamTopic, channel: Channel): void {
       listener(envelope)
     }
   }
-
   socket.onerror = () => {}
-
   socket.onclose = (event: CloseEvent) => {
     if (channel.generation !== generation) {
       return
@@ -203,9 +219,18 @@ function connect(topic: StreamTopic, channel: Channel): void {
   }
 }
 
-function handleOnline(): void {
+function handleReachabilityChange(): void {
+  const reachable = getReachability()
   for (const [topic, channel] of channels) {
-    if (channel.refcount === 0 || channel.socket !== null) {
+    if (channel.refcount === 0) {
+      continue
+    }
+    if (reachable === "offline") {
+      teardown(channel)
+      park(channel)
+      continue
+    }
+    if (channel.socket !== null || channel.status === "stopped") {
       continue
     }
     clearTimers(channel)
@@ -215,19 +240,19 @@ function handleOnline(): void {
   }
 }
 
-let onlineBound = false
+let reachabilityBound = false
 
-function bindOnline(): void {
-  if (onlineBound || typeof window === "undefined") {
+function bindReachability(): void {
+  if (reachabilityBound || typeof window === "undefined") {
     return
   }
-  onlineBound = true
-  window.addEventListener("online", handleOnline)
+  reachabilityBound = true
+  subscribeReachability(handleReachabilityChange)
 }
 
 export function subscribe(topic: StreamTopic, listener: Listener): () => void {
   const channel = channelFor(topic)
-  bindOnline()
+  bindReachability()
   channel.listeners.add(listener)
   channel.refcount += 1
   if (channel.socket === null && channel.timer === null && channel.status !== "stopped") {
@@ -264,6 +289,10 @@ export function retry(topic: StreamTopic): void {
   teardown(channel)
   channel.attempt = 0
   resetConnectSpacing()
+  if (getReachability() === "offline") {
+    park(channel)
+    return
+  }
   setStatus(channel, "idle")
   void connect(topic, channel)
 }

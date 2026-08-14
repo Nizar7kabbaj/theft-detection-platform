@@ -1,3 +1,5 @@
+import type { StandardSchemaV1 } from "@standard-schema/spec"
+
 export const AUTH_CODE = {
   tokenExpired: "token_expired",
   sessionInvalid: "session_invalid",
@@ -5,7 +7,6 @@ export const AUTH_CODE = {
 } as const
 
 const CSRF_DETAILS = new Set(["csrf token missing", "csrf token mismatch"])
-
 const RETRYABLE_STATUS = new Set([429, 502, 503, 504])
 
 type DetailShape = { message: string; code: string | null }
@@ -41,13 +42,30 @@ export class ApiError extends Error {
   readonly status: number
   readonly code: string | null
   readonly retryAfter: number | null
-
   constructor(status: number, message: string, code: string | null, retryAfter: number | null) {
     super(message)
     this.name = "ApiError"
     this.status = status
     this.code = code
     this.retryAfter = retryAfter
+  }
+}
+
+export class ResponseShapeError extends Error {
+  readonly path: string
+  readonly issues: readonly StandardSchemaV1.Issue[]
+  constructor(path: string, issues: readonly StandardSchemaV1.Issue[]) {
+    super("response did not match the expected shape")
+    this.name = "ResponseShapeError"
+    this.path = path
+    this.issues = issues
+  }
+}
+
+export class NetworkError extends Error {
+  constructor(cause: unknown) {
+    super("the request did not reach the server", { cause })
+    this.name = "NetworkError"
   }
 }
 
@@ -65,6 +83,14 @@ export async function apiErrorFromResponse(response: Response): Promise<ApiError
 
 export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError
+}
+
+export function isResponseShapeError(error: unknown): error is ResponseShapeError {
+  return error instanceof ResponseShapeError
+}
+
+export function isNetworkError(error: unknown): error is NetworkError {
+  return error instanceof NetworkError
 }
 
 export function isRefreshable(error: unknown): boolean {
@@ -87,8 +113,14 @@ export function isPermissionDenied(error: unknown): boolean {
 }
 
 export function isRetryable(error: unknown): boolean {
-  if (!isApiError(error)) {
+  if (isNetworkError(error)) {
     return true
+  }
+  if (isResponseShapeError(error)) {
+    return false
+  }
+  if (!isApiError(error)) {
+    return false
   }
   return RETRYABLE_STATUS.has(error.status)
 }
