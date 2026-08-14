@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 
 const CSP_HEADER = "content-security-policy"
 const CSP_REPORT_HEADER = "content-security-policy-report-only"
+const ACCESS_COOKIE_NAME = "__Host-access_token"
+const LOGIN_PATH = "/login"
 
 function directives(nonce: string, dev: boolean): string {
   const script = dev
@@ -47,18 +49,25 @@ function loosePolicyAllowed(): boolean {
 }
 
 export function proxy(request: NextRequest): NextResponse {
-  if (request.nextUrl.pathname === "/") {
-    const target = new URL("/dashboard", request.nextUrl)
+  const { pathname } = request.nextUrl
+  const signedIn = request.cookies.has(ACCESS_COOKIE_NAME)
+  if (!signedIn && pathname !== LOGIN_PATH) {
+    const target = new URL(LOGIN_PATH, request.nextUrl)
+    if (pathname !== "/") {
+      target.searchParams.set("from", `${pathname}${request.nextUrl.search}`)
+    }
     return NextResponse.redirect(target, 307)
   }
+  if (pathname === "/") {
+    return NextResponse.redirect(new URL("/dashboard", request.nextUrl), 307)
+  }
+
   const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("base64")
   const dev = loosePolicyAllowed()
   const policy = directives(nonce, dev)
-
   const headers = new Headers(request.headers)
   headers.set("x-nonce", nonce)
   headers.set(CSP_HEADER, policy)
-
   const response = NextResponse.next({ request: { headers } })
   response.headers.set(CSP_HEADER, policy)
   response.headers.set(

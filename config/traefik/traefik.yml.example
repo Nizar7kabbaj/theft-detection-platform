@@ -8,6 +8,12 @@ log:
 
 accessLog:
   format: json
+  fields:
+    headers:
+      defaultMode: drop
+      names:
+        X-Forwarded-For: keep
+        X-Real-Ip: keep
 
 api:
   insecure: false
