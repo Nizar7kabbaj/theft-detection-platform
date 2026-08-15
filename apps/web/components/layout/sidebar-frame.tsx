@@ -5,6 +5,7 @@ import type { ReactNode } from "react"
 import { useCallback, useState } from "react"
 import { Breadcrumb } from "@/components/layout/breadcrumb"
 import { SidebarNav } from "@/components/layout/sidebar-nav"
+import { SidebarSearch } from "@/components/layout/sidebar-search"
 import { SidebarToggle } from "@/components/layout/sidebar-toggle"
 import { SystemStatus } from "@/components/layout/system-status"
 import { UserBlock } from "@/components/layout/user-block"
@@ -57,6 +58,7 @@ export function SidebarFrame({
             Dashboard
           </span>
         </div>
+        <SidebarSearch collapsed={collapsed} />
         <SidebarNav sections={sections} collapsed={collapsed} />
         <UserBlock username={username} roles={roles} collapsed={collapsed} />
       </aside>
