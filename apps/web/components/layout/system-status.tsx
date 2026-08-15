@@ -10,14 +10,13 @@ import { useStreamStatus } from "@/lib/websocket/use-stream"
 type Tone = "ok" | "warn" | "idle"
 
 const DOT: Record<Tone, string> = {
-  ok: "bg-emerald-500",
-  warn: "bg-amber-500",
+  ok: "bg-success",
+  warn: "bg-warning",
   idle: "bg-muted-foreground/50",
 }
-
 const PILL: Record<Tone, string> = {
-  ok: "border-emerald-500/30 text-emerald-500",
-  warn: "border-amber-500/40 text-amber-500",
+  ok: "border-success/30 text-success",
+  warn: "border-warning/40 text-warning",
   idle: "border-border text-muted-foreground",
 }
 
@@ -55,13 +54,24 @@ export function SystemStatus() {
         aria-label={`system status, ${label}`}
       >
         <Activity aria-hidden="true" className="size-3.5 shrink-0" />
-        <span aria-hidden="true" className={cn("size-1.5 rounded-full", DOT[tone])} />
+        <span aria-hidden="true" className="relative flex size-1.5 shrink-0">
+          {tone === "ok" ? (
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75 motion-reduce:hidden" />
+          ) : null}
+          <span
+            className={cn(
+              "relative inline-flex size-full rounded-full",
+              DOT[tone],
+              tone === "warn" && "animate-pulse motion-reduce:animate-none",
+            )}
+          />
+        </span>
         {label}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner side="bottom" align="end" sideOffset={8}>
           <Popover.Popup className={POPUP_CLASS}>
-            <SystemPanel connection={label} />
+            <SystemPanel />
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>

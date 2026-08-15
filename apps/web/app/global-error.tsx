@@ -1,6 +1,6 @@
 "use client"
-import { GeistSans } from "geist/font/sans"
 import { useEffect } from "react"
+import { inter } from "@/lib/theme/font"
 import "./globals.css"
 export default function GlobalError({
   error,
@@ -24,12 +24,12 @@ export default function GlobalError({
     }).catch(() => undefined)
   }, [error])
   return (
-    <html lang="en" className={GeistSans.variable}>
-      <body className="font-sans">
+    <html lang="en" className={inter.variable}>
+      <body className="font-sans antialiased">
         <main className="mx-auto flex min-h-svh max-w-3xl flex-col items-start justify-center gap-4 p-8">
-          <p className="text-sm text-muted-foreground">the application did not load</p>
+          <p className="text-muted-foreground text-sm">the application did not load</p>
           {error.digest === undefined ? null : (
-            <p className="text-xs text-muted-foreground tabular-nums">reference {error.digest}</p>
+            <p className="text-muted-foreground text-xs tabular-nums">reference {error.digest}</p>
           )}
           <button
             type="button"

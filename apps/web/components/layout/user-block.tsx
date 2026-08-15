@@ -1,7 +1,7 @@
 "use client"
 import { Menu } from "@base-ui/react/menu"
 import { ChevronsUpDown, LogOut } from "lucide-react"
-import { useCallback, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import { ThemeMenuItems } from "@/components/layout/theme-menu-items"
 import { CSRF_HEADER_NAME, readCsrfToken } from "@/lib/api/csrf"
 import { cn } from "@/lib/utils"
@@ -41,8 +41,13 @@ export function UserBlock({
   collapsed: boolean
 }) {
   const [pending, setPending] = useState(false)
+  const inFlight = useRef(false)
   const role = roles.length === 0 ? "no role" : roles.join(", ")
   const onLogout = useCallback(async () => {
+    if (inFlight.current) {
+      return
+    }
+    inFlight.current = true
     setPending(true)
     const headers = new Headers({ Accept: "application/json" })
     const csrf = readCsrfToken()
@@ -96,6 +101,7 @@ export function UserBlock({
               <Menu.Separator className="-mx-1 my-1 h-px bg-border" />
               <Menu.Item
                 onClick={onLogout}
+                closeOnClick={false}
                 disabled={pending}
                 className={cn(SIGN_OUT_CLASS, "text-destructive")}
               >

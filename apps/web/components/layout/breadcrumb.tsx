@@ -1,5 +1,4 @@
 "use client"
-
 import { usePathname } from "next/navigation"
 
 const SEGMENT_LABEL: Record<string, string> = {
@@ -10,17 +9,13 @@ const SEGMENT_LABEL: Record<string, string> = {
   analytics: "analytics",
   settings: "settings",
 }
-
-const CRUMB_LIST_CLASS = "flex min-w-0 items-center gap-1.5 text-[0.8125rem]/5"
-
+const CRUMB_LIST_CLASS = "flex min-w-0 items-center gap-1.5 text-sm"
 export function Breadcrumb() {
   const pathname = usePathname()
   const segments = pathname.split("/").filter((segment) => segment.length > 0)
-
   if (segments.length === 0) {
     return null
   }
-
   return (
     <nav aria-label="breadcrumb" className="min-w-0">
       <ol className={CRUMB_LIST_CLASS}>
