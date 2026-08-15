@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Coroutine
-from enum import StrEnum
 from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 from starlette.requests import HTTPConnection
 
 from app.core.database import get_database
+from app.core.permissions import ROLE_PERMISSIONS, Permission, resolve_permissions
 from app.grpc_gen import audit_pb2
 from app.schemas.identity import CurrentUser
 from app.services.audit_service import AuditClient
@@ -16,57 +16,19 @@ from app.services.auth_service import AuthClient
 
 logger = logging.getLogger(__name__)
 
-
-class Permission(StrEnum):
-    CAMERA_READ = "camera:read"
-    CAMERA_WRITE = "camera:write"
-    DETECTION_READ = "detection:read"
-    DETECTION_WRITE = "detection:write"
-    DETECTION_INFER = "detection:infer"
-    ALERT_READ = "alert:read"
-    ALERT_WRITE = "alert:write"
-    ALERT_ACKNOWLEDGE = "alert:acknowledge"
-    STATS_READ = "stats:read"
-    AUDIT_QUERY = "audit:query"
-
-
-ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
-    "admin": frozenset(Permission),
-    "operator": frozenset(
-        {
-            Permission.CAMERA_READ,
-            Permission.CAMERA_WRITE,
-            Permission.DETECTION_READ,
-            Permission.DETECTION_INFER,
-            Permission.ALERT_READ,
-            Permission.ALERT_WRITE,
-            Permission.ALERT_ACKNOWLEDGE,
-            Permission.STATS_READ,
-        }
-    ),
-    "viewer": frozenset(
-        {
-            Permission.CAMERA_READ,
-            Permission.DETECTION_READ,
-            Permission.ALERT_READ,
-            Permission.STATS_READ,
-        }
-    ),
-    "ml_engineer": frozenset(
-        {
-            Permission.DETECTION_READ,
-            Permission.DETECTION_INFER,
-            Permission.STATS_READ,
-        }
-    ),
-    "compliance": frozenset(
-        {
-            Permission.ALERT_READ,
-            Permission.DETECTION_READ,
-            Permission.AUDIT_QUERY,
-        }
-    ),
-}
+__all__ = [
+    "ROLE_PERMISSIONS",
+    "Permission",
+    "TokenMissingError",
+    "TokenRejectedError",
+    "build_auth_client",
+    "extract_token",
+    "get_auth_client",
+    "get_current_user",
+    "require_permission",
+    "resolve_permissions",
+    "verify_connection",
+]
 
 _CODE_EXPIRED = "token_expired"
 _CODE_SESSION_INVALID = "session_invalid"
@@ -165,13 +127,6 @@ async def get_current_user(
         raise _unauthenticated(exc.code) from exc
 
 
-def resolve_permissions(roles: frozenset[str]) -> frozenset[Permission]:
-    granted: set[Permission] = set()
-    for role in roles:
-        granted |= ROLE_PERMISSIONS.get(role, frozenset())
-    return frozenset(granted)
-
-
 def require_permission(
     permission: Permission,
 ) -> Callable[[CurrentUser], Coroutine[Any, Any, CurrentUser]]:
@@ -197,3 +152,7 @@ def require_permission(
         return user
 
     return _guard
+
+
+def require_ws_permission_unused() -> None:
+    raise NotImplementedError

@@ -408,7 +408,7 @@ export interface components {
             /** Roles */
             roles: string[];
             /** Permissions */
-            permissions: string[];
+            permissions: components["schemas"]["Permission"][];
         };
         /** Keypoint */
         "Keypoint-Output": {
@@ -427,6 +427,11 @@ export interface components {
             class_name: string;
             bbox?: components["schemas"]["Bbox"] | null;
         };
+        /**
+         * Permission
+         * @enum {string}
+         */
+        Permission: "camera:read" | "camera:write" | "detection:read" | "detection:write" | "detection:infer" | "alert:read" | "alert:write" | "alert:acknowledge" | "stats:read" | "audit:query" | "settings:read";
         /** Person */
         Person: {
             /**
