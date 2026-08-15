@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -7,9 +9,9 @@ from typing import Any
 from redis.asyncio import Redis
 
 from app.core.cache import get_or_set, invalidate_prefix, make_list_key
-from app.core.errors import AlertUnavailableError, NotFoundError
+from app.core.errors import AlertUnavailableError, NotFoundError, ValidationError
 from app.repositories.alert_repository import AlertRepository
-from app.schemas.alert import AlertCreate, AlertResponse, AlertType, Severity
+from app.schemas.alert import AlertCreate, AlertPage, AlertResponse, AlertType, Severity
 from app.services.alert_service import AlertClient
 
 logger = logging.getLogger(__name__)
@@ -21,29 +23,55 @@ def _readable_alert_type(alert_type: str | None) -> str:
     return alert_type.replace("ALERT_TYPE_", "").lower().replace("_", " ")
 
 
+def encode_cursor(created_at: datetime, id_: str) -> str:
+    raw = f"{created_at.astimezone(UTC).isoformat()}|{id_}"
+    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def decode_cursor(cursor: str) -> tuple[datetime, str]:
+    padded = cursor + "=" * (-len(cursor) % 4)
+    try:
+        raw = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError, ValueError) as exc:
+        raise ValidationError("malformed cursor") from exc
+    timestamp, separator, id_ = raw.partition("|")
+    if not separator or not id_:
+        raise ValidationError("malformed cursor")
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+    except ValueError as exc:
+        raise ValidationError("malformed cursor") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed, id_
+
+
 def _to_response(doc: dict[str, Any]) -> AlertResponse:
     obj = doc.get("object") or {}
     alert_type = doc.get("alert_type") or AlertType.ALERT_TYPE_UNSPECIFIED.value
-
-    if obj:
-        object_name = obj.get("class_name", "unknown")
-        confidence = obj.get("confidence")
-    else:
+    object_name = obj.get("class_name") or doc.get("object_name")
+    if not object_name:
         object_name = _readable_alert_type(alert_type)
-        confidence = None
-
+    confidence = obj.get("confidence")
+    if confidence is None:
+        confidence = doc.get("confidence")
+    snapshot_url = doc.get("snapshot_path") or doc.get("snapshot_url")
+    created_at = doc.get("created_at") or doc["occurred_at"]
     return AlertResponse.model_validate(
         {
             "_id": doc["_id"],
             "alert_id": doc["alert_id"],
             "session_id": doc["session_id"],
             "occurred_at": doc["occurred_at"],
+            "created_at": created_at,
             "camera_id": doc["camera_id"],
             "severity": doc["severity"],
             "object_name": object_name,
             "confidence": confidence,
-            "snapshot_url": doc.get("snapshot_path"),
+            "snapshot_url": snapshot_url,
             "alert_type": alert_type,
+            "acknowledged": bool(doc.get("acknowledged", False)),
+            "acknowledged_at": doc.get("acknowledged_at"),
         }
     )
 
@@ -75,33 +103,49 @@ class AlertUseCase:
         doc["created_at"] = datetime.now(UTC)
         doc["acknowledged"] = False
         created = await self._repo.create(doc)
-
         try:
             await self._alert_client.send(payload)
         except AlertUnavailableError as exc:
             logger.warning("alert delivery unavailable for %s: %s", payload.alert_id, exc)
-
         await invalidate_prefix(self._redis, self.LIST_PREFIX)
         response = _to_response(created)
         await self._publish("created", response)
         return response
 
     async def list(
-        self, severity: Severity | None = None, limit: int = 50, skip: int = 0
-    ) -> list[AlertResponse]:
-        params = {"severity": severity.value if severity else None, "limit": limit, "skip": skip}
+        self,
+        severity: Severity | None = None,
+        acknowledged: bool | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> AlertPage:
+        after = decode_cursor(cursor) if cursor else None
+        params = {
+            "severity": severity.value if severity else None,
+            "acknowledged": acknowledged,
+            "limit": limit,
+            "cursor": cursor,
+        }
         key = make_list_key("alerts", params)
 
-        async def loader() -> list[dict]:
-            docs = await self._repo.list_filtered(
+        async def loader() -> dict[str, Any]:
+            docs = await self._repo.list_page(
                 severity=severity.value if severity else None,
-                limit=limit,
-                skip=skip,
+                acknowledged=acknowledged,
+                limit=limit + 1,
+                after=after,
             )
-            return [_to_response(d).model_dump(mode="json") for d in docs]
+            has_more = len(docs) > limit
+            page = docs[:limit]
+            items = [_to_response(d).model_dump(mode="json", by_alias=True) for d in page]
+            next_cursor = None
+            if has_more and page:
+                last = page[-1]
+                next_cursor = encode_cursor(last["created_at"], str(last["_id"]))
+            return {"items": items, "next_cursor": next_cursor}
 
         cached = await get_or_set(self._redis, key, self.TTL, loader)
-        return [AlertResponse.model_validate(item) for item in cached]
+        return AlertPage.model_validate(cached)
 
     async def acknowledge(self, alert_id: str) -> AlertResponse:
         updated, acked_now = await self._repo.acknowledge(alert_id)

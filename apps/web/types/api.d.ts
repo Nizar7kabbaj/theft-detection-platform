@@ -242,6 +242,13 @@ export interface components {
             /** @default ALERT_TYPE_OBJECT_PROXIMITY */
             alert_type: components["schemas"]["AlertType"];
         };
+        /** AlertPage */
+        AlertPage: {
+            /** Items */
+            items: components["schemas"]["AlertResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** AlertResponse */
         AlertResponse: {
             /** Id */
@@ -255,6 +262,11 @@ export interface components {
              * Format: date-time
              */
             occurred_at: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
             /** Camera Id */
             camera_id: string;
             severity: components["schemas"]["Severity"];
@@ -265,6 +277,13 @@ export interface components {
             /** Snapshot Url */
             snapshot_url?: string | null;
             alert_type?: components["schemas"]["AlertType"] | null;
+            /**
+             * Acknowledged
+             * @default false
+             */
+            acknowledged: boolean;
+            /** Acknowledged At */
+            acknowledged_at?: string | null;
         };
         /**
          * AlertType
@@ -789,8 +808,9 @@ export interface operations {
         parameters: {
             query?: {
                 severity?: components["schemas"]["Severity"] | null;
+                acknowledged?: boolean | null;
                 limit?: number;
-                skip?: number;
+                cursor?: string | null;
             };
             header?: never;
             path?: never;
@@ -804,7 +824,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AlertResponse"][];
+                    "application/json": components["schemas"]["AlertPage"];
                 };
             };
             /** @description Validation Error */

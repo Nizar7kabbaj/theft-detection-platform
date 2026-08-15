@@ -143,21 +143,57 @@ class TestCount:
         mock_collection.count_documents.assert_awaited_once_with({"severity": "SEVERITY_WARNING"})
 
 
-class TestListFiltered:
-    async def test_no_severity_passes_empty_query(self, repo, mocker):
-        spy = mocker.patch.object(repo, "list", new=mocker.AsyncMock(return_value=[]))
-        await repo.list_filtered()
-        spy.assert_awaited_once_with(query={}, limit=50, skip=0, sort=[("created_at", -1)])
+class TestListPage:
+    async def test_no_filters_sorts_by_created_at_and_id(self, repo, mock_collection, mocker):
+        cursor = mocker.MagicMock()
+        cursor.sort.return_value = cursor
+        cursor.limit.return_value = cursor
+        cursor.to_list = mocker.AsyncMock(return_value=[])
+        mock_collection.find.return_value = cursor
+        await repo.list_page()
+        mock_collection.find.assert_called_once_with({})
+        cursor.sort.assert_called_once_with([("created_at", -1), ("_id", -1)])
+        cursor.limit.assert_called_once_with(51)
 
-    async def test_severity_passed_through_unchanged(self, repo, mocker):
-        spy = mocker.patch.object(repo, "list", new=mocker.AsyncMock(return_value=[]))
-        await repo.list_filtered(severity="SEVERITY_WARNING", limit=10, skip=2)
-        spy.assert_awaited_once_with(
-            query={"severity": "SEVERITY_WARNING"},
-            limit=10,
-            skip=2,
-            sort=[("created_at", -1)],
+    async def test_severity_and_acknowledged_narrow_the_query(self, repo, mock_collection, mocker):
+        cursor = mocker.MagicMock()
+        cursor.sort.return_value = cursor
+        cursor.limit.return_value = cursor
+        cursor.to_list = mocker.AsyncMock(return_value=[])
+        mock_collection.find.return_value = cursor
+        await repo.list_page(severity="SEVERITY_WARNING", acknowledged=False, limit=11)
+        mock_collection.find.assert_called_once_with(
+            {"severity": "SEVERITY_WARNING", "acknowledged": False}
         )
+        cursor.limit.assert_called_once_with(11)
+
+    async def test_acknowledged_true_is_not_dropped_as_falsy(self, repo, mock_collection, mocker):
+        cursor = mocker.MagicMock()
+        cursor.sort.return_value = cursor
+        cursor.limit.return_value = cursor
+        cursor.to_list = mocker.AsyncMock(return_value=[])
+        mock_collection.find.return_value = cursor
+        await repo.list_page(acknowledged=True)
+        mock_collection.find.assert_called_once_with({"acknowledged": True})
+
+    async def test_cursor_builds_tiebreak_or_clause(self, repo, mock_collection, mocker):
+        cursor = mocker.MagicMock()
+        cursor.sort.return_value = cursor
+        cursor.limit.return_value = cursor
+        cursor.to_list = mocker.AsyncMock(return_value=[])
+        mock_collection.find.return_value = cursor
+        moment = datetime(2026, 8, 13, 12, 16, 26, 160000, tzinfo=UTC)
+        await repo.list_page(after=(moment, VALID_OID))
+        query = mock_collection.find.call_args[0][0]
+        assert query["$or"] == [
+            {"created_at": {"$lt": moment}},
+            {"created_at": moment, "_id": {"$lt": ObjectId(VALID_OID)}},
+        ]
+
+    async def test_malformed_cursor_id_rejected(self, repo, mock_collection):
+        moment = datetime(2026, 8, 13, tzinfo=UTC)
+        with pytest.raises(ValidationError):
+            await repo.list_page(after=(moment, "not-an-oid"))
 
 
 class TestAcknowledge:

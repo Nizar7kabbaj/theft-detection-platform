@@ -10,13 +10,26 @@ class AlertRepository(BaseRepository[dict[str, Any]]):
     def __init__(self, collection: AsyncIOMotorCollection) -> None:
         super().__init__(collection)
 
-    async def list_filtered(
-        self, severity: str | None = None, limit: int = 50, skip: int = 0
+    async def list_page(
+        self,
+        severity: str | None = None,
+        acknowledged: bool | None = None,
+        limit: int = 51,
+        after: tuple[datetime, str] | None = None,
     ) -> list[dict[str, Any]]:
         query: dict[str, Any] = {}
         if severity:
             query["severity"] = severity
-        return await self.list(query=query, limit=limit, skip=skip, sort=[("created_at", -1)])
+        if acknowledged is not None:
+            query["acknowledged"] = acknowledged
+        if after is not None:
+            created_at, id_ = after
+            query["$or"] = [
+                {"created_at": {"$lt": created_at}},
+                {"created_at": created_at, "_id": {"$lt": self._oid(id_)}},
+            ]
+        cursor = self._col.find(query).sort([("created_at", -1), ("_id", -1)]).limit(limit)
+        return await cursor.to_list(length=limit)
 
     async def acknowledge(self, id_: str) -> tuple[dict[str, Any] | None, bool]:
         result = await self._col.update_one(

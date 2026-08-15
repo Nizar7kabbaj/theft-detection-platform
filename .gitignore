@@ -104,3 +104,7 @@ config/pki/ca/*
 !apps/web/public/**/*.svg
 !apps/web/public/**/*.webp
 !apps/web/public/**/*.ico
+
+.coverage
+coverage.xml
+htmlcov/

@@ -2,12 +2,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.core.errors import AlertUnavailableError, NotFoundError
-from app.schemas.alert import AlertCreate, AlertResponse, AlertType
-from app.usecases.alert_usecase import _to_response
+from app.core.errors import AlertUnavailableError, NotFoundError, ValidationError
+from app.schemas.alert import AlertCreate, AlertPage, AlertResponse, AlertType
+from app.usecases.alert_usecase import _to_response, decode_cursor, encode_cursor
 
 OCCURRED_AT = datetime(2026, 6, 12, 10, 0, 0, tzinfo=UTC)
-
+CREATED_AT = datetime(2026, 6, 12, 10, 0, 1, tzinfo=UTC)
 
 VALID_PAYLOAD = {
     "alert_id": "a1",
@@ -27,12 +27,46 @@ VALID_PAYLOAD = {
 def patch_cache(mocker):
     mocker.patch(
         "app.usecases.alert_usecase.get_or_set",
-        new=mocker.AsyncMock(return_value=[]),
+        new=mocker.AsyncMock(return_value={"items": [], "next_cursor": None}),
     )
     mocker.patch(
         "app.usecases.alert_usecase.invalidate_prefix",
         new=mocker.AsyncMock(return_value=None),
     )
+
+
+class TestCursorCodec:
+    def test_round_trip_preserves_instant_and_id(self):
+        token = encode_cursor(CREATED_AT, "oid-1")
+        moment, id_ = decode_cursor(token)
+        assert moment == CREATED_AT
+        assert id_ == "oid-1"
+
+    def test_token_carries_no_padding(self):
+        assert "=" not in encode_cursor(CREATED_AT, "oid-1")
+
+    def test_naive_timestamp_treated_as_utc(self):
+        token = encode_cursor(CREATED_AT, "oid-1")
+        moment, _ = decode_cursor(token)
+        assert moment.tzinfo is not None
+
+    def test_garbage_token_rejected(self):
+        with pytest.raises(ValidationError, match="malformed cursor"):
+            decode_cursor("not-base64-at-all!!")
+
+    def test_token_without_separator_rejected(self):
+        import base64
+
+        raw = base64.urlsafe_b64encode(b"no-separator-here").decode().rstrip("=")
+        with pytest.raises(ValidationError, match="malformed cursor"):
+            decode_cursor(raw)
+
+    def test_token_with_unparseable_timestamp_rejected(self):
+        import base64
+
+        raw = base64.urlsafe_b64encode(b"yesterday|oid-1").decode().rstrip("=")
+        with pytest.raises(ValidationError, match="malformed cursor"):
+            decode_cursor(raw)
 
 
 class TestToResponse:
@@ -42,6 +76,7 @@ class TestToResponse:
             "alert_id": "a1",
             "session_id": 1,
             "occurred_at": OCCURRED_AT,
+            "created_at": CREATED_AT,
             "camera_id": "cam-1",
             "severity": "SEVERITY_WARNING",
             "object": {"class_name": "phone", "confidence": 0.92},
@@ -58,6 +93,7 @@ class TestToResponse:
             "alert_id": "a2",
             "session_id": 1,
             "occurred_at": OCCURRED_AT,
+            "created_at": CREATED_AT,
             "camera_id": "cam-1",
             "severity": "SEVERITY_NOTICE",
             "object": None,
@@ -74,6 +110,7 @@ class TestToResponse:
             "alert_id": "a3",
             "session_id": 1,
             "occurred_at": OCCURRED_AT,
+            "created_at": CREATED_AT,
             "camera_id": "cam-1",
             "severity": "SEVERITY_INFO",
             "object": None,
@@ -81,6 +118,56 @@ class TestToResponse:
         }
         resp = _to_response(doc)
         assert resp.object_name == "loitering"
+
+    def test_flat_document_keeps_its_stored_fields(self):
+        doc = {
+            "_id": "oid-4",
+            "alert_id": "a4",
+            "session_id": 1,
+            "occurred_at": OCCURRED_AT,
+            "created_at": CREATED_AT,
+            "camera_id": "cam-1",
+            "severity": "SEVERITY_WARNING",
+            "object_name": "backpack",
+            "confidence": 0.71,
+            "snapshot_url": "/snaps/a4.jpg",
+            "alert_type": "ALERT_TYPE_LOITERING",
+        }
+        resp = _to_response(doc)
+        assert resp.object_name == "backpack"
+        assert resp.confidence == 0.71
+        assert resp.snapshot_url == "/snaps/a4.jpg"
+
+    def test_missing_created_at_falls_back_to_occurred_at(self):
+        doc = {
+            "_id": "oid-5",
+            "alert_id": "a5",
+            "session_id": 1,
+            "occurred_at": OCCURRED_AT,
+            "camera_id": "cam-1",
+            "severity": "SEVERITY_INFO",
+            "object_name": "phone",
+            "alert_type": "ALERT_TYPE_OBJECT_PROXIMITY",
+        }
+        resp = _to_response(doc)
+        assert resp.created_at == OCCURRED_AT
+
+    def test_acknowledged_state_carried_through(self):
+        doc = {
+            "_id": "oid-6",
+            "alert_id": "a6",
+            "session_id": 1,
+            "occurred_at": OCCURRED_AT,
+            "created_at": CREATED_AT,
+            "camera_id": "cam-1",
+            "severity": "SEVERITY_INFO",
+            "object_name": "phone",
+            "acknowledged": True,
+            "acknowledged_at": CREATED_AT,
+        }
+        resp = _to_response(doc)
+        assert resp.acknowledged is True
+        assert resp.acknowledged_at == CREATED_AT
 
 
 class TestCreate:
@@ -120,38 +207,43 @@ class TestCreate:
 
 
 class TestList:
-    async def test_returns_parsed_responses_from_cache(self, alert_usecase, mocker):
+    async def test_returns_page_parsed_from_cache(self, alert_usecase, mocker):
         cached_item = {
             "_id": "oid-1",
             "alert_id": "a1",
             "session_id": 1,
             "occurred_at": OCCURRED_AT.isoformat(),
+            "created_at": CREATED_AT.isoformat(),
             "camera_id": "cam-1",
             "severity": "SEVERITY_WARNING",
             "object_name": "phone",
             "confidence": 0.92,
             "snapshot_url": "snaps/a1.jpg",
             "alert_type": "ALERT_TYPE_OBJECT_PROXIMITY",
+            "acknowledged": False,
+            "acknowledged_at": None,
         }
         mocker.patch(
             "app.usecases.alert_usecase.get_or_set",
-            new=mocker.AsyncMock(return_value=[cached_item]),
+            new=mocker.AsyncMock(return_value={"items": [cached_item], "next_cursor": "tok"}),
         )
-        results = await alert_usecase.list()
-        assert len(results) == 1
-        assert isinstance(results[0], AlertResponse)
-        assert results[0].alert_id == "a1"
+        page = await alert_usecase.list()
+        assert isinstance(page, AlertPage)
+        assert len(page.items) == 1
+        assert page.items[0].alert_id == "a1"
+        assert page.next_cursor == "tok"
 
-    async def test_empty_cache_returns_empty_list(self, alert_usecase):
-        results = await alert_usecase.list()
-        assert results == []
+    async def test_empty_cache_returns_empty_page(self, alert_usecase):
+        page = await alert_usecase.list()
+        assert page.items == []
+        assert page.next_cursor is None
 
     async def test_loader_pulls_from_repo_on_cache_miss(
         self, alert_usecase, fake_alert_repo, mocker, sample_alert_doc
     ):
         fake_alert_repo.store[sample_alert_doc["_id"]] = {
             **sample_alert_doc,
-            "created_at": datetime.now(UTC),
+            "created_at": CREATED_AT,
         }
 
         async def call_loader(_redis, _key, _ttl, loader):
@@ -161,9 +253,95 @@ class TestList:
             "app.usecases.alert_usecase.get_or_set",
             new=mocker.AsyncMock(side_effect=call_loader),
         )
-        results = await alert_usecase.list()
-        assert len(results) == 1
-        assert results[0].alert_id == "a1"
+        page = await alert_usecase.list()
+        assert len(page.items) == 1
+        assert page.items[0].alert_id == "a1"
+        assert page.next_cursor is None
+
+    async def test_short_page_reports_no_next_cursor(self, alert_usecase, fake_alert_repo, mocker):
+        for index in range(3):
+            fake_alert_repo.store[f"oid-{index}"] = {
+                "_id": f"oid-{index}",
+                "alert_id": f"a{index}",
+                "session_id": 1,
+                "occurred_at": OCCURRED_AT,
+                "created_at": CREATED_AT,
+                "camera_id": "cam-1",
+                "severity": "SEVERITY_INFO",
+                "object_name": "phone",
+                "acknowledged": False,
+            }
+
+        async def call_loader(_redis, _key, _ttl, loader):
+            return await loader()
+
+        mocker.patch(
+            "app.usecases.alert_usecase.get_or_set",
+            new=mocker.AsyncMock(side_effect=call_loader),
+        )
+        page = await alert_usecase.list(limit=10)
+        assert len(page.items) == 3
+        assert page.next_cursor is None
+
+    async def test_full_page_hands_out_cursor_and_drops_probe_row(
+        self, alert_usecase, fake_alert_repo, mocker
+    ):
+        for index in range(5):
+            fake_alert_repo.store[f"oid-{index}"] = {
+                "_id": f"oid-{index}",
+                "alert_id": f"a{index}",
+                "session_id": 1,
+                "occurred_at": OCCURRED_AT,
+                "created_at": CREATED_AT,
+                "camera_id": "cam-1",
+                "severity": "SEVERITY_INFO",
+                "object_name": "phone",
+                "acknowledged": False,
+            }
+
+        async def call_loader(_redis, _key, _ttl, loader):
+            return await loader()
+
+        mocker.patch(
+            "app.usecases.alert_usecase.get_or_set",
+            new=mocker.AsyncMock(side_effect=call_loader),
+        )
+        page = await alert_usecase.list(limit=2)
+        assert len(page.items) == 2
+        assert page.next_cursor is not None
+        _moment, id_ = decode_cursor(page.next_cursor)
+        assert id_ == page.items[-1].id
+
+    async def test_second_page_does_not_repeat_first(self, alert_usecase, fake_alert_repo, mocker):
+        for index in range(5):
+            fake_alert_repo.store[f"oid-{index}"] = {
+                "_id": f"oid-{index}",
+                "alert_id": f"a{index}",
+                "session_id": 1,
+                "occurred_at": OCCURRED_AT,
+                "created_at": CREATED_AT,
+                "camera_id": "cam-1",
+                "severity": "SEVERITY_INFO",
+                "object_name": "phone",
+                "acknowledged": False,
+            }
+
+        async def call_loader(_redis, _key, _ttl, loader):
+            return await loader()
+
+        mocker.patch(
+            "app.usecases.alert_usecase.get_or_set",
+            new=mocker.AsyncMock(side_effect=call_loader),
+        )
+        first = await alert_usecase.list(limit=2)
+        second = await alert_usecase.list(limit=2, cursor=first.next_cursor)
+        first_ids = {item.id for item in first.items}
+        second_ids = {item.id for item in second.items}
+        assert first_ids & second_ids == set()
+
+    async def test_malformed_cursor_rejected_before_any_read(self, alert_usecase):
+        with pytest.raises(ValidationError, match="malformed cursor"):
+            await alert_usecase.list(cursor="garbage!!")
 
 
 class TestAcknowledge:

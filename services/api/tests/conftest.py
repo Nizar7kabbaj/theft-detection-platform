@@ -16,17 +16,23 @@ class FakeAlertRepo:
         self.store[oid] = doc
         return doc
 
-    async def list_filtered(
+    async def list_page(
         self,
         severity: str | None = None,
-        limit: int = 50,
-        skip: int = 0,
+        acknowledged: bool | None = None,
+        limit: int = 51,
+        after: tuple[Any, str] | None = None,
     ) -> list[dict[str, Any]]:
         docs = list(self.store.values())
         if severity:
             docs = [d for d in docs if d.get("severity") == severity]
-        docs.sort(key=lambda d: d.get("created_at"), reverse=True)
-        return docs[skip : skip + limit]
+        if acknowledged is not None:
+            docs = [d for d in docs if bool(d.get("acknowledged", False)) is acknowledged]
+        docs.sort(key=lambda d: (d.get("created_at"), str(d["_id"])), reverse=True)
+        if after is not None:
+            created_at, id_ = after
+            docs = [d for d in docs if (d.get("created_at"), str(d["_id"])) < (created_at, id_)]
+        return docs[:limit]
 
     async def acknowledge(self, id_: str) -> tuple[dict[str, Any] | None, bool]:
         doc = self.store.get(id_)

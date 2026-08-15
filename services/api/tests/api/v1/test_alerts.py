@@ -13,7 +13,7 @@ from app.core.authz import get_current_user
 from app.core.errors import NotFoundError
 from app.core.idempotency import IdempotencyState, idempotency
 from app.dependencies import get_alert_usecase
-from app.schemas.alert import AlertCreate, AlertResponse, Severity
+from app.schemas.alert import AlertCreate, AlertPage, AlertResponse, Severity
 from app.schemas.identity import CurrentUser
 
 
@@ -24,6 +24,7 @@ def _sample_response(alert_id: str = "a1") -> AlertResponse:
             "alert_id": alert_id,
             "session_id": 1,
             "occurred_at": datetime.now(UTC),
+            "created_at": datetime.now(UTC),
             "camera_id": "cam-1",
             "severity": "SEVERITY_WARNING",
             "object_name": "person",
@@ -41,7 +42,7 @@ class FakeAlertUseCase:
         self.acknowledge_calls: list[str] = []
         self.delete_calls: list[str] = []
         self._create_result: AlertResponse | None = None
-        self._list_result: list[AlertResponse] = []
+        self._list_result: AlertPage = AlertPage(items=[], next_cursor=None)
         self._acknowledge_result: AlertResponse | None = None
         self._acknowledge_raises: Exception | None = None
         self._delete_raises: Exception | None = None
@@ -49,8 +50,25 @@ class FakeAlertUseCase:
     def set_create_result(self, response: AlertResponse) -> None:
         self._create_result = response
 
-    def set_list_result(self, items: list[AlertResponse]) -> None:
-        self._list_result = items
+    def set_list_result(self, items: list[AlertResponse], next_cursor: str | None = None) -> None:
+        self._list_result = AlertPage(items=items, next_cursor=next_cursor)
+
+    async def list(
+        self,
+        severity: Severity | None = None,
+        acknowledged: bool | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> AlertPage:
+        self.list_calls.append(
+            {
+                "severity": severity,
+                "acknowledged": acknowledged,
+                "limit": limit,
+                "cursor": cursor,
+            }
+        )
+        return self._list_result
 
     def set_acknowledge_result(self, response: AlertResponse) -> None:
         self._acknowledge_result = response
@@ -65,12 +83,6 @@ class FakeAlertUseCase:
         self.create_calls.append(payload)
         assert self._create_result is not None
         return self._create_result
-
-    async def list(
-        self, severity: Severity | None = None, limit: int = 50, skip: int = 0
-    ) -> list[AlertResponse]:
-        self.list_calls.append({"severity": severity, "limit": limit, "skip": skip})
-        return self._list_result
 
     async def acknowledge(self, alert_id: str) -> AlertResponse:
         self.acknowledge_calls.append(alert_id)
@@ -200,23 +212,51 @@ class TestList:
         self, client: AsyncClient, fake_usecase: FakeAlertUseCase
     ) -> None:
         fake_usecase.set_list_result([_sample_response("a1"), _sample_response("a2")])
-
         resp = await client.get("/api/v1/alerts")
-
         assert resp.status_code == 200
-        assert len(resp.json()) == 2
+        assert len(resp.json()["items"]) == 2
+        assert resp.json()["next_cursor"] is None
 
-    async def test_passes_severity_filter_through(
+    async def test_hands_next_cursor_to_the_client(
+        self, client: AsyncClient, fake_usecase: FakeAlertUseCase
+    ) -> None:
+        fake_usecase.set_list_result([_sample_response("a1")], next_cursor="tok")
+        resp = await client.get("/api/v1/alerts")
+        assert resp.json()["next_cursor"] == "tok"
+
+    async def test_passes_filters_through(
         self, client: AsyncClient, fake_usecase: FakeAlertUseCase
     ) -> None:
         fake_usecase.set_list_result([])
-
-        resp = await client.get("/api/v1/alerts?severity=SEVERITY_WARNING&limit=10&skip=5")
-
+        resp = await client.get(
+            "/api/v1/alerts?severity=SEVERITY_WARNING&acknowledged=false&limit=10&cursor=tok"
+        )
         assert resp.status_code == 200
         assert fake_usecase.list_calls == [
-            {"severity": Severity.SEVERITY_WARNING, "limit": 10, "skip": 5}
+            {
+                "severity": Severity.SEVERITY_WARNING,
+                "acknowledged": False,
+                "limit": 10,
+                "cursor": "tok",
+            }
         ]
+
+    async def test_defaults_leave_filters_unset(
+        self, client: AsyncClient, fake_usecase: FakeAlertUseCase
+    ) -> None:
+        fake_usecase.set_list_result([])
+        await client.get("/api/v1/alerts")
+        assert fake_usecase.list_calls == [
+            {"severity": None, "acknowledged": None, "limit": 50, "cursor": None}
+        ]
+
+    async def test_limit_above_ceiling_rejected(self, client: AsyncClient) -> None:
+        resp = await client.get("/api/v1/alerts?limit=500")
+        assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    async def test_limit_below_floor_rejected(self, client: AsyncClient) -> None:
+        resp = await client.get("/api/v1/alerts?limit=0")
+        assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
 class TestAcknowledge:
