@@ -15,9 +15,9 @@ from app.core.authz import (
     Permission,
     TokenMissingError,
     TokenRejectedError,
-    _resolve_permissions,
     build_auth_client,
     extract_token,
+    resolve_permissions,
     verify_connection,
 )
 from app.core.database import get_database
@@ -101,7 +101,7 @@ def require_ws_permission(
 ) -> Callable[[WebSocket], Coroutine[Any, Any, CurrentUser]]:
     async def _guard(ws: WebSocket) -> CurrentUser:
         user = await authenticate(ws)
-        if permission not in _resolve_permissions(user.roles):
+        if permission not in resolve_permissions(user.roles):
             logger.info(
                 "websocket upgrade refused user=%s missing=%s",
                 user.username,
@@ -150,7 +150,7 @@ async def reverify_loop(ws: WebSocket, user: CurrentUser, permission: Permission
                 )
                 await ws.close(code=_POLICY, reason="session revoked")
                 return
-            if permission not in _resolve_permissions(roles):
+            if permission not in resolve_permissions(roles):
                 logger.info(
                     "websocket closed user=%s, permission withdrawn",
                     user.username,

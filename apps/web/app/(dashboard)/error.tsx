@@ -21,7 +21,7 @@ export default function DashboardError({
     reset()
   }, [resetQueries, reset])
   return (
-    <main className="mx-auto flex min-h-svh max-w-3xl flex-col items-start gap-4 p-8">
+    <div className="flex flex-col items-start gap-4">
       <p className="text-sm text-muted-foreground">this section did not load</p>
       {error.digest === undefined ? null : (
         <p className="text-xs text-muted-foreground tabular-nums">reference {error.digest}</p>
@@ -29,6 +29,6 @@ export default function DashboardError({
       <Button onClick={onRetry} variant="outline">
         try again
       </Button>
-    </main>
+    </div>
   )
 }
