@@ -165,7 +165,7 @@ async def get_current_user(
         raise _unauthenticated(exc.code) from exc
 
 
-def _resolve_permissions(roles: frozenset[str]) -> frozenset[Permission]:
+def resolve_permissions(roles: frozenset[str]) -> frozenset[Permission]:
     granted: set[Permission] = set()
     for role in roles:
         granted |= ROLE_PERMISSIONS.get(role, frozenset())
@@ -179,7 +179,7 @@ def require_permission(
         request: Request,
         user: CurrentUser = Depends(get_current_user),
     ) -> CurrentUser:
-        granted = _resolve_permissions(user.roles)
+        granted = resolve_permissions(user.roles)
         if permission not in granted:
             audit = AuditClient(get_database())
             await audit.emit_authorization_denied(

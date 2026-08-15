@@ -1,19 +1,21 @@
 import { dehydrate, HydrationBoundary, QueryClient } from "@tanstack/react-query"
+import type { Metadata } from "next"
 import { Suspense } from "react"
-import { ConnectionBanner } from "@/components/layout/connection-banner"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertStream } from "@/features/alerts/components/alert-stream"
 import { statsQueryKey } from "@/features/analytics/api/stats-key"
 import { fetchStats } from "@/features/analytics/api/stats-server"
-import { DetectionChart } from "@/features/analytics/components/detection-chart"
+import { DetectionChartLazy } from "@/features/analytics/components/detection-chart-lazy"
 import { StatsSummary } from "@/features/analytics/components/stats-summary"
+
+export const metadata: Metadata = { title: "Dashboard" }
 
 async function StatsPanel() {
   const queryClient = new QueryClient()
   try {
     await queryClient.fetchQuery({ queryKey: statsQueryKey, queryFn: fetchStats })
   } catch {
-    return <p className="text-sm text-muted-foreground">today's numbers are unavailable</p>
+    return <p className="text-muted-foreground text-sm">today's numbers are unavailable</p>
   }
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
@@ -21,10 +23,10 @@ async function StatsPanel() {
     </HydrationBoundary>
   )
 }
+
 export default function DashboardPage() {
   return (
-    <main className="mx-auto flex min-h-svh max-w-3xl flex-col gap-6 p-8">
-      <ConnectionBanner />
+    <div className="flex flex-col gap-5">
       <Card>
         <CardHeader>
           <CardTitle>today</CardTitle>
@@ -42,7 +44,7 @@ export default function DashboardPage() {
           <CardDescription>static sample, no api calls in this scope</CardDescription>
         </CardHeader>
         <CardContent>
-          <DetectionChart />
+          <DetectionChartLazy />
         </CardContent>
       </Card>
       <Card>
@@ -54,6 +56,6 @@ export default function DashboardPage() {
           <AlertStream />
         </CardContent>
       </Card>
-    </main>
+    </div>
   )
 }

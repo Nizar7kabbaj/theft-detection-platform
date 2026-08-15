@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from opentelemetry.instrumentation.grpc import aio_client_interceptors
 
-from app.api.v1 import alerts, cameras, detections, stats, streams
+from app.api.v1 import alerts, cameras, detections, identity, stats, streams
 from app.core.config import settings
 from app.core.csrf import csrf_protect
 from app.core.database import close_mongodb_connection, connect_to_mongodb, get_database
@@ -169,6 +169,7 @@ app.include_router(cameras.router, prefix="/api/v1", dependencies=[Depends(rate_
 app.include_router(detections.router, prefix="/api/v1", dependencies=[Depends(rate_limit)])
 app.include_router(alerts.router, prefix="/api/v1", dependencies=[Depends(rate_limit)])
 app.include_router(stats.router, prefix="/api/v1", dependencies=[Depends(rate_limit)])
+app.include_router(identity.router, prefix="/api/v1", dependencies=[Depends(rate_limit)])
 app.include_router(streams.router)
 
 
