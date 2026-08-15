@@ -40,7 +40,7 @@ def _resolve_mongodb_url() -> str:
 async def connect_to_mongodb():
     global client
     logger.info("connecting to mongodb")
-    client = AsyncIOMotorClient(_resolve_mongodb_url())
+    client = AsyncIOMotorClient(_resolve_mongodb_url(), tz_aware=True)
     logger.info("connected to mongodb")
 
 

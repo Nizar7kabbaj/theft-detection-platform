@@ -63,9 +63,17 @@ class AlertResponse(MongoModel):
     alert_id: str
     session_id: int
     occurred_at: datetime
+    created_at: datetime
     camera_id: str
     severity: Severity
     object_name: str
     confidence: float | None = None
     snapshot_url: str | None = None
     alert_type: AlertType | None = None
+    acknowledged: bool = False
+    acknowledged_at: datetime | None = None
+
+
+class AlertPage(BaseModel):
+    items: list[AlertResponse]
+    next_cursor: str | None = None
