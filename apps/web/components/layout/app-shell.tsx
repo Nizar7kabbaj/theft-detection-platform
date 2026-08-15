@@ -7,6 +7,8 @@ import { visibleSections } from "@/lib/navigation/links"
 const SKIP_LINK_CLASS =
   "sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
 
+const MAIN_CLASS = "flex min-w-0 flex-1 flex-col gap-5 px-6 py-5 outline-none"
+
 export function AppShell({
   identity,
   collapsed,
@@ -27,11 +29,7 @@ export function AppShell({
         roles={identity.roles}
         initialCollapsed={collapsed}
       >
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className="flex min-w-0 flex-1 flex-col gap-6 p-6 outline-none"
-        >
+        <main id="main-content" tabIndex={-1} className={MAIN_CLASS}>
           <ConnectionBanner />
           {children}
         </main>

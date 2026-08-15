@@ -5,7 +5,10 @@ import { cookies, headers } from "next/headers"
 import { DEFAULT_THEME, parseTheme, THEME_COOKIE_NAME } from "@/lib/theme/theme-cookie"
 
 export const metadata: Metadata = {
-  title: "theft detection platform",
+  title: {
+    default: "theft detection platform",
+    template: "%s · theft detection platform",
+  },
   description: "retail theft detection and alert review",
   robots: { index: false, follow: false },
 }

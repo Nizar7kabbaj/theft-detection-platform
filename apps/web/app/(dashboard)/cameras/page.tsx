@@ -1,3 +1,6 @@
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "cameras" }
 export const dynamic = "force-dynamic"
 
 export default function CamerasPage() {

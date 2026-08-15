@@ -1,4 +1,5 @@
 import { dehydrate, HydrationBoundary, QueryClient } from "@tanstack/react-query"
+import type { Metadata } from "next"
 import { Suspense } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertStream } from "@/features/alerts/components/alert-stream"
@@ -6,6 +7,8 @@ import { statsQueryKey } from "@/features/analytics/api/stats-key"
 import { fetchStats } from "@/features/analytics/api/stats-server"
 import { DetectionChartLazy } from "@/features/analytics/components/detection-chart-lazy"
 import { StatsSummary } from "@/features/analytics/components/stats-summary"
+
+export const metadata: Metadata = { title: "Dashboard" }
 
 async function StatsPanel() {
   const queryClient = new QueryClient()
@@ -23,7 +26,7 @@ async function StatsPanel() {
 
 export default function DashboardPage() {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <Card>
         <CardHeader>
           <CardTitle>today</CardTitle>
