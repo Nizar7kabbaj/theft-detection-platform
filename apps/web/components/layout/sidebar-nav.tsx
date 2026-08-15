@@ -1,5 +1,5 @@
 "use client"
-import { LayoutDashboard, ShieldAlert, Video } from "lucide-react"
+import { Clock, LayoutDashboard, Settings, ShieldAlert, TrendingUp, Video } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ComponentType } from "react"
@@ -10,6 +10,9 @@ const ICONS: Record<NavIcon, ComponentType<{ className?: string }>> = {
   dashboard: LayoutDashboard,
   alerts: ShieldAlert,
   cameras: Video,
+  history: Clock,
+  analytics: TrendingUp,
+  settings: Settings,
 }
 
 export function SidebarNav({

@@ -1,5 +1,5 @@
 "use client"
-import { PanelLeftClose } from "lucide-react"
+import { ScanEye } from "lucide-react"
 import type { ReactNode } from "react"
 import { useCallback, useState } from "react"
 import { Breadcrumb } from "@/components/layout/breadcrumb"
@@ -48,14 +48,14 @@ export function SidebarFrame({
             collapsed && "justify-center px-0",
           )}
         >
-          <PanelLeftClose className="size-5 shrink-0 text-sidebar-foreground" />
+          <ScanEye className="size-5 shrink-0 text-sidebar-primary" />
           <span
             className={cn(
               "truncate font-medium text-sidebar-foreground text-sm",
               collapsed && "sr-only",
             )}
           >
-            theft detection
+            Dashboard
           </span>
         </div>
         <SidebarNav sections={sections} collapsed={collapsed} />

@@ -1,20 +1,16 @@
 import type { Route } from "next"
 import { PERMISSION, type Permission } from "@/features/auth/schemas/identity"
-
-export type NavIcon = "dashboard" | "alerts" | "cameras"
-
+export type NavIcon = "dashboard" | "alerts" | "cameras" | "history" | "analytics" | "settings"
 export type NavLink = {
   href: Route
   label: string
   icon: NavIcon
   permission: Permission
 }
-
 export type NavSection = {
   heading: string
   links: readonly NavLink[]
 }
-
 export const NAV_SECTIONS: readonly NavSection[] = [
   {
     heading: "monitoring",
@@ -39,8 +35,35 @@ export const NAV_SECTIONS: readonly NavSection[] = [
       },
     ],
   },
+  {
+    heading: "review",
+    links: [
+      {
+        href: "/history",
+        label: "history",
+        icon: "history",
+        permission: PERMISSION.alertRead,
+      },
+      {
+        href: "/analytics",
+        label: "analytics",
+        icon: "analytics",
+        permission: PERMISSION.statsRead,
+      },
+    ],
+  },
+  {
+    heading: "manage",
+    links: [
+      {
+        href: "/settings",
+        label: "settings",
+        icon: "settings",
+        permission: PERMISSION.cameraWrite,
+      },
+    ],
+  },
 ]
-
 export function visibleSections(permissions: readonly string[]): NavSection[] {
   const granted = new Set(permissions)
   const sections: NavSection[] = []
