@@ -12,11 +12,13 @@ import { UserBlock } from "@/components/layout/user-block"
 import { SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_COOKIE_NAME } from "@/lib/layout/sidebar-cookie"
 import type { NavSection } from "@/lib/navigation/links"
 import { useCommandKey } from "@/lib/navigation/use-command-key"
-import { cn } from "@/lib/utils"
 
 const ASIDE_CLASS =
-  "sticky top-0 flex h-dvh shrink-0 flex-col overflow-hidden border-sidebar-border border-r bg-sidebar transition-[width] duration-200 ease-linear"
-const BRAND_CLASS = "flex h-12 shrink-0 items-center gap-2 px-3"
+  "group/sidebar sticky top-0 flex h-dvh w-(--sidebar-width) shrink-0 flex-col overflow-hidden border-sidebar-border border-r bg-sidebar transition-[width] duration-200 ease-linear data-[collapsed=true]:w-(--sidebar-width-icon)"
+const BRAND_CLASS =
+  "flex h-12 shrink-0 items-center gap-3 overflow-hidden px-3 transition-[gap] duration-200 ease-linear group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:gap-0 group-data-[collapsed=true]/sidebar:px-0"
+const BRAND_LABEL_CLASS =
+  "max-w-40 truncate font-medium text-sidebar-foreground text-sm transition-[max-width,opacity] duration-200 ease-linear group-data-[collapsed=true]/sidebar:max-w-0 group-data-[collapsed=true]/sidebar:opacity-0"
 const HEADER_CLASS =
   "sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2.5 border-border border-b bg-background/95 px-3 backdrop-blur"
 export function SidebarFrame({
@@ -46,24 +48,14 @@ export function SidebarFrame({
   return (
     <div className="flex min-h-dvh bg-background">
       <CommandPalette sections={sections} open={commandOpen} onOpenChange={setCommandOpen} />
-      <aside
-        id="app-sidebar"
-        className={cn(ASIDE_CLASS, collapsed ? "w-(--sidebar-width-icon)" : "w-(--sidebar-width)")}
-      >
-        <div className={cn(BRAND_CLASS, collapsed && "justify-center px-0")}>
+      <aside id="app-sidebar" data-collapsed={collapsed} className={ASIDE_CLASS}>
+        <div className={BRAND_CLASS}>
           <ScanEye className="size-5 shrink-0 text-sidebar-primary" />
-          <span
-            className={cn(
-              "truncate font-medium text-sidebar-foreground text-sm",
-              collapsed && "sr-only",
-            )}
-          >
-            Dashboard
-          </span>
+          <span className={BRAND_LABEL_CLASS}>Dashboard</span>
         </div>
-        <SidebarSearch collapsed={collapsed} onOpen={onCommandOpen} />
-        <SidebarNav sections={sections} collapsed={collapsed} />
-        <UserBlock username={username} roles={roles} collapsed={collapsed} />
+        <SidebarSearch onOpen={onCommandOpen} />
+        <SidebarNav sections={sections} />
+        <UserBlock username={username} roles={roles} />
       </aside>
       <SidebarToggle collapsed={collapsed} onToggle={onToggle} />
       <div className="flex min-w-0 flex-1 flex-col">

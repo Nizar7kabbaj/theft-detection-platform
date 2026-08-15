@@ -10,7 +10,10 @@ const LOGOUT_PATH = "/auth/logout"
 const LOGIN_PATH = "/login"
 
 const TRIGGER_CLASS =
-  "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[popup-open]:bg-sidebar-accent"
+  "flex w-full items-center gap-2 overflow-hidden rounded-md px-2 py-2 text-left outline-none transition-[gap,padding,background-color] duration-200 ease-linear hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[popup-open]:bg-sidebar-accent group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:gap-0 group-data-[collapsed=true]/sidebar:px-0"
+
+const IDENTITY_CLASS =
+  "flex min-w-0 max-w-40 flex-col transition-[max-width,opacity] duration-200 ease-linear group-data-[collapsed=true]/sidebar:max-w-0 group-data-[collapsed=true]/sidebar:opacity-0"
 
 const POPUP_CLASS =
   "z-50 w-56 origin-[var(--transform-origin)] rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none"
@@ -31,15 +34,7 @@ function initials(username: string): string {
   return `${first.slice(0, 1)}${second.slice(0, 1)}`.toUpperCase()
 }
 
-export function UserBlock({
-  username,
-  roles,
-  collapsed,
-}: {
-  username: string
-  roles: readonly string[]
-  collapsed: boolean
-}) {
+export function UserBlock({ username, roles }: { username: string; roles: readonly string[] }) {
   const [pending, setPending] = useState(false)
   const inFlight = useRef(false)
   const role = roles.length === 0 ? "no role" : roles.join(", ")
@@ -70,24 +65,18 @@ export function UserBlock({
   return (
     <div className="border-sidebar-border border-t p-2">
       <Menu.Root>
-        <Menu.Trigger
-          className={cn(TRIGGER_CLASS, collapsed && "justify-center px-0")}
-          aria-label={collapsed ? username : undefined}
-          title={collapsed ? username : undefined}
-        >
+        <Menu.Trigger className={TRIGGER_CLASS} aria-label={username}>
           <span
             aria-hidden="true"
             className="flex size-7 shrink-0 items-center justify-center rounded-full bg-sidebar-accent font-medium text-[0.7rem] text-sidebar-accent-foreground"
           >
             {initials(username)}
           </span>
-          <span className={cn("flex min-w-0 flex-col", collapsed && "sr-only")}>
+          <span className={IDENTITY_CLASS}>
             <span className="truncate text-sidebar-foreground text-sm">{username}</span>
             <span className="truncate text-muted-foreground text-xs">{role}</span>
           </span>
-          <ChevronsUpDown
-            className={cn("ml-auto size-4 shrink-0 text-muted-foreground", collapsed && "hidden")}
-          />
+          <ChevronsUpDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-opacity duration-200 ease-linear group-data-[collapsed=true]/sidebar:hidden" />
         </Menu.Trigger>
         <Menu.Portal>
           <Menu.Positioner side="top" align="start" sideOffset={8}>
