@@ -72,6 +72,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["lib/theme/use-theme.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noDocumentCookie": "off"
+          }
+        }
+      }
     }
   ]
 }

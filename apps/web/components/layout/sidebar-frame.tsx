@@ -3,7 +3,6 @@ import { ScanEye } from "lucide-react"
 import type { ReactNode } from "react"
 import { useCallback, useState } from "react"
 import { Breadcrumb } from "@/components/layout/breadcrumb"
-import { LogoutButton } from "@/components/layout/logout-button"
 import { SidebarNav } from "@/components/layout/sidebar-nav"
 import { SidebarToggle } from "@/components/layout/sidebar-toggle"
 import { SystemStatus } from "@/components/layout/system-status"
@@ -67,7 +66,6 @@ export function SidebarFrame({
           <Breadcrumb />
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <SystemStatus />
-            <LogoutButton collapsed />
           </div>
         </header>
         {children}
