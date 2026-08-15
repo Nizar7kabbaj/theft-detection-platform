@@ -3,20 +3,7 @@ import type { components } from "@/types/api"
 
 type IdentityResponse = components["schemas"]["IdentityResponse"]
 
-export const PERMISSION = {
-  cameraRead: "camera:read",
-  cameraWrite: "camera:write",
-  detectionRead: "detection:read",
-  detectionWrite: "detection:write",
-  detectionInfer: "detection:infer",
-  alertRead: "alert:read",
-  alertWrite: "alert:write",
-  alertAcknowledge: "alert:acknowledge",
-  statsRead: "stats:read",
-  auditQuery: "audit:query",
-} as const
-
-export type Permission = (typeof PERMISSION)[keyof typeof PERMISSION]
+export type Permission = components["schemas"]["Permission"]
 
 export const identityResponseSchema = z.object({
   user_id: z.string().max(64),

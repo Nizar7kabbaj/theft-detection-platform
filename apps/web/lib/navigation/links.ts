@@ -1,16 +1,20 @@
 import type { Route } from "next"
-import { PERMISSION, type Permission } from "@/features/auth/schemas/identity"
+import type { Permission } from "@/features/auth/schemas/identity"
+
 export type NavIcon = "dashboard" | "alerts" | "cameras" | "history" | "analytics" | "settings"
+
 export type NavLink = {
   href: Route
   label: string
   icon: NavIcon
   permission: Permission
 }
+
 export type NavSection = {
   heading: string
   links: readonly NavLink[]
 }
+
 export const NAV_SECTIONS: readonly NavSection[] = [
   {
     heading: "monitoring",
@@ -19,19 +23,19 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         href: "/dashboard",
         label: "dashboard",
         icon: "dashboard",
-        permission: PERMISSION.statsRead,
+        permission: "stats:read",
       },
       {
         href: "/alerts",
         label: "alerts",
         icon: "alerts",
-        permission: PERMISSION.alertRead,
+        permission: "alert:read",
       },
       {
         href: "/cameras",
         label: "cameras",
         icon: "cameras",
-        permission: PERMISSION.cameraRead,
+        permission: "camera:read",
       },
     ],
   },
@@ -42,13 +46,13 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         href: "/history",
         label: "history",
         icon: "history",
-        permission: PERMISSION.alertRead,
+        permission: "alert:read",
       },
       {
         href: "/analytics",
         label: "analytics",
         icon: "analytics",
-        permission: PERMISSION.statsRead,
+        permission: "stats:read",
       },
     ],
   },
@@ -59,11 +63,12 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         href: "/settings",
         label: "settings",
         icon: "settings",
-        permission: PERMISSION.cameraWrite,
+        permission: "settings:read",
       },
     ],
   },
 ]
+
 export function visibleSections(permissions: readonly string[]): NavSection[] {
   const granted = new Set(permissions)
   const sections: NavSection[] = []
