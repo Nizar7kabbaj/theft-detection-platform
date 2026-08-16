@@ -1,0 +1,24 @@
+services:
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      target: dev
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_ALLOW_DEV_CSP: "1"
+      API_BASE_URL: http://backend:8000
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=theft-detection-platform_edge"
+      - "traefik.http.routers.web.rule=Host(`localhost`)"
+      - "traefik.http.routers.web.priority=1"
+      - "traefik.http.routers.web.entrypoints=websecure"
+      - "traefik.http.routers.web.tls=true"
+      - "traefik.http.routers.web.middlewares=dev-chain@file"
+      - "traefik.http.services.web.loadbalancer.server.port=3000"

@@ -13,6 +13,18 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
+FROM base AS dev
+ENV NODE_ENV=development \
+    NEXT_TELEMETRY_DISABLED=1 \
+    NEXT_PUBLIC_ALLOW_DEV_CSP=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0 \
+    WATCHPACK_POLLING=true
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+EXPOSE 3000
+CMD ["pnpm", "exec", "next", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
+
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

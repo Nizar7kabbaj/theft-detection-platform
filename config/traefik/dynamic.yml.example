@@ -8,6 +8,11 @@ tls:
       sniStrict: false
 http:
   middlewares:
+    rate-limit-dev:
+      rateLimit:
+        average: 2000
+        burst: 4000
+        period: 1s
     rate-limit-per-ip:
       rateLimit:
         average: 10
@@ -41,6 +46,11 @@ http:
       chain:
         middlewares:
           - rate-limit-per-ip
+          - security-headers
+    dev-chain:
+      chain:
+        middlewares:
+          - rate-limit-dev
           - security-headers
     api-chain:
       chain:
