@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 
+from app.alert_client import AlertClient
 from app.core.config import settings
 from app.grpc_gen import inference_pb2_grpc, presence_pb2_grpc
 from app.inference import LSTMDetector
@@ -52,10 +53,30 @@ async def _serve() -> None:
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="inference")
     detector = LSTMDetector(
         yolo_model_name=settings.YOLO_MODEL_NAME,
+        object_model_name=settings.YOLO_OBJECT_MODEL_NAME,
         lstm_model_path=settings.LSTM_MODEL_PATH,
         device=settings.DEVICE,
         anomaly_threshold=settings.ANOMALY_THRESHOLD,
         person_class=settings.YOLO_PERSON_CLASS,
+        object_classes=settings.object_class_ids,
+        object_confidence=settings.OBJECT_CONFIDENCE,
+        grab_ratio=settings.CONCEALMENT_GRAB_RATIO,
+        missing_frames=settings.CONCEALMENT_MISSING_FRAMES,
+        keypoint_confidence=settings.CONCEALMENT_KEYPOINT_CONFIDENCE,
+        expiry_frames=settings.CONCEALMENT_EXPIRY_FRAMES,
+        snapshot_dir=settings.SNAPSHOT_DIR,
+    )
+
+    alert_client = AlertClient(
+        api_base_url=settings.API_BASE_URL,
+        auth_base_url=settings.AUTH_BASE_URL,
+        username=settings.ALERT_USERNAME,
+        password_file=settings.ALERT_PASSWORD_FILE,
+        access_cookie_name=settings.ACCESS_COOKIE_NAME,
+        csrf_cookie_name=settings.CSRF_COOKIE_NAME,
+        csrf_header_name=settings.CSRF_HEADER_NAME,
+        verify=True,
+        timeout_seconds=settings.ALERT_TIMEOUT_SECONDS,
     )
     server = grpc.aio.server(interceptors=[IdentityInterceptor()])
     health_servicer = AsyncHealthServicer()
@@ -64,7 +85,7 @@ async def _serve() -> None:
     health_servicer.set(PRESENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
     health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
     inference_pb2_grpc.add_InferenceServiceServicer_to_server(
-        InferenceServicer(detector=detector, executor=executor),
+        InferenceServicer(detector=detector, executor=executor, alert_client=alert_client),
         server,
     )
     presence_servicer = PresenceServicer()
@@ -96,6 +117,7 @@ async def _serve() -> None:
     await server.stop(grace=5)
     executor.shutdown(wait=True)
     detector.close()
+    alert_client.close()
     log.info("ai service stopped")
 
 

@@ -8,6 +8,7 @@ from typing import Protocol
 import cv2
 import numpy as np
 
+from app.concealment import ConcealmentTracker, ConcealmentVerdict
 from app.core.config import settings
 from app.tracker_store import TrackerStore
 
@@ -22,12 +23,35 @@ from app.grpc_gen.inference_pb2 import InferenceState
 
 
 @dataclass(frozen=True, slots=True)
+class TrackedPersonResult:
+    track_id: int
+    bbox: tuple[float, float, float, float]
+    keypoints: list[tuple[float, float, float]]
+    score: float
+    inference_state: InferenceState.ValueType
+
+
+@dataclass(frozen=True, slots=True)
+class TrackedObjectResult:
+    track_id: int
+    class_name: str
+    bbox: tuple[float, float, float, float]
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
 class DetectionResult:
     bbox: tuple[float, float, float, float]
     keypoints: list[tuple[float, float, float]]
     score: float
     inference_state: InferenceState.ValueType
     track_id: int
+    persons: list[TrackedPersonResult]
+    objects: list[TrackedObjectResult]
+    concealments: list[ConcealmentVerdict]
+    snapshots: dict[int, str]
+    frame_width: int
+    frame_height: int
 
 
 class Detector(Protocol):
@@ -46,17 +70,36 @@ class LSTMDetector:
     def __init__(
         self,
         yolo_model_name: str,
+        object_model_name: str,
         lstm_model_path: str,
         device: str,
         anomaly_threshold: float,
         person_class: int,
+        object_classes: list[int],
+        object_confidence: float,
+        grab_ratio: float,
+        missing_frames: int,
+        keypoint_confidence: float,
+        expiry_frames: int,
+        snapshot_dir: str,
     ) -> None:
         self._yolo_model_name = yolo_model_name
+        self._object_model_name = object_model_name
         self._lstm_model_path = lstm_model_path
         self._device = device
         self._anomaly_threshold = anomaly_threshold
         self._person_class = person_class
+        self._object_classes = object_classes
+        self._object_confidence = object_confidence
+        self._snapshot_dir = Path(snapshot_dir)
+        self._concealment = ConcealmentTracker(
+            grab_ratio=grab_ratio,
+            missing_frames=missing_frames,
+            keypoint_confidence=keypoint_confidence,
+            expiry_frames=expiry_frames,
+        )
         self._yolo: YOLO | None = None
+        self._objects: YOLO | None = None
         self._predictor: ShoplifterPredictor | None = None
         self._store: TrackerStore | None = None
 
@@ -69,11 +112,20 @@ class LSTMDetector:
         )
         self._yolo = YOLO(self._yolo_model_name)
         self._yolo.to(self._device)
+        self._objects = YOLO(self._object_model_name)
+        self._objects.to(self._device)
         self._predictor = ShoplifterPredictor(
             self._lstm_model_path,
             device=self._device,
             store=self._store,
         )
+
+    def write_snapshot(self, frame: np.ndarray, alert_id: str) -> str | None:
+        self._snapshot_dir.mkdir(parents=True, exist_ok=True)
+        path = self._snapshot_dir / f"{alert_id}.jpg"
+        if not cv2.imwrite(str(path), frame):
+            return None
+        return str(path)
 
     def analyze_frame(
         self,
@@ -82,12 +134,54 @@ class LSTMDetector:
         frame_index: int,
         camera_id: str,
     ) -> DetectionResult | None:
-        if self._yolo is None or self._predictor is None:
+        if self._yolo is None or self._objects is None or self._predictor is None:
             raise RuntimeError("detector not loaded")
         arr = np.frombuffer(image_bytes, dtype=np.uint8)
         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         if frame is None:
             return None
+        height, width = frame.shape[:2]
+        persons = self._track_persons(frame, camera_id, frame_index)
+        objects = self._track_objects(frame)
+        concealments = self._concealment.observe(
+            camera_id=camera_id,
+            frame_index=frame_index,
+            persons=[(person.track_id, person.keypoints) for person in persons],
+            objects=[(obj.track_id, obj.class_name, obj.bbox) for obj in objects],
+        )
+        snapshots: dict[int, str] = {}
+        for verdict in concealments:
+            alert_id = f"{camera_id}-{session_id}-{frame_index}-{verdict.object_track_id}"
+            written = self.write_snapshot(frame, alert_id)
+            if written is not None:
+                snapshots[verdict.object_track_id] = written
+        if not persons and not objects and not concealments:
+            return None
+        lead = persons[0] if persons else None
+        return DetectionResult(
+            bbox=lead.bbox if lead else (0.0, 0.0, 0.0, 0.0),
+            keypoints=lead.keypoints if lead else [],
+            score=lead.score if lead else 0.0,
+            inference_state=(
+                lead.inference_state if lead else InferenceState.INFERENCE_STATE_UNSPECIFIED
+            ),
+            track_id=lead.track_id if lead else 0,
+            persons=persons,
+            objects=objects,
+            concealments=concealments,
+            snapshots=snapshots,
+            frame_width=width,
+            frame_height=height,
+        )
+
+    def _track_persons(
+        self,
+        frame: np.ndarray,
+        camera_id: str,
+        frame_index: int,
+    ) -> list[TrackedPersonResult]:
+        if self._yolo is None or self._predictor is None:
+            raise RuntimeError("models not loaded")
         results = self._yolo.track(
             frame,
             persist=True,
@@ -95,56 +189,106 @@ class LSTMDetector:
             verbose=False,
         )
         if not results:
-            return None
+            return []
         result = results[0]
         if result.boxes is None or result.keypoints is None or len(result.boxes) == 0:
-            return None
+            return []
         boxes = result.boxes
+        if boxes.id is None:
+            return []
         kpts = result.keypoints
-        confs = boxes.conf.cpu().numpy() if boxes.conf is not None else np.array([])
-        if confs.size == 0:
-            return None
-        top = int(np.argmax(confs))
-        coords = boxes.xyxy[top].cpu().numpy().astype(float)
-        kp_xy = kpts.xy[top].cpu().numpy()
-        kp_conf = (
-            kpts.conf[top].cpu().numpy() if kpts.conf is not None else np.zeros(kp_xy.shape[0])
+        xyxy = boxes.xyxy.cpu().numpy()
+        track_ids = boxes.id.int().cpu().numpy()
+        kp_xy = kpts.xy.cpu().numpy()
+        kp_conf = kpts.conf.cpu().numpy() if kpts.conf is not None else None
+        out: list[TrackedPersonResult] = []
+        for index in range(len(xyxy)):
+            coords = xyxy[index].astype(float)
+            kp_array = np.zeros((kp_xy.shape[1], 3), dtype=np.float32)
+            kp_array[:, 0] = kp_xy[index][:, 0]
+            kp_array[:, 1] = kp_xy[index][:, 1]
+            if kp_conf is not None:
+                kp_array[:, 2] = kp_conf[index]
+            track_id = int(track_ids[index])
+            _, p_anomaly = self._predictor.update(
+                camera_id=camera_id,
+                track_id=track_id,
+                bbox_xyxy=tuple(coords),
+                keypoints=kp_array,
+                frame_index=frame_index,
+            )
+            if p_anomaly is None:
+                state = InferenceState.INFERENCE_STATE_WARMING_UP
+                score = 0.0
+            elif p_anomaly >= self._anomaly_threshold:
+                state = InferenceState.INFERENCE_STATE_ANOMALY
+                score = float(p_anomaly)
+            else:
+                state = InferenceState.INFERENCE_STATE_NORMAL
+                score = float(p_anomaly)
+            out.append(
+                TrackedPersonResult(
+                    track_id=track_id,
+                    bbox=(
+                        float(coords[0]),
+                        float(coords[1]),
+                        float(coords[2]),
+                        float(coords[3]),
+                    ),
+                    keypoints=[
+                        (
+                            float(kp_array[i, 0]),
+                            float(kp_array[i, 1]),
+                            float(kp_array[i, 2]),
+                        )
+                        for i in range(kp_array.shape[0])
+                    ],
+                    score=score,
+                    inference_state=state,
+                )
+            )
+        out.sort(key=lambda person: person.score, reverse=True)
+        return out
+
+    def _track_objects(self, frame: np.ndarray) -> list[TrackedObjectResult]:
+        if self._objects is None:
+            raise RuntimeError("models not loaded")
+        results = self._objects.track(
+            frame,
+            persist=True,
+            classes=self._object_classes,
+            conf=self._object_confidence,
+            verbose=False,
         )
-        track_ids = boxes.id.cpu().numpy() if boxes.id is not None else None
-        if track_ids is None or top >= len(track_ids):
-            return None
-        track_id = int(track_ids[top])
-        kp_array = np.zeros((kp_xy.shape[0], 3), dtype=np.float32)
-        kp_array[:, 0] = kp_xy[:, 0]
-        kp_array[:, 1] = kp_xy[:, 1]
-        kp_array[:, 2] = kp_conf
-        _, p_anomaly = self._predictor.update(
-            camera_id=camera_id,
-            track_id=track_id,
-            bbox_xyxy=tuple(coords),
-            keypoints=kp_array,
-            frame_index=frame_index,
-        )
-        if p_anomaly is None:
-            inference_state = InferenceState.INFERENCE_STATE_WARMING_UP
-            score = 0.0
-        elif p_anomaly >= self._anomaly_threshold:
-            inference_state = InferenceState.INFERENCE_STATE_ANOMALY
-            score = float(p_anomaly)
-        else:
-            inference_state = InferenceState.INFERENCE_STATE_NORMAL
-            score = float(p_anomaly)
-        keypoints_out = [
-            (float(kp_array[i, 0]), float(kp_array[i, 1]), float(kp_array[i, 2]))
-            for i in range(kp_array.shape[0])
-        ]
-        return DetectionResult(
-            bbox=(float(coords[0]), float(coords[1]), float(coords[2]), float(coords[3])),
-            keypoints=keypoints_out,
-            score=score,
-            inference_state=inference_state,
-            track_id=track_id,
-        )
+        if not results:
+            return []
+        result = results[0]
+        if result.boxes is None or len(result.boxes) == 0 or result.boxes.id is None:
+            return []
+        boxes = result.boxes
+        xyxy = boxes.xyxy.cpu().numpy()
+        track_ids = boxes.id.int().cpu().numpy()
+        confs = boxes.conf.cpu().numpy() if boxes.conf is not None else None
+        class_ids = boxes.cls.int().cpu().numpy() if boxes.cls is not None else None
+        names = result.names
+        out: list[TrackedObjectResult] = []
+        for index in range(len(xyxy)):
+            coords = xyxy[index].astype(float)
+            class_id = int(class_ids[index]) if class_ids is not None else -1
+            out.append(
+                TrackedObjectResult(
+                    track_id=int(track_ids[index]),
+                    class_name=str(names.get(class_id, "unknown")),
+                    bbox=(
+                        float(coords[0]),
+                        float(coords[1]),
+                        float(coords[2]),
+                        float(coords[3]),
+                    ),
+                    confidence=float(confs[index]) if confs is not None else 0.0,
+                )
+            )
+        return out
 
     def close(self) -> None:
         if self._store is not None:

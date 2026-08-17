@@ -24,21 +24,24 @@ _sym_db = _symbol_database.Default()
 
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 from . import common_pb2 as common__pb2
+from . import alert_pb2 as alert__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0finference.proto\x12\x11theftdetection.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0c\x63ommon.proto\"\x83\x01\n\x05\x46rame\x12\x0f\n\x07payload\x18\x01 \x01(\x0c\x12\x12\n\nsession_id\x18\x02 \x01(\x03\x12\x13\n\x0b\x66rame_index\x18\x03 \x01(\x05\x12-\n\ttimestamp\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tcamera_id\x18\x05 \x01(\t\"\xda\x01\n\tDetection\x12%\n\x04\x62\x62ox\x18\x01 \x01(\x0b\x32\x17.theftdetection.v1.Bbox\x12.\n\tkeypoints\x18\x02 \x03(\x0b\x32\x1b.theftdetection.v1.Keypoint\x12\r\n\x05score\x18\x03 \x01(\x02\x12:\n\x0finference_state\x18\x04 \x01(\x0e\x32!.theftdetection.v1.InferenceState\x12\x10\n\x08track_id\x18\x05 \x01(\x05\x12\x19\n\x11\x64\x65tection_present\x18\x06 \x01(\x08*\x8a\x01\n\x0eInferenceState\x12\x1f\n\x1bINFERENCE_STATE_UNSPECIFIED\x10\x00\x12\x1e\n\x1aINFERENCE_STATE_WARMING_UP\x10\x01\x12\x1a\n\x16INFERENCE_STATE_NORMAL\x10\x02\x12\x1b\n\x17INFERENCE_STATE_ANOMALY\x10\x03\x32U\n\x10InferenceService\x12\x41\n\x07\x41nalyze\x12\x18.theftdetection.v1.Frame\x1a\x1c.theftdetection.v1.Detectionb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0finference.proto\x12\x11theftdetection.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0c\x63ommon.proto\x1a\x0b\x61lert.proto\"\x83\x01\n\x05\x46rame\x12\x0f\n\x07payload\x18\x01 \x01(\x0c\x12\x12\n\nsession_id\x18\x02 \x01(\x03\x12\x13\n\x0b\x66rame_index\x18\x03 \x01(\x05\x12-\n\ttimestamp\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tcamera_id\x18\x05 \x01(\t\"\xc3\x01\n\rTrackedPerson\x12\x10\n\x08track_id\x18\x01 \x01(\x05\x12%\n\x04\x62\x62ox\x18\x02 \x01(\x0b\x32\x17.theftdetection.v1.Bbox\x12.\n\tkeypoints\x18\x03 \x03(\x0b\x32\x1b.theftdetection.v1.Keypoint\x12\r\n\x05score\x18\x04 \x01(\x02\x12:\n\x0finference_state\x18\x05 \x01(\x0e\x32!.theftdetection.v1.InferenceState\"\xa1\x03\n\tDetection\x12%\n\x04\x62\x62ox\x18\x01 \x01(\x0b\x32\x17.theftdetection.v1.Bbox\x12.\n\tkeypoints\x18\x02 \x03(\x0b\x32\x1b.theftdetection.v1.Keypoint\x12\r\n\x05score\x18\x03 \x01(\x02\x12:\n\x0finference_state\x18\x04 \x01(\x0e\x32!.theftdetection.v1.InferenceState\x12\x10\n\x08track_id\x18\x05 \x01(\x05\x12\x19\n\x11\x64\x65tection_present\x18\x06 \x01(\x08\x12\x31\n\x07persons\x18\x07 \x03(\x0b\x32 .theftdetection.v1.TrackedPerson\x12\x31\n\x07objects\x18\x08 \x03(\x0b\x32 .theftdetection.v1.TrackedObject\x12\x13\n\x0b\x66rame_width\x18\t \x01(\x05\x12\x14\n\x0c\x66rame_height\x18\n \x01(\x05\x12\x34\n\x0c\x63oncealments\x18\x0b \x03(\x0b\x32\x1e.theftdetection.v1.Concealment*\x8a\x01\n\x0eInferenceState\x12\x1f\n\x1bINFERENCE_STATE_UNSPECIFIED\x10\x00\x12\x1e\n\x1aINFERENCE_STATE_WARMING_UP\x10\x01\x12\x1a\n\x16INFERENCE_STATE_NORMAL\x10\x02\x12\x1b\n\x17INFERENCE_STATE_ANOMALY\x10\x03\x32U\n\x10InferenceService\x12\x41\n\x07\x41nalyze\x12\x18.theftdetection.v1.Frame\x1a\x1c.theftdetection.v1.Detectionb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'inference_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_INFERENCESTATE']._serialized_start=441
-  _globals['_INFERENCESTATE']._serialized_end=579
-  _globals['_FRAME']._serialized_start=86
-  _globals['_FRAME']._serialized_end=217
-  _globals['_DETECTION']._serialized_start=220
-  _globals['_DETECTION']._serialized_end=438
-  _globals['_INFERENCESERVICE']._serialized_start=581
-  _globals['_INFERENCESERVICE']._serialized_end=666
+  _globals['_INFERENCESTATE']._serialized_start=851
+  _globals['_INFERENCESTATE']._serialized_end=989
+  _globals['_FRAME']._serialized_start=99
+  _globals['_FRAME']._serialized_end=230
+  _globals['_TRACKEDPERSON']._serialized_start=233
+  _globals['_TRACKEDPERSON']._serialized_end=428
+  _globals['_DETECTION']._serialized_start=431
+  _globals['_DETECTION']._serialized_end=848
+  _globals['_INFERENCESERVICE']._serialized_start=991
+  _globals['_INFERENCESERVICE']._serialized_end=1076
 # @@protoc_insertion_point(module_scope)

@@ -29,6 +29,7 @@ dependencies = [
     "opentelemetry-exporter-prometheus==0.50b0",
     "opentelemetry-instrumentation-grpc==0.50b0",
     "opentelemetry-instrumentation-logging==0.50b0",
+    "requests==2.34.2",
 ]
 
 [project.optional-dependencies]
