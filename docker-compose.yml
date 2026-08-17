@@ -59,6 +59,7 @@ services:
       - ./config/pki/api/tls.crt:/run/secrets/api_tls_cert:ro
       - ./config/pki/api/tls.key:/run/secrets/api_tls_key:ro
       - ./config/pki/ca/ca.crt:/run/secrets/api_tls_ca:ro
+      - ai_snapshots:/app/snapshots:ro
     restart: unless-stopped
 
   web:
@@ -137,6 +138,8 @@ services:
       - ./config/pki/ai/tls.crt:/run/secrets/ai_tls_cert:ro
       - ./config/pki/ai/tls.key:/run/secrets/ai_tls_key:ro
       - ./config/pki/ca/ca.crt:/run/secrets/ai_tls_ca:ro
+      - ./config/auth/detector_password:/run/secrets/alert_password:ro
+      - ai_snapshots:/app/snapshots
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=ai:50051", "-tls", "-tls-ca-cert=/run/secrets/ai_tls_ca", "-tls-client-cert=/run/secrets/ai_tls_cert", "-tls-client-key=/run/secrets/ai_tls_key"]
       interval: 30s
@@ -1054,3 +1057,4 @@ volumes:
   netdata_lib:
   netdata_cache:
   portainer_data:
+  ai_snapshots:

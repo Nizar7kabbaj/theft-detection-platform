@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
     DEBUG: bool = True
-    SNAPSHOTS_DIR: str = "ai-model/outputs/snapshots"
+    SNAPSHOTS_DIR: str = "/app/snapshots"
     ALERTS_DIR: str = "ai-model/outputs/alerts"
     INFERENCE_TARGET: str = "ai:50051"
     NOTIFICATION_TARGET: str = "notification:50052"

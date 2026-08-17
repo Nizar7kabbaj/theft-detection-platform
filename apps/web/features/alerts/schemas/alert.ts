@@ -15,7 +15,7 @@ const severity = z.enum([
 const alertType = z.enum([
   "ALERT_TYPE_UNSPECIFIED",
   "ALERT_TYPE_OBJECT_PROXIMITY",
-  "ALERT_TYPE_BENDING",
+  "ALERT_TYPE_CONCEALMENT",
   "ALERT_TYPE_LOITERING",
 ])
 

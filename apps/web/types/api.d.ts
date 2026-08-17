@@ -289,7 +289,7 @@ export interface components {
          * AlertType
          * @enum {string}
          */
-        AlertType: "ALERT_TYPE_UNSPECIFIED" | "ALERT_TYPE_OBJECT_PROXIMITY" | "ALERT_TYPE_BENDING" | "ALERT_TYPE_LOITERING";
+        AlertType: "ALERT_TYPE_UNSPECIFIED" | "ALERT_TYPE_OBJECT_PROXIMITY" | "ALERT_TYPE_CONCEALMENT" | "ALERT_TYPE_LOITERING";
         /** Bbox */
         Bbox: {
             /** X1 */

@@ -27,6 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM base AS weights
 ADD --chmod=0644 https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n-pose.pt /app/yolov8n-pose.pt
+ADD --chmod=0644 https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt /app/yolov8n.pt
 
 FROM base AS probe
 ARG GRPC_HEALTH_PROBE_VERSION
@@ -39,10 +40,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PATH=/opt/venv/bin:$PATH
 COPY --from=builder --chown=ai:ai /opt/venv /opt/venv
 COPY --from=weights --chown=ai:ai /app/yolov8n-pose.pt /app/yolov8n-pose.pt
+COPY --from=weights --chown=ai:ai /app/yolov8n.pt /app/yolov8n.pt
 COPY --from=probe /usr/local/bin/grpc_health_probe /usr/local/bin/grpc_health_probe
 COPY --chown=ai:ai app /app/app
-RUN mkdir -p /app/.ultralytics /app/.matplotlib \
-    && chown ai:ai /app/.ultralytics /app/.matplotlib
+RUN mkdir -p /app/.ultralytics /app/.matplotlib /app/snapshots \
+    && chown ai:ai /app/.ultralytics /app/.matplotlib /app/snapshots
 USER ai
 EXPOSE 50051 9464
 HEALTHCHECK --interval=10s --timeout=3s --start-period=40s --retries=3 \

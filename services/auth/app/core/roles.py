@@ -9,3 +9,4 @@ class Role(StrEnum):
     VIEWER = "viewer"
     ML_ENGINEER = "ml_engineer"
     COMPLIANCE = "compliance"
+    DETECTOR = "detector"

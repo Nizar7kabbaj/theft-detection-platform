@@ -54,6 +54,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.SETTINGS_READ,
         }
     ),
+    "detector": frozenset({Permission.ALERT_WRITE}),
 }
 
 

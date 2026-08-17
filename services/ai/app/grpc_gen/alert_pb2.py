@@ -26,19 +26,21 @@ from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__
 from . import common_pb2 as common__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x61lert.proto\x12\x11theftdetection.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0c\x63ommon.proto\"\xfe\x02\n\x05\x41lert\x12\x10\n\x08\x61lert_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\x03\x12\x13\n\x0b\x66rame_index\x18\x03 \x01(\x05\x12/\n\x0boccurred_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x16\n\tcamera_id\x18\x05 \x01(\tH\x00\x88\x01\x01\x12)\n\x06person\x18\x06 \x01(\x0b\x32\x19.theftdetection.v1.Person\x12)\n\x06object\x18\x07 \x01(\x0b\x32\x19.theftdetection.v1.Object\x12-\n\x08severity\x18\x08 \x01(\x0e\x32\x1b.theftdetection.v1.Severity\x12\x30\n\nalert_type\x18\t \x01(\x0e\x32\x1c.theftdetection.v1.AlertType\x12\x1a\n\rsnapshot_path\x18\n \x01(\tH\x01\x88\x01\x01\x42\x0c\n\n_camera_idB\x10\n\x0e_snapshot_path\"m\n\x0eSendAlertReply\x12)\n\x06status\x18\x01 \x01(\x0e\x32\x19.theftdetection.v1.Status\x12\x30\n\x0c\x64\x65livered_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp*a\n\x06Status\x12\x16\n\x12STATUS_UNSPECIFIED\x10\x00\x12\x13\n\x0fSTATUS_ACCEPTED\x10\x01\x12\x17\n\x13STATUS_RATE_LIMITED\x10\x02\x12\x11\n\rSTATUS_FAILED\x10\x03\x32X\n\x0c\x41lertService\x12H\n\tSendAlert\x12\x18.theftdetection.v1.Alert\x1a!.theftdetection.v1.SendAlertReplyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x61lert.proto\x12\x11theftdetection.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0c\x63ommon.proto\"\x85\x02\n\x0b\x43oncealment\x12\x17\n\x0fobject_track_id\x18\x01 \x01(\x05\x12\x14\n\x0cobject_class\x18\x02 \x01(\t\x12/\n\x0elast_seen_bbox\x18\x03 \x01(\x0b\x32\x17.theftdetection.v1.Bbox\x12\x17\n\x0flast_seen_frame\x18\x04 \x01(\x05\x12\x16\n\x0emissing_frames\x18\x05 \x01(\x05\x12\x13\n\x0bwrist_index\x18\x06 \x01(\x05\x12\x0f\n\x07wrist_x\x18\x07 \x01(\x02\x12\x0f\n\x07wrist_y\x18\x08 \x01(\x02\x12\x15\n\rgrab_distance\x18\t \x01(\x02\x12\x17\n\x0fperson_track_id\x18\n \x01(\x05\"\xdb\x04\n\x05\x41lert\x12\x10\n\x08\x61lert_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\x03\x12\x13\n\x0b\x66rame_index\x18\x03 \x01(\x05\x12/\n\x0boccurred_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x16\n\tcamera_id\x18\x05 \x01(\tH\x00\x88\x01\x01\x12)\n\x06person\x18\x06 \x01(\x0b\x32\x19.theftdetection.v1.Person\x12)\n\x06object\x18\x07 \x01(\x0b\x32\x19.theftdetection.v1.Object\x12-\n\x08severity\x18\x08 \x01(\x0e\x32\x1b.theftdetection.v1.Severity\x12\x30\n\nalert_type\x18\t \x01(\x0e\x32\x1c.theftdetection.v1.AlertType\x12\x1a\n\rsnapshot_path\x18\n \x01(\tH\x01\x88\x01\x01\x12\x13\n\x0b\x66rame_width\x18\x0b \x01(\x05\x12\x14\n\x0c\x66rame_height\x18\x0c \x01(\x05\x12\x38\n\x0b\x63oncealment\x18\r \x01(\x0b\x32\x1e.theftdetection.v1.ConcealmentH\x02\x88\x01\x01\x12\x1d\n\x10\x63lassifier_score\x18\x0e \x01(\x02H\x03\x88\x01\x01\x12\x1d\n\x10\x63lassifier_state\x18\x0f \x01(\tH\x04\x88\x01\x01\x42\x0c\n\n_camera_idB\x10\n\x0e_snapshot_pathB\x0e\n\x0c_concealmentB\x13\n\x11_classifier_scoreB\x13\n\x11_classifier_state\"m\n\x0eSendAlertReply\x12)\n\x06status\x18\x01 \x01(\x0e\x32\x19.theftdetection.v1.Status\x12\x30\n\x0c\x64\x65livered_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp*a\n\x06Status\x12\x16\n\x12STATUS_UNSPECIFIED\x10\x00\x12\x13\n\x0fSTATUS_ACCEPTED\x10\x01\x12\x17\n\x13STATUS_RATE_LIMITED\x10\x02\x12\x11\n\rSTATUS_FAILED\x10\x03\x32X\n\x0c\x41lertService\x12H\n\tSendAlert\x12\x18.theftdetection.v1.Alert\x1a!.theftdetection.v1.SendAlertReplyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'alert_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_STATUS']._serialized_start=577
-  _globals['_STATUS']._serialized_end=674
-  _globals['_ALERT']._serialized_start=82
-  _globals['_ALERT']._serialized_end=464
-  _globals['_SENDALERTREPLY']._serialized_start=466
-  _globals['_SENDALERTREPLY']._serialized_end=575
-  _globals['_ALERTSERVICE']._serialized_start=676
-  _globals['_ALERTSERVICE']._serialized_end=764
+  _globals['_STATUS']._serialized_start=1062
+  _globals['_STATUS']._serialized_end=1159
+  _globals['_CONCEALMENT']._serialized_start=82
+  _globals['_CONCEALMENT']._serialized_end=343
+  _globals['_ALERT']._serialized_start=346
+  _globals['_ALERT']._serialized_end=949
+  _globals['_SENDALERTREPLY']._serialized_start=951
+  _globals['_SENDALERTREPLY']._serialized_end=1060
+  _globals['_ALERTSERVICE']._serialized_start=1161
+  _globals['_ALERTSERVICE']._serialized_end=1249
 # @@protoc_insertion_point(module_scope)

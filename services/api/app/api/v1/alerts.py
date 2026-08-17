@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import FileResponse
 
 from app.core.authz import Permission, require_permission
 from app.core.idempotency import IdempotencyState, idempotency
 from app.dependencies import get_alert_usecase
-from app.schemas.alert import AlertCreate, AlertPage, AlertResponse, Severity
+from app.schemas.alert import AlertCreate, AlertDetail, AlertPage, AlertResponse, Severity
 from app.usecases.alert_usecase import AlertUseCase
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -44,6 +45,35 @@ async def list_alerts(
         acknowledged=acknowledged,
         limit=limit,
         cursor=cursor,
+    )
+
+
+@router.get(
+    "/{alert_id}",
+    response_model=AlertDetail,
+    dependencies=[Depends(require_permission(Permission.ALERT_READ))],
+)
+async def get_alert(
+    alert_id: str,
+    usecase: AlertUseCase = Depends(get_alert_usecase),
+) -> AlertDetail:
+    return await usecase.get(alert_id)
+
+
+@router.get(
+    "/{alert_id}/snapshot",
+    response_class=FileResponse,
+    dependencies=[Depends(require_permission(Permission.ALERT_READ))],
+)
+async def get_alert_snapshot(
+    alert_id: str,
+    usecase: AlertUseCase = Depends(get_alert_usecase),
+) -> FileResponse:
+    path = await usecase.snapshot_path(alert_id)
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=300"},
     )
 
 

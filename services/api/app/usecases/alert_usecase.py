@@ -4,14 +4,24 @@ import base64
 import binascii
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
+import anyio.to_thread
 from redis.asyncio import Redis
 
 from app.core.cache import get_or_set, invalidate_prefix, make_list_key
+from app.core.config import settings
 from app.core.errors import AlertUnavailableError, NotFoundError, ValidationError
 from app.repositories.alert_repository import AlertRepository
-from app.schemas.alert import AlertCreate, AlertPage, AlertResponse, AlertType, Severity
+from app.schemas.alert import (
+    AlertCreate,
+    AlertDetail,
+    AlertPage,
+    AlertResponse,
+    AlertType,
+    Severity,
+)
 from app.services.alert_service import AlertClient
 
 logger = logging.getLogger(__name__)
@@ -46,6 +56,20 @@ def decode_cursor(cursor: str) -> tuple[datetime, str]:
     return parsed, id_
 
 
+def _snapshot_url(doc: dict[str, Any]) -> str | None:
+    if not (doc.get("snapshot_path") or doc.get("snapshot_url")):
+        return None
+    return f"/api/v1/alerts/{doc['_id']}/snapshot"
+
+
+def _resolve_snapshot(root_dir: str, stored: str) -> Path | None:
+    root = Path(root_dir).resolve()
+    candidate = (root / Path(stored).name).resolve()
+    if candidate.parent != root or not candidate.is_file():
+        return None
+    return candidate
+
+
 def _to_response(doc: dict[str, Any]) -> AlertResponse:
     obj = doc.get("object") or {}
     alert_type = doc.get("alert_type") or AlertType.ALERT_TYPE_UNSPECIFIED.value
@@ -55,7 +79,6 @@ def _to_response(doc: dict[str, Any]) -> AlertResponse:
     confidence = obj.get("confidence")
     if confidence is None:
         confidence = doc.get("confidence")
-    snapshot_url = doc.get("snapshot_path") or doc.get("snapshot_url")
     created_at = doc.get("created_at") or doc["occurred_at"]
     return AlertResponse.model_validate(
         {
@@ -68,10 +91,36 @@ def _to_response(doc: dict[str, Any]) -> AlertResponse:
             "severity": doc["severity"],
             "object_name": object_name,
             "confidence": confidence,
-            "snapshot_url": snapshot_url,
+            "snapshot_url": _snapshot_url(doc),
             "alert_type": alert_type,
             "acknowledged": bool(doc.get("acknowledged", False)),
             "acknowledged_at": doc.get("acknowledged_at"),
+        }
+    )
+
+
+def _to_detail(doc: dict[str, Any]) -> AlertDetail:
+    return AlertDetail.model_validate(
+        {
+            "_id": doc["_id"],
+            "alert_id": doc["alert_id"],
+            "session_id": doc["session_id"],
+            "frame_index": doc.get("frame_index", 0),
+            "occurred_at": doc["occurred_at"],
+            "created_at": doc.get("created_at") or doc["occurred_at"],
+            "camera_id": doc["camera_id"],
+            "severity": doc["severity"],
+            "alert_type": doc.get("alert_type") or AlertType.ALERT_TYPE_UNSPECIFIED.value,
+            "acknowledged": bool(doc.get("acknowledged", False)),
+            "acknowledged_at": doc.get("acknowledged_at"),
+            "person": doc.get("person"),
+            "object": doc.get("object"),
+            "frame_width": doc.get("frame_width"),
+            "frame_height": doc.get("frame_height"),
+            "concealment": doc.get("concealment"),
+            "classifier_score": doc.get("classifier_score"),
+            "classifier_state": doc.get("classifier_state"),
+            "snapshot_url": _snapshot_url(doc),
         }
     )
 
@@ -146,6 +195,24 @@ class AlertUseCase:
 
         cached = await get_or_set(self._redis, key, self.TTL, loader)
         return AlertPage.model_validate(cached)
+
+    async def get(self, alert_id: str) -> AlertDetail:
+        doc = await self._repo.get(alert_id)
+        if doc is None:
+            raise NotFoundError(f"alert {alert_id} not found")
+        return _to_detail(doc)
+
+    async def snapshot_path(self, alert_id: str) -> Path:
+        doc = await self._repo.get(alert_id)
+        if doc is None:
+            raise NotFoundError(f"alert {alert_id} not found")
+        stored = doc.get("snapshot_path")
+        if not stored:
+            raise NotFoundError(f"alert {alert_id} has no snapshot")
+        resolved = await anyio.to_thread.run_sync(_resolve_snapshot, settings.SNAPSHOTS_DIR, stored)
+        if resolved is None:
+            raise NotFoundError(f"alert {alert_id} has no snapshot")
+        return resolved
 
     async def acknowledge(self, alert_id: str) -> AlertResponse:
         updated, acked_now = await self._repo.acknowledge(alert_id)
