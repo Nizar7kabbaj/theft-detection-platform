@@ -41,3 +41,26 @@ class AlertRepository(BaseRepository[dict[str, Any]]):
             return doc, True
         doc = await self.get(id_)
         return doc, False
+
+    async def decide(
+        self,
+        id_: str,
+        decision: str,
+        actor_id: str,
+    ) -> tuple[dict[str, Any] | None, bool]:
+        oid = self._oid(id_)
+        changes: dict[str, Any] = {"decision": decision}
+        if decision == "DECISION_UNSPECIFIED":
+            changes["decided_at"] = None
+            changes["decided_by"] = None
+        else:
+            changes["decided_at"] = datetime.now(UTC)
+            changes["decided_by"] = actor_id
+        updated = await self._col.find_one_and_update(
+            {"_id": oid, "decision": {"$ne": decision}},
+            {"$set": changes},
+            return_document=True,
+        )
+        if updated is not None:
+            return updated, True
+        return await self.get(id_), False

@@ -21,6 +21,13 @@ class AlertType(str, Enum):
     ALERT_TYPE_LOITERING = "ALERT_TYPE_LOITERING"
 
 
+class Decision(str, Enum):
+    DECISION_UNSPECIFIED = "DECISION_UNSPECIFIED"
+    DECISION_CONFIRMED = "DECISION_CONFIRMED"
+    DECISION_DISMISSED = "DECISION_DISMISSED"
+    DECISION_UNSURE = "DECISION_UNSURE"
+
+
 class Bbox(BaseModel):
     x1: float
     y1: float
@@ -75,6 +82,10 @@ class AlertCreate(BaseModel):
     classifier_state: str | None = None
 
 
+class DecisionUpdate(BaseModel):
+    decision: Decision
+
+
 class AlertResponse(MongoModel):
     id: str = Field(alias="_id")
     alert_id: str
@@ -103,6 +114,9 @@ class AlertDetail(MongoModel):
     alert_type: AlertType | None = None
     acknowledged: bool = False
     acknowledged_at: datetime | None = None
+    decision: Decision = Decision.DECISION_UNSPECIFIED
+    decided_at: datetime | None = None
+    decided_by: str | None = None
     person: Person | None = None
     object: Object | None = None
     frame_width: int | None = None

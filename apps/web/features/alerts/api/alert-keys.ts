@@ -92,4 +92,5 @@ export const alertKeys = {
   all: ["alerts"] as const,
   list: (filters: AlertFilters) =>
     ["alerts", "list", filters.severity, filters.acknowledged] as const,
+  detail: (id: string) => ["alerts", "detail", id] as const,
 }

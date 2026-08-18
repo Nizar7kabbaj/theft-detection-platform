@@ -4,7 +4,15 @@ from fastapi.responses import FileResponse
 from app.core.authz import Permission, require_permission
 from app.core.idempotency import IdempotencyState, idempotency
 from app.dependencies import get_alert_usecase
-from app.schemas.alert import AlertCreate, AlertDetail, AlertPage, AlertResponse, Severity
+from app.schemas.alert import (
+    AlertCreate,
+    AlertDetail,
+    AlertPage,
+    AlertResponse,
+    DecisionUpdate,
+    Severity,
+)
+from app.schemas.identity import CurrentUser
 from app.usecases.alert_usecase import AlertUseCase
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -80,22 +88,23 @@ async def get_alert_snapshot(
 @router.patch(
     "/{alert_id}/acknowledge",
     response_model=AlertResponse,
-    dependencies=[Depends(require_permission(Permission.ALERT_ACKNOWLEDGE))],
 )
 async def acknowledge_alert(
     alert_id: str,
+    user: CurrentUser = Depends(require_permission(Permission.ALERT_ACKNOWLEDGE)),
     usecase: AlertUseCase = Depends(get_alert_usecase),
 ) -> AlertResponse:
-    return await usecase.acknowledge(alert_id)
+    return await usecase.acknowledge(alert_id, user.user_id)
 
 
-@router.delete(
-    "/{alert_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_permission(Permission.ALERT_WRITE))],
+@router.patch(
+    "/{alert_id}/decision",
+    response_model=AlertDetail,
 )
-async def delete_alert(
+async def decide_alert(
     alert_id: str,
+    payload: DecisionUpdate,
+    user: CurrentUser = Depends(require_permission(Permission.ALERT_ACKNOWLEDGE)),
     usecase: AlertUseCase = Depends(get_alert_usecase),
-) -> None:
-    await usecase.delete(alert_id)
+) -> AlertDetail:
+    return await usecase.decide(alert_id, payload.decision, user.user_id)

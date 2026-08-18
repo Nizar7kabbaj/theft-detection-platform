@@ -20,9 +20,11 @@ from app.schemas.alert import (
     AlertPage,
     AlertResponse,
     AlertType,
+    Decision,
     Severity,
 )
 from app.services.alert_service import AlertClient
+from app.services.audit_service import AuditClient
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +115,9 @@ def _to_detail(doc: dict[str, Any]) -> AlertDetail:
             "alert_type": doc.get("alert_type") or AlertType.ALERT_TYPE_UNSPECIFIED.value,
             "acknowledged": bool(doc.get("acknowledged", False)),
             "acknowledged_at": doc.get("acknowledged_at"),
+            "decision": doc.get("decision") or Decision.DECISION_UNSPECIFIED.value,
+            "decided_at": doc.get("decided_at"),
+            "decided_by": doc.get("decided_by"),
             "person": doc.get("person"),
             "object": doc.get("object"),
             "frame_width": doc.get("frame_width"),
@@ -134,10 +139,12 @@ class AlertUseCase:
         repo: AlertRepository,
         redis: Redis,
         alert_client: AlertClient,
+        audit_client: AuditClient,
     ) -> None:
         self._repo = repo
         self._redis = redis
         self._alert_client = alert_client
+        self._audit = audit_client
 
     async def _publish(self, event: str, response: AlertResponse) -> None:
         try:
@@ -151,6 +158,7 @@ class AlertUseCase:
         doc["occurred_at"] = payload.occurred_at
         doc["created_at"] = datetime.now(UTC)
         doc["acknowledged"] = False
+        doc["decision"] = Decision.DECISION_UNSPECIFIED.value
         created = await self._repo.create(doc)
         try:
             await self._alert_client.send(payload)
@@ -214,7 +222,7 @@ class AlertUseCase:
             raise NotFoundError(f"alert {alert_id} has no snapshot")
         return resolved
 
-    async def acknowledge(self, alert_id: str) -> AlertResponse:
+    async def acknowledge(self, alert_id: str, actor_id: str) -> AlertResponse:
         updated, acked_now = await self._repo.acknowledge(alert_id)
         if updated is None:
             raise NotFoundError(f"alert {alert_id} not found")
@@ -222,15 +230,21 @@ class AlertUseCase:
         if acked_now:
             await invalidate_prefix(self._redis, self.LIST_PREFIX)
             await self._publish("acknowledged", response)
+            await self._audit.emit_alert_acknowledged(
+                alert_id=str(updated["_id"]),
+                actor_user_id=actor_id,
+            )
         return response
 
-    async def delete(self, alert_id: str) -> None:
-        doc = await self._repo.get(alert_id)
-        if doc is None:
+    async def decide(self, alert_id: str, decision: Decision, actor_id: str) -> AlertDetail:
+        updated, changed = await self._repo.decide(alert_id, decision.value, actor_id)
+        if updated is None:
             raise NotFoundError(f"alert {alert_id} not found")
-        response = _to_response(doc)
-        deleted = await self._repo.delete(alert_id)
-        if not deleted:
-            raise NotFoundError(f"alert {alert_id} not found")
-        await invalidate_prefix(self._redis, self.LIST_PREFIX)
-        await self._publish("deleted", response)
+        if changed:
+            await invalidate_prefix(self._redis, self.LIST_PREFIX)
+            await self._publish("decided", _to_response(updated))
+            await self._audit.emit_alert_acknowledged(
+                alert_id=str(updated["_id"]),
+                actor_user_id=actor_id,
+            )
+        return _to_detail(updated)

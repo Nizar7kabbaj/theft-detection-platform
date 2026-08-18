@@ -9,6 +9,7 @@ from app.repositories.camera_repository import CameraRepository
 from app.repositories.detection_repository import DetectionRepository
 from app.repositories.stats_repository import StatsRepository
 from app.services.alert_service import AlertClient
+from app.services.audit_service import AuditClient
 from app.services.inference_service import InferenceClient
 from app.usecases.alert_usecase import AlertUseCase
 from app.usecases.camera_usecase import CameraUseCase
@@ -44,6 +45,12 @@ def get_stats_repo(
     return StatsRepository(db)
 
 
+def get_audit_client(
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> AuditClient:
+    return AuditClient(db)
+
+
 def get_inference_client(request: Request) -> InferenceClient:
     return InferenceClient(request.app.state.inference_stub)
 
@@ -63,8 +70,9 @@ def get_alert_usecase(
     repo: AlertRepository = Depends(get_alert_repo),
     redis: Redis = Depends(get_redis),
     alert_client: AlertClient = Depends(get_alert_client),
+    audit_client: AuditClient = Depends(get_audit_client),
 ) -> AlertUseCase:
-    return AlertUseCase(repo, redis, alert_client)
+    return AlertUseCase(repo, redis, alert_client, audit_client)
 
 
 def get_detection_usecase(
