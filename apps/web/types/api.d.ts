@@ -127,6 +127,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/alerts/{alert_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Alert */
+        get: operations["get_alert_api_v1_alerts__alert_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/{alert_id}/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Alert Snapshot */
+        get: operations["get_alert_snapshot_api_v1_alerts__alert_id__snapshot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/alerts/{alert_id}/acknowledge": {
         parameters: {
             query?: never;
@@ -144,7 +178,7 @@ export interface paths {
         patch: operations["acknowledge_alert_api_v1_alerts__alert_id__acknowledge_patch"];
         trace?: never;
     };
-    "/api/v1/alerts/{alert_id}": {
+    "/api/v1/alerts/{alert_id}/decision": {
         parameters: {
             query?: never;
             header?: never;
@@ -154,11 +188,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Alert */
-        delete: operations["delete_alert_api_v1_alerts__alert_id__delete"];
+        delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Decide Alert */
+        patch: operations["decide_alert_api_v1_alerts__alert_id__decision_patch"];
         trace?: never;
     };
     "/api/v1/stats": {
@@ -241,6 +275,66 @@ export interface components {
             snapshot_path?: string | null;
             /** @default ALERT_TYPE_OBJECT_PROXIMITY */
             alert_type: components["schemas"]["AlertType"];
+            /** Frame Width */
+            frame_width?: number | null;
+            /** Frame Height */
+            frame_height?: number | null;
+            concealment?: components["schemas"]["Concealment"] | null;
+            /** Classifier Score */
+            classifier_score?: number | null;
+            /** Classifier State */
+            classifier_state?: string | null;
+        };
+        /** AlertDetail */
+        AlertDetail: {
+            /** Id */
+            _id: string;
+            /** Alert Id */
+            alert_id: string;
+            /** Session Id */
+            session_id: number;
+            /** Frame Index */
+            frame_index: number;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Camera Id */
+            camera_id: string;
+            severity: components["schemas"]["Severity"];
+            alert_type?: components["schemas"]["AlertType"] | null;
+            /**
+             * Acknowledged
+             * @default false
+             */
+            acknowledged: boolean;
+            /** Acknowledged At */
+            acknowledged_at?: string | null;
+            /** @default DECISION_UNSPECIFIED */
+            decision: components["schemas"]["Decision"];
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decided By */
+            decided_by?: string | null;
+            person?: components["schemas"]["Person"] | null;
+            object?: components["schemas"]["Object"] | null;
+            /** Frame Width */
+            frame_width?: number | null;
+            /** Frame Height */
+            frame_height?: number | null;
+            concealment?: components["schemas"]["Concealment"] | null;
+            /** Classifier Score */
+            classifier_score?: number | null;
+            /** Classifier State */
+            classifier_state?: string | null;
+            /** Snapshot Url */
+            snapshot_url?: string | null;
         };
         /** AlertPage */
         AlertPage: {
@@ -347,6 +441,36 @@ export interface components {
              */
             created_at: string;
         };
+        /** Concealment */
+        Concealment: {
+            /** Object Track Id */
+            object_track_id: number;
+            /** Object Class */
+            object_class: string;
+            /** Last Seen Frame */
+            last_seen_frame: number;
+            /** Missing Frames */
+            missing_frames: number;
+            /** Person Track Id */
+            person_track_id: number;
+            /** Wrist Index */
+            wrist_index: number;
+            /** Wrist X */
+            wrist_x: number;
+            /** Wrist Y */
+            wrist_y: number;
+            /** Grab Distance */
+            grab_distance: number;
+        };
+        /**
+         * Decision
+         * @enum {string}
+         */
+        Decision: "DECISION_UNSPECIFIED" | "DECISION_CONFIRMED" | "DECISION_DISMISSED" | "DECISION_UNSURE";
+        /** DecisionUpdate */
+        DecisionUpdate: {
+            decision: components["schemas"]["Decision"];
+        };
         /** DetectionCreate */
         DetectionCreate: {
             /** Session Id */
@@ -402,7 +526,7 @@ export interface components {
             confidence: number;
             bbox: components["schemas"]["Bbox"];
             /** Keypoints */
-            keypoints?: components["schemas"]["Keypoint-Output"][] | null;
+            keypoints?: components["schemas"]["app__schemas__common__Keypoint"][] | null;
             /** Track Id */
             track_id: number;
             /** Detection Present */
@@ -428,17 +552,6 @@ export interface components {
             roles: string[];
             /** Permissions */
             permissions: components["schemas"]["Permission"][];
-        };
-        /** Keypoint */
-        "Keypoint-Output": {
-            /** Name */
-            name?: string | null;
-            /** X */
-            x: number;
-            /** Y */
-            y: number;
-            /** Confidence */
-            confidence: number;
         };
         /** Object */
         Object: {
@@ -871,6 +984,66 @@ export interface operations {
             };
         };
     };
+    get_alert_api_v1_alerts__alert_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_alert_snapshot_api_v1_alerts__alert_id__snapshot_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     acknowledge_alert_api_v1_alerts__alert_id__acknowledge_patch: {
         parameters: {
             query?: never;
@@ -902,7 +1075,7 @@ export interface operations {
             };
         };
     };
-    delete_alert_api_v1_alerts__alert_id__delete: {
+    decide_alert_api_v1_alerts__alert_id__decision_patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -911,14 +1084,20 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionUpdate"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AlertDetail"];
+                };
             };
             /** @description Validation Error */
             422: {

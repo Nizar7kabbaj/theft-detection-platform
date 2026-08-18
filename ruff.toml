@@ -69,4 +69,5 @@ extend-immutable-calls = [
     "fastapi.Form",
     "fastapi.Security",
     "app.core.ws_authz.require_ws_permission",
+    "app.core.authz.require_permission",
 ]

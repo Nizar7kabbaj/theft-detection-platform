@@ -1,8 +1,12 @@
 "use client"
+
 import { type InfiniteData, useMutation, useQueryClient } from "@tanstack/react-query"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { type AlertFilters, alertKeys } from "@/features/alerts/api/alert-keys"
 import { acknowledgeAlert } from "@/features/alerts/api/alerts-client"
+import type { Route } from "next"
 import type { Alert, AlertPage } from "@/features/alerts/schemas/alert"
 
 const CELL_CLASS = "px-3 py-2 align-middle"
@@ -45,7 +49,9 @@ export function AlertRow({
   canAcknowledge: boolean
 }) {
   const queryClient = useQueryClient()
+  const router = useRouter()
   const key = alertKeys.list(filters)
+  const href = `/alerts/${alert._id}` as Route
 
   const mutation = useMutation({
     mutationFn: () => acknowledgeAlert(alert._id),
@@ -65,10 +71,27 @@ export function AlertRow({
     },
   })
 
+  const openDetail = () => {
+    const selection = window.getSelection()
+    if (selection !== null && selection.toString().length > 0) {
+      return
+    }
+    router.push(href)
+  }
+
   return (
-    <tr className="border-border border-b last:border-b-0">
+    <tr
+      className="cursor-pointer border-border border-b last:border-b-0 hover:bg-muted/40"
+      onClick={openDetail}
+    >
       <td className={`${CELL_CLASS} whitespace-nowrap tabular-nums text-muted-foreground`}>
-        {formatTime(alert.created_at)}
+        <Link
+          className="underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          href={href}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {formatTime(alert.created_at)}
+        </Link>
       </td>
       <td className={CELL_CLASS}>{alert.camera_id}</td>
       <td className={`${CELL_CLASS} ${SEVERITY_CLASS[alert.severity]}`}>
@@ -80,7 +103,8 @@ export function AlertRow({
           ? "—"
           : alert.confidence.toFixed(2)}
       </td>
-      <td className={CELL_CLASS}>
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the time cell carries a real link for keyboard users */}
+      <td className={CELL_CLASS} onClick={(event) => event.stopPropagation()}>
         {alert.acknowledged ? (
           <span className="text-muted-foreground">acknowledged</span>
         ) : canAcknowledge ? (

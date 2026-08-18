@@ -1,9 +1,12 @@
 import { type AlertFilters, alertListPath } from "@/features/alerts/api/alert-keys"
 import {
   type Alert,
+  type AlertDetail,
   type AlertPage,
+  alertDetailSchema,
   alertPageSchema,
   alertResponseSchema,
+  type Decision,
 } from "@/features/alerts/schemas/alert"
 import { apiRequest } from "@/lib/api/client"
 import "client-only"
@@ -25,4 +28,20 @@ export function acknowledgeAlert(id: string): Promise<Alert> {
     method: "PATCH",
     schema: alertResponseSchema,
   })
+}
+
+export function decideAlert(id: string, decision: Decision): Promise<AlertDetail> {
+  return apiRequest(`/api/v1/alerts/${encodeURIComponent(id)}/decision`, {
+    method: "PATCH",
+    body: { decision },
+    schema: alertDetailSchema,
+  })
+}
+
+export function fetchAlertDetailClient(id: string, signal?: AbortSignal): Promise<AlertDetail> {
+  const path = `/api/v1/alerts/${encodeURIComponent(id)}`
+  if (signal === undefined) {
+    return apiRequest(path, { schema: alertDetailSchema })
+  }
+  return apiRequest(path, { schema: alertDetailSchema, signal })
 }

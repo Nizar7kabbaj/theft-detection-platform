@@ -16,6 +16,7 @@ from app.repositories.audit_outbox_repository import AuditOutboxRepository
 logger = logging.getLogger(__name__)
 
 _SCHEMA_VERSION = 1
+
 _ROLE_BY_NAME = {
     "admin": common_pb2.ROLE_ADMIN,
     "operator": common_pb2.ROLE_OPERATOR,
@@ -85,6 +86,15 @@ def authorization_denied(
     return _freeze(event, occurred_at)
 
 
+def alert_acknowledged(alert_id: str, actor_user_id: str) -> PreparedEvent:
+    occurred_at = datetime.now(UTC)
+    event = _new_event(actor_user_id, common_pb2.SEVERITY_INFO, occurred_at)
+    acknowledged = event.alert_acknowledged
+    acknowledged.alert_id = alert_id
+    acknowledged.actor_user_id = actor_user_id
+    return _freeze(event, occurred_at)
+
+
 def events_shed(dropped: int) -> PreparedEvent:
     occurred_at = datetime.now(UTC)
     event = _new_event("", common_pb2.SEVERITY_ERROR, occurred_at)
@@ -116,6 +126,17 @@ class AuditClient:
             method=method,
             path=path,
             roles=roles,
+        )
+        await self._enqueue(prepared)
+
+    async def emit_alert_acknowledged(
+        self,
+        alert_id: str,
+        actor_user_id: str,
+    ) -> None:
+        prepared = alert_acknowledged(
+            alert_id=alert_id,
+            actor_user_id=actor_user_id,
         )
         await self._enqueue(prepared)
 
