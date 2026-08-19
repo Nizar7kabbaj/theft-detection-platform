@@ -7,6 +7,7 @@ from app.services.camera_health import HealthState
 
 
 class CameraCreate(BaseModel):
+    camera_id: str
     name: str
     location: str
     stream_url: str | None = None
@@ -21,6 +22,7 @@ class CameraHealthView(BaseModel):
 
 class CameraResponse(MongoModel):
     id: str = Field(alias="_id")
+    camera_id: str
     name: str
     location: str
     stream_url: str | None = None

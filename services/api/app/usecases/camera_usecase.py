@@ -25,7 +25,7 @@ class CameraUseCase:
         self._stream = stream
 
     async def _with_health(self, camera: CameraResponse) -> CameraResponse:
-        health = await read_health(self._stream, camera.id)
+        health = await read_health(self._stream, camera.camera_id)
         last_frame_at = (
             datetime.fromtimestamp(health.last_frame_at, tz=UTC)
             if health.last_frame_at is not None

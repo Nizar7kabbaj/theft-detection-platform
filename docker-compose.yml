@@ -182,7 +182,7 @@ services:
       OTEL_SERVICE_NAME: "theft-camera"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-camera"
       PROMETHEUS_EXPORTER_PORT: "9464"
-      CAMERA_ID: "cam-01"
+      CAMERA_ID: "cam-a"
       DEVICE_PATH: "/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_3521BF9F-video-index0"
       FRAME_WIDTH: "1920"
       FRAME_HEIGHT: "1080"

@@ -20,9 +20,9 @@ _CHANNEL = "cameras:health"
 
 async def _camera_ids(db: AsyncIOMotorDatabase) -> list[str]:
     ids: list[str] = []
-    cursor = db.cameras.find({}, {"_id": 1})
+    cursor = db.cameras.find({}, {"camera_id": 1})
     async for doc in cursor:
-        ids.append(str(doc["_id"]))
+        ids.append(str(doc["camera_id"]))
     return ids
 
 

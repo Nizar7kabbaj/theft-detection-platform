@@ -411,6 +411,8 @@ export interface components {
         };
         /** CameraCreate */
         CameraCreate: {
+            /** Camera Id */
+            camera_id: string;
             /** Name */
             name: string;
             /** Location */
@@ -423,10 +425,21 @@ export interface components {
              */
             status: string;
         };
+        /** CameraHealthView */
+        CameraHealthView: {
+            /** @default unknown */
+            state: components["schemas"]["HealthState"];
+            /** Last Frame At */
+            last_frame_at?: string | null;
+            /** Age Seconds */
+            age_seconds?: number | null;
+        };
         /** CameraResponse */
         CameraResponse: {
             /** Id */
             _id: string;
+            /** Camera Id */
+            camera_id: string;
             /** Name */
             name: string;
             /** Location */
@@ -435,6 +448,7 @@ export interface components {
             stream_url?: string | null;
             /** Status */
             status: string;
+            health?: components["schemas"]["CameraHealthView"];
             /**
              * Created At
              * Format: date-time
@@ -542,6 +556,11 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * HealthState
+         * @enum {string}
+         */
+        HealthState: "online" | "degraded" | "offline" | "unknown";
         /** IdentityResponse */
         IdentityResponse: {
             /** User Id */

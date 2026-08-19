@@ -37,8 +37,9 @@ def _derive_state(age_seconds: float | None) -> HealthState:
     return HealthState.OFFLINE
 
 
-def _frame_age(entry_id: str, now: float) -> float | None:
-    ms_part, _, _ = entry_id.partition("-")
+def _frame_age(entry_id: str | bytes, now: float) -> float | None:
+    raw = entry_id.decode("ascii", "ignore") if isinstance(entry_id, bytes) else entry_id
+    ms_part, _, _ = raw.partition("-")
     try:
         entry_ms = int(ms_part)
     except ValueError:

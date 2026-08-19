@@ -108,7 +108,7 @@ async def open_stream_redis() -> Redis:
     client = from_url(
         _stream_redis_url(),
         encoding="utf-8",
-        decode_responses=True,
+        decode_responses=False,
         health_check_interval=30,
         socket_keepalive=True,
         **_tls_options(),
