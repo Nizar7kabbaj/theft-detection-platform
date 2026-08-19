@@ -82,6 +82,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["features/cameras/components/live-view.tsx"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noImgElement": "off"
+          }
+        }
+      }
     }
   ]
 }
