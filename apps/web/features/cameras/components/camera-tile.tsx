@@ -1,4 +1,6 @@
 "use client"
+import type { Route } from "next"
+import Link from "next/link"
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { type Camera, cameraHealth, type HealthState } from "@/features/cameras/schemas/camera"
@@ -67,16 +69,23 @@ export function CameraTile({ camera }: { camera: Camera }) {
   const state = health.state
   const label = `${camera.name}, ${camera.location}, ${HEALTH_LABEL[state]}`
   const age = useFrameAge(health.last_frame_at)
+  const href = `/cameras/${encodeURIComponent(camera.camera_id)}` as Route
 
   return (
     <Card
       aria-label={label}
-      className="gap-3 transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring hover:ring-foreground/20"
-      tabIndex={0}
+      className="relative gap-3 transition-shadow focus-within:ring-2 focus-within:ring-ring hover:ring-foreground/20"
     >
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="truncate text-pretty">{camera.name}</CardTitle>
+          <CardTitle className="min-w-0 text-pretty">
+            <Link
+              className="block truncate rounded-sm outline-none after:absolute after:inset-0 after:content-[''] focus-visible:underline"
+              href={href}
+            >
+              {camera.name}
+            </Link>
+          </CardTitle>
           <span className={`flex shrink-0 items-center gap-1.5 text-xs ${HEALTH_TEXT[state]}`}>
             <span
               aria-hidden="true"

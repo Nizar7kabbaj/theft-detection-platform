@@ -30,6 +30,7 @@ from app.observability import setup_observability
 from app.services.audit_drain import run_drain
 from app.services.broadcast_service import BroadcastService
 from app.services.camera_reconcile import run_reconcile
+from app.services.frame_stream import ViewerLimit
 from app.services.revocation_service import RevocationService
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ async def lifespan(app: FastAPI):
     )
     await app.state.broadcaster.start()
     app.state.stream_redis = await open_stream_redis()
+    app.state.frame_viewers = ViewerLimit(settings.FRAME_STREAM_MAX_VIEWERS)
     app.state.reconcile_stop = asyncio.Event()
     app.state.reconcile_task = asyncio.create_task(
         run_reconcile(
