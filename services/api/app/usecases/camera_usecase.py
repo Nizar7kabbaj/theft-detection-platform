@@ -9,7 +9,8 @@ from redis.asyncio import Redis
 from app.core.cache import get_or_set, invalidate
 from app.core.errors import ConflictError, NotFoundError
 from app.repositories.camera_repository import CameraRepository
-from app.schemas.camera import CameraCreate, CameraResponse
+from app.schemas.camera import CameraCreate, CameraHealthView, CameraResponse
+from app.services.camera_health import read_health
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +19,24 @@ class CameraUseCase:
     LIST_KEY = "cache:cameras:list"
     TTL = 300
 
-    def __init__(self, repo: CameraRepository, redis: Redis) -> None:
+    def __init__(self, repo: CameraRepository, redis: Redis, stream: Redis) -> None:
         self._repo = repo
         self._redis = redis
+        self._stream = stream
+
+    async def _with_health(self, camera: CameraResponse) -> CameraResponse:
+        health = await read_health(self._stream, camera.id)
+        last_frame_at = (
+            datetime.fromtimestamp(health.last_frame_at, tz=UTC)
+            if health.last_frame_at is not None
+            else None
+        )
+        view = CameraHealthView(
+            state=health.state,
+            last_frame_at=last_frame_at,
+            age_seconds=health.age_seconds,
+        )
+        return camera.model_copy(update={"health": view})
 
     @staticmethod
     def _item_key(camera_id: str) -> str:
@@ -51,7 +67,8 @@ class CameraUseCase:
             return [CameraResponse.model_validate(d).model_dump(mode="json") for d in docs]
 
         cached = await get_or_set(self._redis, self.LIST_KEY, self.TTL, loader)
-        return [CameraResponse.model_validate(item) for item in cached]
+        cameras = [CameraResponse.model_validate(item) for item in cached]
+        return [await self._with_health(c) for c in cameras]
 
     async def get(self, camera_id: str) -> CameraResponse:
         async def loader() -> dict:
@@ -61,7 +78,7 @@ class CameraUseCase:
             return CameraResponse.model_validate(doc).model_dump(mode="json")
 
         cached = await get_or_set(self._redis, self._item_key(camera_id), self.TTL, loader)
-        return CameraResponse.model_validate(cached)
+        return await self._with_health(CameraResponse.model_validate(cached))
 
     async def delete(self, camera_id: str) -> None:
         doc = await self._repo.get(camera_id)

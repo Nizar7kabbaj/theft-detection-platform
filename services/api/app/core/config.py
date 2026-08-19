@@ -18,6 +18,15 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     REDIS_USER: str = "api"
     REDIS_PASSWORD_FILE: Path = Path("/run/secrets/api_redis_password")
+    STREAM_REDIS_HOST: str = "theft-redis-stream"
+    STREAM_REDIS_PORT: int = 6380
+    STREAM_REDIS_DB: int = 2
+    STREAM_REDIS_USER: str = "api-health"
+    STREAM_REDIS_PASSWORD_FILE: Path = Path("/run/secrets/stream_reader_redis_password")
+    STREAM_FRAME_PREFIX: str = "frame"
+    HEALTH_ONLINE_MAX_AGE_SECONDS: float = 5.0
+    HEALTH_DEGRADED_MAX_AGE_SECONDS: float = 15.0
+    HEALTH_RECONCILE_INTERVAL_SECONDS: float = 3.0
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
     DEBUG: bool = True

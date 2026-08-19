@@ -21,6 +21,10 @@ def get_db() -> AsyncIOMotorDatabase:
     return get_database()
 
 
+def get_stream_redis(request: Request) -> Redis:
+    return request.app.state.stream_redis
+
+
 def get_camera_repo(
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> CameraRepository:
@@ -62,8 +66,9 @@ def get_alert_client(request: Request) -> AlertClient:
 def get_camera_usecase(
     repo: CameraRepository = Depends(get_camera_repo),
     redis: Redis = Depends(get_redis),
+    stream: Redis = Depends(get_stream_redis),
 ) -> CameraUseCase:
-    return CameraUseCase(repo, redis)
+    return CameraUseCase(repo, redis, stream)
 
 
 def get_alert_usecase(
