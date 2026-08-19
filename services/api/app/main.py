@@ -21,7 +21,7 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.rate_limit import RateLimitedError, rate_limit
-from app.core.redis import close_redis, open_pubsub_redis, open_redis
+from app.core.redis import close_redis, open_pubsub_redis, open_redis, open_stream_redis
 from app.grpc_gen.alert_pb2_grpc import AlertServiceStub
 from app.grpc_gen.audit_pb2_grpc import AuditServiceStub
 from app.grpc_gen.auth_pb2_grpc import AuthServiceStub
@@ -29,6 +29,7 @@ from app.grpc_gen.inference_pb2_grpc import InferenceServiceStub
 from app.observability import setup_observability
 from app.services.audit_drain import run_drain
 from app.services.broadcast_service import BroadcastService
+from app.services.camera_reconcile import run_reconcile
 from app.services.revocation_service import RevocationService
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ _GRPC_CHANNEL_OPTIONS = [
 async def _create_indexes() -> None:
     db = get_database()
     await db.cameras.create_index("name", unique=True)
+    await db.cameras.create_index("camera_id", unique=True)
     await db.detections.create_index([("session_id", 1), ("occurred_at", -1)])
     await db.alerts.create_index([("acknowledged", 1), ("created_at", -1)])
     logger.info("startup indexes ready")
@@ -60,6 +62,16 @@ async def lifespan(app: FastAPI):
         heartbeat_seconds=settings.WS_HEARTBEAT_SECONDS,
     )
     await app.state.broadcaster.start()
+    app.state.stream_redis = await open_stream_redis()
+    app.state.reconcile_stop = asyncio.Event()
+    app.state.reconcile_task = asyncio.create_task(
+        run_reconcile(
+            get_database(),
+            app.state.stream_redis,
+            app.state.redis,
+            app.state.reconcile_stop,
+        )
+    )
     app.state.revocation_redis = await open_pubsub_redis()
     app.state.revocations = RevocationService(app.state.revocation_redis)
     await app.state.revocations.start()
@@ -68,7 +80,6 @@ async def lifespan(app: FastAPI):
         private_key=settings.TLS_KEY_FILE.read_bytes(),
         certificate_chain=settings.TLS_CERT_FILE.read_bytes(),
     )
-
     app.state.inference_channel = grpc.aio.secure_channel(
         settings.INFERENCE_TARGET,
         credentials,
@@ -103,6 +114,8 @@ async def lifespan(app: FastAPI):
     )
     logger.info("backend ready")
     yield
+    app.state.reconcile_stop.set()
+    await app.state.reconcile_task
     app.state.audit_drain_stop.set()
     await app.state.audit_drain_task
     await app.state.audit_channel.close(grace=2)
@@ -112,6 +125,7 @@ async def lifespan(app: FastAPI):
     await app.state.broadcaster.stop()
     await app.state.revocations.stop()
     await close_redis(app.state.revocation_redis)
+    await close_redis(app.state.stream_redis)
     await close_redis(app.state.redis)
     await close_mongodb_connection()
     logger.info("backend stopped")

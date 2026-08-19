@@ -26,6 +26,22 @@ def _load_redis_password() -> str:
     return password
 
 
+@lru_cache(maxsize=1)
+def _load_stream_password() -> str:
+    path = settings.STREAM_REDIS_PASSWORD_FILE
+    try:
+        password = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        logger.error("stream redis password file missing at %s", path)
+        return ""
+    except OSError as exc:
+        logger.error("stream redis password file unreadable at %s: %s", path, exc)
+        return ""
+    if not password:
+        logger.error("stream redis password file empty at %s", path)
+    return password
+
+
 def _resolve_redis_url() -> str:
     mode = (settings.REDIS_MODE or "local").lower()
     if mode == "cloud":
@@ -78,9 +94,37 @@ async def open_pubsub_redis() -> Redis:
     return client
 
 
+def _stream_redis_url() -> str:
+    scheme = "rediss" if settings.REDIS_TLS else "redis"
+    user = quote_plus(settings.STREAM_REDIS_USER)
+    password = quote_plus(_load_stream_password())
+    return (
+        f"{scheme}://{user}:{password}@"
+        f"{settings.STREAM_REDIS_HOST}:{settings.STREAM_REDIS_PORT}/{settings.STREAM_REDIS_DB}"
+    )
+
+
+async def open_stream_redis() -> Redis:
+    client = from_url(
+        _stream_redis_url(),
+        encoding="utf-8",
+        decode_responses=False,
+        health_check_interval=30,
+        socket_keepalive=True,
+        **_tls_options(),
+    )
+    await client.ping()
+    logger.info("stream redis connection ready")
+    return client
+
+
 async def close_redis(client: Redis) -> None:
     await client.aclose()
     logger.info("redis connection closed")
+
+
+def get_stream_redis(request: Request) -> Redis:
+    return request.app.state.stream_redis
 
 
 def get_redis(request: Request) -> Redis:

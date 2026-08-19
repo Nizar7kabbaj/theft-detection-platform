@@ -56,6 +56,7 @@ services:
       - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
       - ./config/mongodb/secrets/mongo_api_password:/run/secrets/mongo_password:ro
       - ./config/redis/api_redis_password:/run/secrets/api_redis_password:ro
+      - ./config/redis/stream_reader_redis_password:/run/secrets/stream_reader_redis_password:ro
       - ./config/pki/api/tls.crt:/run/secrets/api_tls_cert:ro
       - ./config/pki/api/tls.key:/run/secrets/api_tls_key:ro
       - ./config/pki/ca/ca.crt:/run/secrets/api_tls_ca:ro
@@ -181,7 +182,7 @@ services:
       OTEL_SERVICE_NAME: "theft-camera"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-camera"
       PROMETHEUS_EXPORTER_PORT: "9464"
-      CAMERA_ID: "cam-01"
+      CAMERA_ID: "cam-a"
       DEVICE_PATH: "/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_3521BF9F-video-index0"
       FRAME_WIDTH: "1920"
       FRAME_HEIGHT: "1080"

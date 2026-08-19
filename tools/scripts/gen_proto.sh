@@ -25,7 +25,7 @@ resolve_protos() {
     backend)              echo "common.proto inference.proto alert.proto audit.proto auth.proto" ;;
     ai-service)           echo "common.proto inference.proto alert.proto presence.proto" ;;
     notification-service) echo "common.proto alert.proto" ;;
-    camera-service)       echo "common.proto inference.proto" ;;
+    camera-service)       echo "common.proto inference.proto alert.proto" ;;
     detect-gate-service)  echo "common.proto presence.proto" ;;
     auth-service)         echo "common.proto audit.proto auth.proto" ;;
     audit-service)        echo "common.proto audit.proto" ;;

@@ -8,6 +8,7 @@ user ai on #<password> ~ai:track:* resetchannels -@all +@connection +xadd +xrang
 user camera on #<password> ~frame:* resetchannels -@all +@connection +xadd +client +ping
 user gate on #<password> ~frame:* resetchannels -@all +@connection +xread +xlen +client +ping
 user exporter on #CHANGEME resetchannels ~* -@all +@connection +info +client +ping +latency +slowlog
+user api-health on #<sha256-hex> ~frame:* resetchannels -@all +@connection +xrevrange +xlen +client +ping
 
 appendonly no
 save ""

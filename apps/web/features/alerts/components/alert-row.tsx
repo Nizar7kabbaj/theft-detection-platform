@@ -1,12 +1,12 @@
 "use client"
 
 import { type InfiniteData, useMutation, useQueryClient } from "@tanstack/react-query"
+import type { Route } from "next"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { type AlertFilters, alertKeys } from "@/features/alerts/api/alert-keys"
 import { acknowledgeAlert } from "@/features/alerts/api/alerts-client"
-import type { Route } from "next"
 import type { Alert, AlertPage } from "@/features/alerts/schemas/alert"
 
 const CELL_CLASS = "px-3 py-2 align-middle"
