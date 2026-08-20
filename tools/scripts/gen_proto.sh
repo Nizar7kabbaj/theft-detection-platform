@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 GRPCIO_TOOLS_VERSION="1.71.2"
+
 usage() {
   cat >&2 <<'EOF'
 usage: tools/scripts/gen_proto.sh <target>
@@ -8,6 +10,7 @@ usage: tools/scripts/gen_proto.sh <target>
 generates python grpc stubs from proto/ into the matching service grpc_gen path
 EOF
 }
+
 resolve_outdir() {
   case "$1" in
     backend)              echo "services/api/app/grpc_gen" ;;
@@ -20,24 +23,65 @@ resolve_outdir() {
     *)                    return 1 ;;
   esac
 }
-resolve_protos() {
+
+resolve_entry_protos() {
   case "$1" in
-    backend)              echo "common.proto inference.proto alert.proto audit.proto auth.proto" ;;
-    ai-service)           echo "common.proto inference.proto alert.proto presence.proto" ;;
-    notification-service) echo "common.proto alert.proto" ;;
-    camera-service)       echo "common.proto inference.proto alert.proto" ;;
+    backend)              echo "inference.proto alert.proto audit.proto auth.proto" ;;
+    ai-service)           echo "inference.proto alert.proto presence.proto" ;;
+    notification-service) echo "alert.proto" ;;
+    camera-service)       echo "inference.proto alert.proto" ;;
     detect-gate-service)  echo "common.proto presence.proto" ;;
-    auth-service)         echo "common.proto audit.proto auth.proto" ;;
-    audit-service)        echo "common.proto audit.proto" ;;
+    auth-service)         echo "audit.proto auth.proto" ;;
+    audit-service)        echo "audit.proto" ;;
     *)                    return 1 ;;
   esac
 }
+
+proto_imports() {
+  local proto_dir="$1"
+  local file="$2"
+  grep -oE '^import "[^"]+"' "${proto_dir}/${file}" \
+    | sed -E 's/^import "([^"]+)"$/\1/' \
+    | grep -v '^google/protobuf/' \
+    || true
+}
+
+resolve_closure() {
+  local proto_dir="$1"
+  shift
+  local queue=("$@")
+  local seen=""
+  local current
+  local dep
+  while [[ ${#queue[@]} -gt 0 ]]; do
+    current="${queue[0]}"
+    queue=("${queue[@]:1}")
+    case " ${seen} " in
+      *" ${current} "*) continue ;;
+    esac
+    if [[ ! -f "${proto_dir}/${current}" ]]; then
+      echo "proto not found: ${current}" >&2
+      return 1
+    fi
+    seen="${seen} ${current}"
+    for dep in $(proto_imports "${proto_dir}" "${current}"); do
+      queue+=("${dep}")
+    done
+  done
+  echo "${seen}" | tr ' ' '\n' | grep -v '^$' | sort -u
+}
+
 generate() {
   local target="$1"
   local repo_root="$2"
   local outdir protos out_host
+  local -a entries
   outdir="$(resolve_outdir "${target}")"
-  protos="$(resolve_protos "${target}")"
+  read -r -a entries <<<"$(resolve_entry_protos "${target}")"
+  protos="$(resolve_closure "${repo_root}/proto" "${entries[@]}")" || {
+    echo "cannot resolve proto dependencies for ${target}" >&2
+    return 1
+  }
   out_host="${repo_root}/${outdir}"
   mkdir -p "${out_host}" || {
     echo "cannot create ${out_host}" >&2
@@ -47,6 +91,10 @@ generate() {
   local p
   for p in ${protos}; do
     proto_args="${proto_args} /proto/${p}"
+  done
+  echo "resolved protos for ${target}:" >&2
+  for p in ${protos}; do
+    echo "  ${p}" >&2
   done
   docker run --rm \
     --user "$(id -u):$(id -g)" \
@@ -73,6 +121,7 @@ generate() {
   echo "generated in ${outdir}:"
   ls -1 "${out_host}"
 }
+
 main() {
   if [[ $# -ne 1 ]]; then
     usage
@@ -98,6 +147,7 @@ main() {
   }
   generate "$1" "${repo_root}"
 }
+
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   main "$@"
   exit 0

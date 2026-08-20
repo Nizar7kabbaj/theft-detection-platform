@@ -28,6 +28,11 @@ class Decision(str, Enum):
     DECISION_UNSURE = "DECISION_UNSURE"
 
 
+class AlertSort(str, Enum):
+    CREATED_AT = "created_at"
+    DECIDED_AT = "decided_at"
+
+
 class Bbox(BaseModel):
     x1: float
     y1: float
@@ -100,6 +105,9 @@ class AlertResponse(MongoModel):
     alert_type: AlertType | None = None
     acknowledged: bool = False
     acknowledged_at: datetime | None = None
+    decision: Decision = Decision.DECISION_UNSPECIFIED
+    decided_at: datetime | None = None
+    decided_by: str | None = None
 
 
 class AlertDetail(MongoModel):

@@ -5,6 +5,9 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 
 from app.repositories.base import BaseRepository
 
+SORT_CREATED = "created_at"
+SORT_DECIDED = "decided_at"
+
 
 class AlertRepository(BaseRepository[dict[str, Any]]):
     def __init__(self, collection: AsyncIOMotorCollection) -> None:
@@ -14,22 +17,38 @@ class AlertRepository(BaseRepository[dict[str, Any]]):
         self,
         severity: str | None = None,
         acknowledged: bool | None = None,
+        decision: str | None = None,
+        camera_id: str | None = None,
+        sort: str = SORT_CREATED,
         limit: int = 51,
         after: tuple[datetime, str] | None = None,
     ) -> list[dict[str, Any]]:
+        field = SORT_DECIDED if sort == SORT_DECIDED else SORT_CREATED
         query: dict[str, Any] = {}
         if severity:
             query["severity"] = severity
         if acknowledged is not None:
             query["acknowledged"] = acknowledged
+        if decision:
+            query["decision"] = decision
+        if camera_id:
+            query["camera_id"] = camera_id
+        if field == SORT_DECIDED:
+            query[SORT_DECIDED] = {"$type": "date"}
         if after is not None:
-            created_at, id_ = after
-            query["$or"] = [
-                {"created_at": {"$lt": created_at}},
-                {"created_at": created_at, "_id": {"$lt": self._oid(id_)}},
+            boundary, id_ = after
+            page_clause = [
+                {field: {"$lt": boundary}},
+                {field: boundary, "_id": {"$lt": self._oid(id_)}},
             ]
-        cursor = self._col.find(query).sort([("created_at", -1), ("_id", -1)]).limit(limit)
+            existing = query.pop("$and", [])
+            query["$and"] = [*existing, {"$or": page_clause}]
+        cursor = self._col.find(query).sort([(field, -1), ("_id", -1)]).limit(limit)
         return await cursor.to_list(length=limit)
+
+    async def distinct_cameras(self) -> list[str]:
+        values = await self._col.distinct("camera_id")
+        return sorted(v for v in values if isinstance(v, str) and v)
 
     async def acknowledge(self, id_: str) -> tuple[dict[str, Any] | None, bool]:
         result = await self._col.update_one(

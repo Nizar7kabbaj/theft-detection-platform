@@ -28,10 +28,6 @@ class AuditOutboxRepository:
         self._col = database.get_collection(_COLLECTION, write_concern=durable)
         self._dead = database.get_collection(_DEAD_COLLECTION, write_concern=durable)
 
-    async def ensure_indexes(self) -> None:
-        await self._col.create_index([("next_attempt_at", ASCENDING)])
-        await self._col.create_index([("event_id", ASCENDING)], unique=True)
-
     async def enqueue(self, event_id: str, event_bytes: bytes, occurred_at: datetime) -> None:
         now = datetime.now(UTC)
         await self._col.insert_one(

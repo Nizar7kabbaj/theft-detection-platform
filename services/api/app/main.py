@@ -42,20 +42,10 @@ _GRPC_CHANNEL_OPTIONS = [
 ]
 
 
-async def _create_indexes() -> None:
-    db = get_database()
-    await db.cameras.create_index("name", unique=True)
-    await db.cameras.create_index("camera_id", unique=True)
-    await db.detections.create_index([("session_id", 1), ("occurred_at", -1)])
-    await db.alerts.create_index([("acknowledged", 1), ("created_at", -1)])
-    logger.info("startup indexes ready")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("backend starting")
     await connect_to_mongodb()
-    await _create_indexes()
     app.state.redis = await open_redis()
     app.state.broadcaster = BroadcastService(
         redis=app.state.redis,

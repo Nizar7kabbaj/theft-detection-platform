@@ -103,7 +103,6 @@ async def run_drain(
     database: AsyncIOMotorDatabase, stub: AuditServiceStub, stop_event: asyncio.Event
 ) -> None:
     outbox = AuditOutboxRepository(database)
-    await outbox.ensure_indexes()
     logger.info("audit drain started")
     while not stop_event.is_set():
         try:
