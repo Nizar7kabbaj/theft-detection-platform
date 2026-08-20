@@ -6,12 +6,11 @@ import json
 import logging
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pymongo.errors import PyMongoError
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from app.core.config import settings
-from app.services.camera_health import HealthState, read_health
+from app.services.camera_health import HealthState, read_health_many
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +59,8 @@ async def run_reconcile(
     while not stop.is_set():
         try:
             camera_ids = await _camera_ids(db)
-            seen: set[str] = set()
-            for camera_id in camera_ids:
-                seen.add(camera_id)
-                health = await read_health(stream, camera_id)
+            healths = await read_health_many(stream, camera_ids)
+            for camera_id, health in healths.items():
                 if last_state.get(camera_id) != health.state:
                     last_state[camera_id] = health.state
                     await _publish_transition(
@@ -73,10 +70,10 @@ async def run_reconcile(
                         health.last_frame_at,
                         health.age_seconds,
                     )
-            for gone in set(last_state) - seen:
+            for gone in set(last_state) - set(healths):
                 del last_state[gone]
-        except PyMongoError as exc:
-            logger.error("reconcile tick failed: %s", exc)
+        except Exception:
+            logger.exception("reconcile tick failed")
 
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(stop.wait(), timeout=interval)

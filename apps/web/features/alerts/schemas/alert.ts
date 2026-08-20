@@ -50,6 +50,9 @@ export const alertResponseSchema = z.object({
   alert_type: z.nullish(alertType),
   acknowledged: z.boolean(),
   acknowledged_at: z.nullish(z.iso.datetime({ offset: true })),
+  decision: decisionSchema,
+  decided_at: z.nullish(z.iso.datetime({ offset: true })),
+  decided_by: z.nullish(z.string().check(z.maxLength(128))),
 })
 
 export type Alert = z.output<typeof alertResponseSchema>

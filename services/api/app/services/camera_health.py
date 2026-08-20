@@ -67,3 +67,35 @@ async def read_health(stream: Redis, camera_id: str) -> CameraHealth:
 
     last_frame_at = now - age
     return CameraHealth(_derive_state(age), last_frame_at, age)
+
+
+async def read_health_many(stream: Redis, camera_ids: list[str]) -> dict[str, CameraHealth]:
+    if not camera_ids:
+        return {}
+    pipe = stream.pipeline(transaction=False)
+    for camera_id in camera_ids:
+        pipe.xrevrange(f"{settings.STREAM_FRAME_PREFIX}:{camera_id}", count=1)
+    try:
+        replies = await pipe.execute(raise_on_error=False)
+    except RedisError as exc:
+        logger.warning("stream batch read failed count=%d: %s", len(camera_ids), exc)
+        unknown = CameraHealth(HealthState.UNKNOWN, None, None)
+        return dict.fromkeys(camera_ids, unknown)
+    now = time.time()
+    health: dict[str, CameraHealth] = {}
+    for camera_id, reply in zip(camera_ids, replies, strict=True):
+        health[camera_id] = _health_from_reply(camera_id, reply, now)
+    return health
+
+
+def _health_from_reply(camera_id: str, reply: object, now: float) -> CameraHealth:
+    if isinstance(reply, Exception):
+        logger.warning("stream read failed camera=%s: %s", camera_id, reply)
+        return CameraHealth(HealthState.UNKNOWN, None, None)
+    if not isinstance(reply, list) or not reply:
+        return CameraHealth(HealthState.OFFLINE, None, None)
+    entry_id, _fields = reply[0]
+    age = _frame_age(entry_id, now)
+    if age is None:
+        return CameraHealth(HealthState.UNKNOWN, None, None)
+    return CameraHealth(_derive_state(age), now - age, age)

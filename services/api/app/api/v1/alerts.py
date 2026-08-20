@@ -9,6 +9,8 @@ from app.schemas.alert import (
     AlertDetail,
     AlertPage,
     AlertResponse,
+    AlertSort,
+    Decision,
     DecisionUpdate,
     Severity,
 )
@@ -44,6 +46,9 @@ async def create_alert(
 async def list_alerts(
     severity: Severity | None = Query(default=None),
     acknowledged: bool | None = Query(default=None),
+    decision: Decision | None = Query(default=None),
+    camera_id: str | None = Query(default=None, max_length=64),
+    sort: AlertSort = Query(default=AlertSort.CREATED_AT),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None, max_length=256),
     usecase: AlertUseCase = Depends(get_alert_usecase),
@@ -51,9 +56,32 @@ async def list_alerts(
     return await usecase.list(
         severity=severity,
         acknowledged=acknowledged,
+        decision=decision,
+        camera_id=camera_id,
+        sort=sort,
         limit=limit,
         cursor=cursor,
     )
+    return await usecase.list(
+        severity=severity,
+        acknowledged=acknowledged,
+        decision=decision,
+        camera_id=camera_id,
+        sort=sort,
+        limit=limit,
+        cursor=cursor,
+    )
+
+
+@router.get(
+    "/cameras",
+    response_model=list[str],
+    dependencies=[Depends(require_permission(Permission.ALERT_READ))],
+)
+async def list_alert_cameras(
+    usecase: AlertUseCase = Depends(get_alert_usecase),
+) -> list[str]:
+    return await usecase.camera_facet()
 
 
 @router.get(

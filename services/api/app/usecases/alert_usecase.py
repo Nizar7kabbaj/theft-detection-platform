@@ -10,15 +10,16 @@ from typing import Any
 import anyio.to_thread
 from redis.asyncio import Redis
 
-from app.core.cache import get_or_set, invalidate_prefix, make_list_key
+from app.core.cache import get_or_set, invalidate, invalidate_prefix, make_list_key
 from app.core.config import settings
 from app.core.errors import AlertUnavailableError, NotFoundError, ValidationError
-from app.repositories.alert_repository import AlertRepository
+from app.repositories.alert_repository import SORT_CREATED, SORT_DECIDED, AlertRepository
 from app.schemas.alert import (
     AlertCreate,
     AlertDetail,
     AlertPage,
     AlertResponse,
+    AlertSort,
     AlertType,
     Decision,
     Severity,
@@ -28,6 +29,8 @@ from app.services.audit_service import AuditClient
 
 logger = logging.getLogger(__name__)
 
+_CURSOR_SEGMENTS = 3
+
 
 def _readable_alert_type(alert_type: str | None) -> str:
     if alert_type is None:
@@ -35,20 +38,25 @@ def _readable_alert_type(alert_type: str | None) -> str:
     return alert_type.replace("ALERT_TYPE_", "").lower().replace("_", " ")
 
 
-def encode_cursor(created_at: datetime, id_: str) -> str:
-    raw = f"{created_at.astimezone(UTC).isoformat()}|{id_}"
+def encode_cursor(sort: str, boundary: datetime, id_: str) -> str:
+    raw = f"{sort}|{boundary.astimezone(UTC).isoformat()}|{id_}"
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
 
 
-def decode_cursor(cursor: str) -> tuple[datetime, str]:
+def decode_cursor(cursor: str, sort: str) -> tuple[datetime, str]:
     padded = cursor + "=" * (-len(cursor) % 4)
     try:
         raw = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
     except (binascii.Error, UnicodeDecodeError, ValueError) as exc:
         raise ValidationError("malformed cursor") from exc
-    timestamp, separator, id_ = raw.partition("|")
-    if not separator or not id_:
+    parts = raw.split("|")
+    if len(parts) != _CURSOR_SEGMENTS:
         raise ValidationError("malformed cursor")
+    origin, timestamp, id_ = parts
+    if not id_ or not timestamp:
+        raise ValidationError("malformed cursor")
+    if origin != sort:
+        raise ValidationError("cursor does not match the requested order")
     try:
         parsed = datetime.fromisoformat(timestamp)
     except ValueError as exc:
@@ -97,6 +105,9 @@ def _to_response(doc: dict[str, Any]) -> AlertResponse:
             "alert_type": alert_type,
             "acknowledged": bool(doc.get("acknowledged", False)),
             "acknowledged_at": doc.get("acknowledged_at"),
+            "decision": doc.get("decision") or Decision.DECISION_UNSPECIFIED.value,
+            "decided_at": doc.get("decided_at"),
+            "decided_by": doc.get("decided_by"),
         }
     )
 
@@ -132,7 +143,9 @@ def _to_detail(doc: dict[str, Any]) -> AlertDetail:
 
 class AlertUseCase:
     LIST_PREFIX = "cache:alerts:list:"
+    CAMERA_FACET_KEY = "cache:alerts:cameras"
     TTL = 30
+    FACET_TTL = 300
 
     def __init__(
         self,
@@ -165,6 +178,7 @@ class AlertUseCase:
         except AlertUnavailableError as exc:
             logger.warning("alert delivery unavailable for %s: %s", payload.alert_id, exc)
         await invalidate_prefix(self._redis, self.LIST_PREFIX)
+        await invalidate(self._redis, self.CAMERA_FACET_KEY)
         response = _to_response(created)
         await self._publish("created", response)
         return response
@@ -173,13 +187,20 @@ class AlertUseCase:
         self,
         severity: Severity | None = None,
         acknowledged: bool | None = None,
+        decision: Decision | None = None,
+        camera_id: str | None = None,
+        sort: AlertSort = AlertSort.CREATED_AT,
         limit: int = 50,
         cursor: str | None = None,
     ) -> AlertPage:
-        after = decode_cursor(cursor) if cursor else None
+        order = SORT_DECIDED if sort is AlertSort.DECIDED_AT else SORT_CREATED
+        after = decode_cursor(cursor, order) if cursor else None
         params = {
             "severity": severity.value if severity else None,
             "acknowledged": acknowledged,
+            "decision": decision.value if decision else None,
+            "camera_id": camera_id,
+            "sort": order,
             "limit": limit,
             "cursor": cursor,
         }
@@ -189,6 +210,9 @@ class AlertUseCase:
             docs = await self._repo.list_page(
                 severity=severity.value if severity else None,
                 acknowledged=acknowledged,
+                decision=decision.value if decision else None,
+                camera_id=camera_id,
+                sort=order,
                 limit=limit + 1,
                 after=after,
             )
@@ -198,11 +222,20 @@ class AlertUseCase:
             next_cursor = None
             if has_more and page:
                 last = page[-1]
-                next_cursor = encode_cursor(last["created_at"], str(last["_id"]))
+                boundary = last.get(order)
+                if boundary is not None:
+                    next_cursor = encode_cursor(order, boundary, str(last["_id"]))
             return {"items": items, "next_cursor": next_cursor}
 
         cached = await get_or_set(self._redis, key, self.TTL, loader)
         return AlertPage.model_validate(cached)
+
+    async def camera_facet(self) -> list[str]:
+        async def loader() -> list[str]:
+            return await self._repo.distinct_cameras()
+
+        cached = await get_or_set(self._redis, self.CAMERA_FACET_KEY, self.FACET_TTL, loader)
+        return [str(value) for value in cached]
 
     async def get(self, alert_id: str) -> AlertDetail:
         doc = await self._repo.get(alert_id)

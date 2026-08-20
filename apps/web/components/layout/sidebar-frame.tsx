@@ -9,6 +9,7 @@ import { SidebarSearch } from "@/components/layout/sidebar-search"
 import { SidebarToggle } from "@/components/layout/sidebar-toggle"
 import { SystemStatus } from "@/components/layout/system-status"
 import { UserBlock } from "@/components/layout/user-block"
+import { writeCookie } from "@/lib/cookies/write"
 import { SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_COOKIE_NAME } from "@/lib/layout/sidebar-cookie"
 import type { NavSection } from "@/lib/navigation/links"
 import { useCommandKey } from "@/lib/navigation/use-command-key"
@@ -39,7 +40,7 @@ export function SidebarFrame({
   const onToggle = useCallback(() => {
     setCollapsed((current) => {
       const next = !current
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${next ? "1" : "0"}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}; samesite=lax; secure`
+      writeCookie(SIDEBAR_COOKIE_NAME, next ? "1" : "0", SIDEBAR_COOKIE_MAX_AGE)
       return next
     })
   }, [])

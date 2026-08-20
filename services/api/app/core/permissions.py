@@ -50,6 +50,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
         {
             Permission.ALERT_READ,
             Permission.DETECTION_READ,
+            Permission.STATS_READ,
             Permission.AUDIT_QUERY,
             Permission.SETTINGS_READ,
         }
