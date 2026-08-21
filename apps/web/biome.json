@@ -82,6 +82,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["features/floorplan/components/store-scene.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noStaticElementInteractions": "off"
+          }
+        }
+      }
     }
   ]
 }
