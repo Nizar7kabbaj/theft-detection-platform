@@ -15,9 +15,7 @@ from app.services.frame_stream import ViewerLimit, run_frame_pump
 from app.services.revocation_service import RevocationService
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter()
-
 _POLICY = 1008
 
 
@@ -99,20 +97,7 @@ async def _camera_exists(camera_id: str) -> bool:
     return doc is not None
 
 
-@router.websocket("/ws/cameras/{camera_id}/frames")
-async def camera_frames_stream(
-    ws: WebSocket,
-    camera_id: str,
-    user: CurrentUser = Depends(require_ws_permission(Permission.CAMERA_READ)),
-) -> None:
-    if not await _camera_exists(camera_id):
-        await ws.close(code=1008, reason="unknown camera")
-        return
-    viewers = _get_frame_viewers(ws)
-    if not viewers.acquire():
-        await ws.close(code=1008, reason="viewer limit reached")
-        logger.warning("frame viewer rejected camera=%s cap reached", camera_id)
-        return
+async def _stream_frames(ws: WebSocket, camera_id: str, user: CurrentUser) -> None:
     await ws.accept()
     revocations = _get_revocations(ws)
     revoked = revocations.register(user.session_id)
@@ -138,4 +123,23 @@ async def camera_frames_stream(
         for task in tasks:
             task.cancel()
         revocations.unregister(user.session_id, revoked)
+
+
+@router.websocket("/ws/cameras/{camera_id}/frames")
+async def camera_frames_stream(
+    ws: WebSocket,
+    camera_id: str,
+    user: CurrentUser = Depends(require_ws_permission(Permission.CAMERA_READ)),
+) -> None:
+    if not await _camera_exists(camera_id):
+        await ws.close(code=1008, reason="unknown camera")
+        return
+    viewers = _get_frame_viewers(ws)
+    if not viewers.acquire():
+        await ws.close(code=1008, reason="viewer limit reached")
+        logger.warning("frame viewer rejected camera=%s cap reached", camera_id)
+        return
+    try:
+        await _stream_frames(ws, camera_id, user)
+    finally:
         viewers.release()

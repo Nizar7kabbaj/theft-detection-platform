@@ -1,0 +1,59 @@
+:root {
+  --plan-floor: oklch(0.37 0.008 250);
+  --plan-floor-line: oklch(0.43 0.009 250);
+  --plan-apron: oklch(0.84 0.006 250);
+  --plan-wall: oklch(0.89 0.09 85);
+  --plan-wall-cap: oklch(0.82 0.1 85);
+  --plan-partition: oklch(0.89 0.09 85);
+  --plan-partition-cap: oklch(0.82 0.1 85);
+  --plan-storefront: oklch(0.88 0.035 190);
+  --plan-storefront-frame: oklch(0.96 0.004 220);
+  --plan-frame: oklch(0.95 0.004 250);
+  --plan-deck: oklch(0.9 0.005 250);
+  --plan-goods: oklch(0.7 0.16 45);
+  --plan-produce: oklch(0.66 0.16 145);
+  --plan-produce-rim: oklch(0.57 0.14 145);
+  --plan-counter-body: oklch(0.6 0.2 27);
+  --plan-counter-top: oklch(0.7 0.01 250);
+  --plan-cooler-body: oklch(0.95 0.004 230);
+  --plan-glass: oklch(0.87 0.04 225);
+  --plan-cooler-frame: oklch(0.83 0.008 240);
+  --plan-sign: oklch(0.98 0.002 250);
+  --plan-sign-post: oklch(0.78 0.008 250);
+  --plan-crate: oklch(0.66 0.02 245);
+  --plan-crate-lid: oklch(0.6 0.022 245);
+  --plan-edge: oklch(0.28 0.01 250);
+  --plan-label: oklch(0.93 0.005 250);
+  --plan-zone: oklch(0.85 0 0);
+  --plan-zone-active: oklch(0.75 0.16 62);
+}
+
+.dark {
+  --plan-floor: oklch(0.28 0.008 250);
+  --plan-floor-line: oklch(0.33 0.009 250);
+  --plan-apron: oklch(0.24 0.005 250);
+  --plan-wall: oklch(0.74 0.085 85);
+  --plan-wall-cap: oklch(0.66 0.095 85);
+  --plan-partition: oklch(0.74 0.085 85);
+  --plan-partition-cap: oklch(0.66 0.095 85);
+  --plan-storefront: oklch(0.66 0.04 190);
+  --plan-storefront-frame: oklch(0.8 0.005 220);
+  --plan-frame: oklch(0.82 0.005 250);
+  --plan-deck: oklch(0.74 0.006 250);
+  --plan-goods: oklch(0.63 0.15 45);
+  --plan-produce: oklch(0.58 0.15 145);
+  --plan-produce-rim: oklch(0.49 0.13 145);
+  --plan-counter-body: oklch(0.53 0.18 27);
+  --plan-counter-top: oklch(0.58 0.012 250);
+  --plan-cooler-body: oklch(0.82 0.005 230);
+  --plan-glass: oklch(0.7 0.045 225);
+  --plan-cooler-frame: oklch(0.68 0.01 240);
+  --plan-sign: oklch(0.88 0.003 250);
+  --plan-sign-post: oklch(0.64 0.01 250);
+  --plan-crate: oklch(0.55 0.022 245);
+  --plan-crate-lid: oklch(0.49 0.024 245);
+  --plan-edge: oklch(0.2 0.01 250);
+  --plan-label: oklch(0.9 0.005 250);
+  --plan-zone: oklch(0.85 0 0);
+  --plan-zone-active: oklch(0.76 0.16 62);
+}

@@ -9,6 +9,7 @@ import { fetchStats } from "@/features/analytics/api/stats-server"
 import { fetchStatsTimeseries } from "@/features/analytics/api/timeseries-server"
 import { AlertVolumeChartLazy } from "@/features/analytics/components/analytics-charts-lazy"
 import { StatsSummary } from "@/features/analytics/components/stats-summary"
+import { FloorConsoleLazy } from "@/features/floorplan/components/floor-console-lazy"
 
 export const metadata: Metadata = { title: "Dashboard" }
 export const dynamic = "force-dynamic"
@@ -42,28 +43,41 @@ async function HourlyAlertPanel() {
 export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-5">
-      <Card>
-        <CardHeader>
-          <CardTitle>today</CardTitle>
-          <CardDescription>read on the server, hydrated into the client cache</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Suspense fallback={<div className="h-16 w-full animate-pulse rounded bg-muted" />}>
-            <StatsPanel />
-          </Suspense>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>alerts today by hour</CardTitle>
-          <CardDescription>buckets are UTC, so a day edge sits at 01:00 local</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Suspense fallback={<div className={SKELETON_CLASS} />}>
-            <HourlyAlertPanel />
-          </Suspense>
-        </CardContent>
-      </Card>
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle>floor</CardTitle>
+            <CardDescription>camera positions across the store</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FloorConsoleLazy />
+          </CardContent>
+        </Card>
+        <div className="flex min-w-0 flex-col gap-5">
+          <Card>
+            <CardHeader>
+              <CardTitle>today</CardTitle>
+              <CardDescription>read on the server, hydrated into the client cache</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Suspense fallback={<div className="h-16 w-full animate-pulse rounded bg-muted" />}>
+                <StatsPanel />
+              </Suspense>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>alerts today by hour</CardTitle>
+              <CardDescription>buckets are UTC, so a day edge sits at 01:00 local</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Suspense fallback={<div className={SKELETON_CLASS} />}>
+                <HourlyAlertPanel />
+              </Suspense>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>alert stream</CardTitle>
