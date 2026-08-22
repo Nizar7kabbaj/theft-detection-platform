@@ -21,8 +21,9 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_LINK_MODE=copy \
     UV_HTTP_TIMEOUT=300 \
     UV_CONCURRENT_DOWNLOADS=8
-COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 
 FROM base AS weights
@@ -34,9 +35,12 @@ ARG GRPC_HEALTH_PROBE_VERSION
 ADD --chmod=0755 https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 /usr/local/bin/grpc_health_probe
 
 FROM base AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        libglib2.0-0
 ENV PATH=/opt/venv/bin:$PATH
 COPY --from=builder --chown=ai:ai /opt/venv /opt/venv
 COPY --from=weights --chown=ai:ai /app/yolov8n-pose.pt /app/yolov8n-pose.pt
