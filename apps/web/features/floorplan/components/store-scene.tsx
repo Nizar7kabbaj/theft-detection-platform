@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   BufferAttribute,
   BufferGeometry,
-  CanvasTexture,
   Color,
   LineBasicMaterial,
   MeshStandardMaterial,
@@ -14,37 +13,29 @@ import {
 } from "three"
 import type { HealthState } from "@/features/cameras/schemas/camera"
 import { type CameraPlacement, PLACEMENTS } from "@/features/floorplan/lib/coverage"
-import {
-  buildSolid,
-  disposeSolid,
-  type PartKind,
-  type SolidParts,
-} from "@/features/floorplan/lib/fixture-geometry"
+import type { PartKind } from "@/features/floorplan/lib/fixture-geometry"
 import { cssRgb, type Palette, type Rgb } from "@/features/floorplan/lib/palette"
-import { SOLIDS, STORE_DEPTH, STORE_WIDTH, ZONE_RECTS } from "@/features/floorplan/lib/store-model"
-import { ZONE_LABEL, type ZoneId } from "@/features/floorplan/lib/zones"
+import {
+  cachedLabels,
+  cachedSolids,
+  LABEL_HEIGHT,
+  type LabelEntry,
+  peekLabels,
+  tintsFrom,
+} from "@/features/floorplan/lib/scene-cache"
+import { STORE_DEPTH, STORE_WIDTH, ZONE_RECTS } from "@/features/floorplan/lib/store-model"
+import type { ZoneId } from "@/features/floorplan/lib/zones"
 
 const HALF_WIDTH = STORE_WIDTH / 2
 const HALF_DEPTH = STORE_DEPTH / 2
 const CONE_SEGMENTS = 20
 const FIT_SPAN_X = 78
 const FIT_SPAN_Y = 58
-const LABEL_HEIGHT = 2.1
-const LABEL_PIXELS = 72
 const TILE = 4
-
 const skipRaycast: Object3D["raycast"] = () => undefined
-
-type LabelEntry = {
-  id: ZoneId
-  texture: CanvasTexture
-  width: number
-}
-
 function toColor(rgb: Rgb): Color {
   return new Color().setRGB(rgb[0], rgb[1], rgb[2], SRGBColorSpace)
 }
-
 function healthColor(palette: Palette, state: HealthState): Color {
   if (state === "online") {
     return toColor(palette.online)
@@ -57,7 +48,6 @@ function healthColor(palette: Palette, state: HealthState): Color {
   }
   return toColor(palette.unknown)
 }
-
 function tileGrid(): BufferGeometry {
   const points: number[] = []
   for (let x = TILE; x < STORE_WIDTH; x += TILE) {
@@ -70,37 +60,6 @@ function tileGrid(): BufferGeometry {
   geometry.setAttribute("position", new BufferAttribute(new Float32Array(points), 3))
   return geometry
 }
-
-function labelTexture(
-  text: string,
-  fill: string,
-): { texture: CanvasTexture; aspect: number } | null {
-  const canvas = document.createElement("canvas")
-  const measure = canvas.getContext("2d")
-  if (measure === null) {
-    return null
-  }
-  const font = `600 ${LABEL_PIXELS}px Inter, system-ui, sans-serif`
-  measure.font = font
-  const width = Math.ceil(measure.measureText(text).width) + LABEL_PIXELS
-  const height = Math.ceil(LABEL_PIXELS * 1.7)
-  canvas.width = width
-  canvas.height = height
-  const paint = canvas.getContext("2d")
-  if (paint === null) {
-    return null
-  }
-  paint.font = font
-  paint.fillStyle = fill
-  paint.textAlign = "center"
-  paint.textBaseline = "middle"
-  paint.fillText(text, width / 2, height / 2)
-  const texture = new CanvasTexture(canvas)
-  texture.colorSpace = SRGBColorSpace
-  texture.anisotropy = 8
-  return { texture, aspect: width / height }
-}
-
 function wedgePositions(placement: CameraPlacement): Float32Array {
   const half = (placement.fov * Math.PI) / 360
   const yaw = (placement.yaw * Math.PI) / 180
@@ -111,7 +70,6 @@ function wedgePositions(placement: CameraPlacement): Float32Array {
   }
   return new Float32Array(points)
 }
-
 function wedgeIndex(): Uint16Array {
   const indices: number[] = []
   for (let step = 1; step <= CONE_SEGMENTS; step += 1) {
@@ -119,7 +77,6 @@ function wedgeIndex(): Uint16Array {
   }
   return new Uint16Array(indices)
 }
-
 function FitCamera() {
   const camera = useThree((state) => state.camera)
   const size = useThree((state) => state.size)
@@ -132,7 +89,6 @@ function FitCamera() {
   }, [camera, size, invalidate])
   return null
 }
-
 function Lighting() {
   return (
     <>
@@ -143,7 +99,6 @@ function Lighting() {
     </>
   )
 }
-
 function ViewCone({
   placement,
   palette,
@@ -191,7 +146,6 @@ function ViewCone({
     </group>
   )
 }
-
 function CameraMarker({
   placement,
   palette,
@@ -230,40 +184,29 @@ function CameraMarker({
     </group>
   )
 }
-
 function ZoneLabels({ palette }: { palette: Palette }) {
   const invalidate = useThree((state) => state.invalidate)
-  const [labels, setLabels] = useState<readonly LabelEntry[]>([])
+  const fill = useMemo(() => cssRgb(palette.label), [palette])
+  const [labels, setLabels] = useState<readonly LabelEntry[]>(() => peekLabels(fill) ?? [])
   useEffect(() => {
-    let cancelled = false
-    const built: LabelEntry[] = []
-    const dispose = (): void => {
-      for (const entry of built) {
-        entry.texture.dispose()
-      }
+    const ready = peekLabels(fill)
+    if (ready !== null) {
+      setLabels(ready)
+      invalidate()
+      return
     }
-    const draw = (): void => {
-      const fill = cssRgb(palette.label)
-      for (const rect of ZONE_RECTS) {
-        const made = labelTexture(ZONE_LABEL[rect.id], fill)
-        if (made === null) {
-          continue
-        }
-        built.push({ id: rect.id, texture: made.texture, width: LABEL_HEIGHT * made.aspect })
-      }
+    let cancelled = false
+    void document.fonts.ready.then(() => {
       if (cancelled) {
-        dispose()
         return
       }
-      setLabels(built)
+      setLabels(cachedLabels(fill))
       invalidate()
-    }
-    void document.fonts.ready.then(draw)
+    })
     return () => {
       cancelled = true
-      dispose()
     }
-  }, [palette, invalidate])
+  }, [fill, invalidate])
   return (
     <group>
       {labels.map((entry) => {
@@ -293,7 +236,6 @@ function ZoneLabels({ palette }: { palette: Palette }) {
     </group>
   )
 }
-
 function Zones({
   palette,
   hovered,
@@ -344,12 +286,11 @@ function Zones({
     </group>
   )
 }
-
 function Store({ palette }: { palette: Palette }) {
-  const built = useMemo<readonly { solid: (typeof SOLIDS)[number]; parts: SolidParts }[]>(() => {
-    const tints = { goods: toColor(palette.goods), produce: toColor(palette.produce) }
-    return SOLIDS.map((solid) => ({ solid, parts: buildSolid(solid, tints) }))
-  }, [palette])
+  const built = useMemo(
+    () => cachedSolids(tintsFrom(toColor(palette.goods), toColor(palette.produce))),
+    [palette],
+  )
   const grid = useMemo(() => tileGrid(), [])
   const gridMaterial = useMemo(
     () =>
@@ -390,9 +331,6 @@ function Store({ palette }: { palette: Palette }) {
   }, [palette])
   useEffect(() => {
     return () => {
-      for (const entry of built) {
-        disposeSolid(entry.parts)
-      }
       grid.dispose()
       gridMaterial.dispose()
       lineMaterial.dispose()
@@ -400,7 +338,7 @@ function Store({ palette }: { palette: Palette }) {
         material.dispose()
       }
     }
-  }, [built, grid, gridMaterial, lineMaterial, materials])
+  }, [grid, gridMaterial, lineMaterial, materials])
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0]} raycast={skipRaycast}>
@@ -446,7 +384,6 @@ function Store({ palette }: { palette: Palette }) {
     </group>
   )
 }
-
 export function StoreScene({
   palette,
   health,
@@ -461,7 +398,6 @@ export function StoreScene({
   const container = useRef<HTMLDivElement>(null)
   const [awake, setAwake] = useState(true)
   const [hovered, setHovered] = useState<ZoneId | null>(null)
-
   useEffect(() => {
     const node = container.current
     if (node === null) {
@@ -485,12 +421,10 @@ export function StoreScene({
       document.removeEventListener("visibilitychange", sync)
     }
   }, [])
-
   const activeZone = useMemo(() => {
     const match = PLACEMENTS.find((placement) => placement.cameraId === selected)
     return match === undefined ? null : match.zone
   }, [selected])
-
   const selectZone = useCallback(
     (zone: ZoneId) => {
       const match = PLACEMENTS.find((placement) => placement.zone === zone)
@@ -500,7 +434,6 @@ export function StoreScene({
     },
     [onSelect],
   )
-
   return (
     <div ref={container} className="aspect-[16/10] w-full">
       <Canvas
