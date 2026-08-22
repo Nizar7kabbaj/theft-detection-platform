@@ -75,7 +75,7 @@ export default async function CameraDetailPage({ params }: { params: Promise<{ i
           </Card>
           <AbsentPanel
             title="tracking map"
-            reason="no floor plan or track history is stored for this site"
+            reason="track history is not stored, so there is nothing to draw on the plan"
           />
           <AbsentPanel
             title="detections"

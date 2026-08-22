@@ -1,5 +1,6 @@
 "use client"
-import { useCallback, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { LiveView } from "@/features/cameras/components/live-view"
 import { useCameraGrid } from "@/features/cameras/hooks/use-camera-grid"
 import { HEALTH_DETAIL, HEALTH_DOT, HEALTH_TEXT } from "@/features/cameras/lib/health"
@@ -10,6 +11,33 @@ import { usePlanPalette } from "@/features/floorplan/lib/palette"
 import { ZONE_LABEL } from "@/features/floorplan/lib/zones"
 
 const SURFACE_CLASS = "aspect-[16/10] w-full animate-pulse rounded-lg bg-muted"
+const CAMERA_PARAM = "camera"
+const CAMERA_STORAGE_KEY = "floorplan.camera"
+const PLACED_IDS: ReadonlySet<string> = new Set(PLACEMENTS.map((placement) => placement.cameraId))
+
+function placed(cameraId: string | null): string | null {
+  return cameraId !== null && PLACED_IDS.has(cameraId) ? cameraId : null
+}
+
+function readStored(): string | null {
+  try {
+    return window.sessionStorage.getItem(CAMERA_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function writeStored(cameraId: string | null): void {
+  try {
+    if (cameraId === null) {
+      window.sessionStorage.removeItem(CAMERA_STORAGE_KEY)
+      return
+    }
+    window.sessionStorage.setItem(CAMERA_STORAGE_KEY, cameraId)
+  } catch {
+    return
+  }
+}
 
 function stateOf(camera: Camera | undefined): HealthState {
   return camera === undefined ? "unknown" : cameraHealth(camera).state
@@ -18,7 +46,27 @@ function stateOf(camera: Camera | undefined): HealthState {
 export function FloorConsole() {
   const { cameras, isPending, isError } = useCameraGrid()
   const palette = usePlanPalette()
-  const [selected, setSelected] = useState<string | null>(null)
+  const params = useSearchParams()
+  const fromUrl = params.get(CAMERA_PARAM)
+
+  const [selected, setSelected] = useState<string | null>(
+    () => placed(fromUrl) ?? placed(readStored()),
+  )
+
+  useEffect(() => {
+    writeStored(selected)
+    const search = new URLSearchParams(window.location.search)
+    if (selected === null) {
+      search.delete(CAMERA_PARAM)
+    } else {
+      search.set(CAMERA_PARAM, selected)
+    }
+    const query = search.toString()
+    const target = query === "" ? window.location.pathname : `${window.location.pathname}?${query}`
+    if (target !== `${window.location.pathname}${window.location.search}`) {
+      window.history.replaceState(null, "", target)
+    }
+  }, [selected])
 
   const byId = useMemo(() => {
     const map = new Map<string, Camera>()
