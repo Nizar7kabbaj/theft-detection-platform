@@ -1,91 +1,70 @@
 @startuml
-title admin config — login and adding a camera
+title adding a camera
+skinparam shadowing false
+skinparam defaultFontName Helvetica
 skinparam activity {
-  BackgroundColor #dae8fc
-  BorderColor #6c8ebf
-  ArrowColor #333333
-  FontName Arial
-  DiamondBackgroundColor #fff2cc
-  DiamondBorderColor #d6b656
+  BackgroundColor #EEF1F5
+  BorderColor #44546A
+  ArrowColor #44546A
+  FontColor #1F2933
+  DiamondBackgroundColor #FFFFFF
+  DiamondBorderColor #8A94A6
 }
 skinparam swimlane {
-  BorderColor #999999
-  TitleBackgroundColor #f5f5f5
-  TitleFontSize 14
+  BorderColor #8A94A6
+  TitleBackgroundColor #FFFFFF
+  TitleFontSize 13
 }
-|#f5f5f5|admin|
+|operator|
 start
-:open admin panel; <<#d5e8d4>>
-:submit credentials;
-|#f5f5f5|frontend|
-:post credentials to backend /api/v1/auth/login;
+:open the camera page;
+:submit name and device path;
+|frontend|
+:post to /api/v1/cameras with session cookie;
+|backend|
+:resolve permissions from token roles;
+if (camera write granted?) then (no)
+  |backend|
+  :return 403;
+  kill
+endif
+|backend|
+if (idempotency key already used?) then (yes)
+  |backend|
+  :return the stored response;
+  kill
+endif
+|backend|
+:validate the request body;
+if (body valid?) then (no)
+  |backend|
+  :return 422;
+  kill
+endif
+|mongodb|
+:insert the camera document;
+|backend|
+if (name already taken?) then (yes)
+  |backend|
+  :return 409;
+  kill
+endif
+|backend|
+:drop the cached camera list;
+:record the create in the audit outbox;
 note right
-  alt path: traefik routes /api/v1/auth/*
-  direct to auth-service, dropping the
-  backend proxy hop. flagged for lock.
+  audit events go to an outbox collection and
+  reach the audit service through a background
+  loop, so the response does not wait for them
 end note
-|#f5f5f5|backend|
-:proxy login request to auth-service over http;
-|#f5f5f5|auth-service|
-:verify password with argon2;
-if (credentials valid?) then (no)
-  |#f5f5f5|audit-service|
-  :append login_failure event;
-  |#f5f5f5|auth-service|
-  :return 401; <<#f8cecc>>
-  stop
-else (yes)
-endif
-:mint jwt and refresh token;
-:write session row to mongodb;
-|#f5f5f5|audit-service|
-:append login_success event;
-|#f5f5f5|auth-service|
-:return tokens to backend;
-|#f5f5f5|backend|
-:set httponly cookies on response;
-|#f5f5f5|frontend|
-:store cookies, render dashboard;
-|#f5f5f5|admin|
-:open camera config page;
-:submit new camera (cameracreate schema);
-|#f5f5f5|frontend|
-:post /api/v1/cameras with cookie;
-|#f5f5f5|backend|
-:call auth-service verifytoken;
-|#f5f5f5|auth-service|
-:verify jwt signature, expiry, roles;
-if (valid and admin role?) then (no)
-  :return 403; <<#f8cecc>>
-  stop
-else (yes)
-endif
-:return verification reply;
-|#f5f5f5|backend|
-:validate cameracreate payload schema;
-if (payload valid?) then (no)
-  :return 422; <<#f8cecc>>
-  stop
-else (yes)
-endif
-:write camera document to mongodb;
-:publish cameras:created to redis;
-|#f5f5f5|audit-service|
-:append admin_action event (camera created);
-note right
-  admin_action chosen for create.
-  config_changed reserved for
-  later field edits.
-end note
-|#f5f5f5|backend|
-:enqueue start_capture command on camera-service control stream;
-|#f5f5f5|camera-service|
-:receive cameracommand on existing bidi stream;
-:start capture loop at 15 fps on selected device;
-:send commandack back to backend;
-|#f5f5f5|backend|
-:return 201 to frontend;
-|#f5f5f5|frontend|
-:show camera as active in dashboard; <<#e1d5e7>>
+|redis|
+:publish cameras created;
+|backend|
+:store the response under the idempotency key;
+:return 201;
+|frontend|
+:refresh the camera list;
+|operator|
+:see the new camera;
 stop
 @enduml

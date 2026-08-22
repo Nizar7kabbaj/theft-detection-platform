@@ -24,6 +24,7 @@ build/
 .DS_Store
 Thumbs.db
 desktop.ini
+!docs/diagrams/*.png
 ml/data/raw/
 ml/data/processed/
 *.pkl
@@ -32,7 +33,6 @@ ml/data/processed/
 !ml/models/*.pt
 !ml/models/*.json
 *.jpg
-*.jpeg
 *.png
 *.mp4
 !ml/notebooks/*.png
@@ -109,3 +109,4 @@ config/pki/ca/*
 .coverage
 coverage.xml
 htmlcov/
+!docs/diagrams/*.png
