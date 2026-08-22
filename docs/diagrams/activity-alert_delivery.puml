@@ -1,0 +1,63 @@
+@startuml
+title alert delivery and response
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam activity {
+  BackgroundColor #EEF1F5
+  BorderColor #44546A
+  ArrowColor #44546A
+  FontColor #1F2933
+  DiamondBackgroundColor #FFFFFF
+  DiamondBorderColor #8A94A6
+}
+skinparam swimlane {
+  BorderColor #8A94A6
+  TitleBackgroundColor #FFFFFF
+  TitleFontSize 13
+}
+|notification-service|
+start
+:receive the stored alert;
+:validate the payload;
+if (payload valid?) then (no)
+  :report the failure\nback and stop;
+  kill
+endif
+:record a delivery intent;
+:queue the delivery task;
+fork
+|notification-worker|
+:take the task\nfrom the queue;
+if (gate raised?) then (yes)
+  :buffer until a probe\nclears the gate;
+  kill
+endif
+:send the snapshot\nwith a caption;
+if (telegram accepted?) then (no)
+  :retry with a growing delay,\nthen move to the\ndead letter store;
+  kill
+endif
+:mark the intent delivered;
+fork again
+|backend|
+:push the alert over\nthe open websockets;
+|frontend|
+:show the alert\non the dashboard;
+end fork
+|operator|
+:open the alert and\nreview the snapshot;
+:acknowledge the alert;
+|backend|
+:check the\nacknowledge permission;
+:mark the alert\nacknowledged in mongodb;
+if (already acknowledged?) then (yes)
+  :return the\nalert unchanged;
+  kill
+endif
+:drop the cached\nalert pages;
+:publish the acknowledgement;
+:record it in the\naudit outbox;
+|frontend|
+:update the alert in place;
+stop
+@enduml

@@ -1,139 +1,87 @@
 @startuml
 left to right direction
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam ArrowColor #44546A
+skinparam packageStyle rectangle
 skinparam usecase {
-  BackgroundColor #dae8fc
-  BorderColor #6c8ebf
-  ArrowColor #333333
-  FontName Arial
+  BackgroundColor #EEF1F5
+  BorderColor #44546A
+  FontColor #1F2933
 }
 skinparam actor {
-  FontName Arial
+  BackgroundColor #FFFFFF
+  BorderColor #44546A
 }
 skinparam rectangle {
-  BackgroundColor #FAFAFA
-  BorderColor #cccccc
+  BackgroundColor #FFFFFF
+  BorderColor #8A94A6
+  FontColor #1F2933
 }
-
-actor "Authenticated\nUser" as auth_user
+actor "Viewer" as viewer
 actor "Operator" as operator
 actor "Admin" as admin
-actor "ML Engineer" as ml_eng
-actor "Data Labeller" as labeller
-actor "Compliance\nOfficer" as compliance
-actor "Data Subject" as data_subj
-actor "Camera\n(USB device)" as camera #e1d5e7
-actor "Alertmanager" as am #e1d5e7
-actor "Telegram\nBot API" as tg #e1d5e7
-actor "Federated\nEdge Client" as fed #e1d5e7
-actor "System /\nScheduler" as system #e1d5e7
-
-operator --|> auth_user
-admin --|> auth_user
-ml_eng --|> auth_user
-compliance --|> auth_user
-
+actor "ML Engineer" as mleng
+actor "Compliance Officer" as compliance
+actor "Camera" as camera
+actor "Detection Service" as detector
+viewer <|-- operator
+operator <|-- admin
 rectangle "theft-detection-platform" {
-  usecase "Log In" as UC_LOGIN #dae8fc
-  usecase "Log Out" as UC_LOGOUT #dae8fc
-  usecase "Lock Account" as UC_LOCK #dae8fc
-  usecase "Revoke Session" as UC_REVOKE #fff2cc
-  usecase "Capture Video Stream" as UC_CAPTURE #dae8fc
-  usecase "Monitor Live Cameras" as UC_MONITOR #dae8fc
-  usecase "Receive Theft Alert" as UC_RECV #dae8fc
-  usecase "Acknowledge Alert" as UC_ACK #dae8fc
-  usecase "View Dashboard\nStatistics" as UC_STATS #dae8fc
-  usecase "Attach Snapshot" as UC_SNAP #dae8fc
-  usecase "Manage Cameras" as UC_MGCAM #fff2cc
-  usecase "Manage Users" as UC_MGUSR #fff2cc
-  usecase "Configure Detection\nSettings" as UC_CONFIG #fff2cc
-  usecase "Query Audit Log" as UC_QAUDIT #fff2cc
-  usecase "Verify Audit Chain\nIntegrity" as UC_VAUDIT #fff2cc
-  usecase "Request Data\nErasure" as UC_ERASE #fff2cc
-  usecase "Enforce Data\nRetention" as UC_RETAIN #fff2cc
-  usecase "Record Audit Event" as UC_AUDIT #fff2cc
-  usecase "Ingest Operational\nData" as UC_INGEST #dae8fc
-  usecase "Generate Weekly\nReport" as UC_REPORT #dae8fc
-  usecase "Review Model\nPerformance" as UC_MODEL #d5e8d4
-  usecase "Label Training Data" as UC_LABEL #d5e8d4
-  usecase "Detect Model\nDrift" as UC_DRIFT #d5e8d4
-  usecase "Trigger Model\nTraining" as UC_TRAIN #d5e8d4
-  usecase "Promote Model\nto Production" as UC_PROMOTE #d5e8d4
-  usecase "Participate in\nFederated Round" as UC_FED #d5e8d4
-  usecase "Deliver via\nTelegram" as UC_DELIVER #dae8fc
-  usecase "Forward Infrastructure\nAlert" as UC_INFRA #dae8fc
+  usecase "Log In" as UC_LOGIN
+  usecase "Log Out" as UC_LOGOUT
+  usecase "Lock Account" as UC_LOCK
+  usecase "View Live Camera Feed" as UC_FEED
+  usecase "Browse Alerts" as UC_ALERTS
+  usecase "Browse Detections" as UC_DETECTIONS
+  usecase "View Statistics" as UC_STATS
+  usecase "Acknowledge Alert" as UC_ACK
+  usecase "Decide on Alert" as UC_DECIDE
+  usecase "Run Analysis" as UC_ANALYZE
+  usecase "Manage Cameras" as UC_CAMERAS
+  usecase "Manage Users" as UC_USERS
+  usecase "Configure Detection Settings" as UC_SETTINGS
+  usecase "Query Audit Log" as UC_QUERY
+  usecase "Verify Audit Chain" as UC_VERIFY
+  usecase "Erase Subject Data" as UC_ERASE
+  usecase "Capture Video Stream" as UC_CAPTURE
+  usecase "Submit Detection Alert" as UC_SUBMIT
+  usecase "Deliver via Telegram" as UC_DELIVER
 }
-
-auth_user -- UC_LOGIN
-auth_user -- UC_LOGOUT
-UC_LOCK ..> UC_LOGIN : <<extend>>
-note left of UC_LOCK : failure count\n>= threshold
-
-camera -- UC_CAPTURE
-operator -- UC_MONITOR
-operator -- UC_RECV
+actor "Telegram Bot API" as telegram
+viewer -- UC_LOGIN
+viewer -- UC_LOGOUT
+viewer -- UC_FEED
+viewer -- UC_ALERTS
+viewer -- UC_DETECTIONS
+viewer -- UC_STATS
 operator -- UC_ACK
-operator -- UC_STATS
-UC_SNAP ..> UC_RECV : <<extend>>
-note right of UC_SNAP : snapshot\navailable
-
-admin -- UC_MGCAM
-admin -- UC_MGUSR
-admin -- UC_CONFIG
-admin -- UC_REVOKE
-
-compliance -- UC_QAUDIT
-compliance -- UC_VAUDIT
-data_subj -- UC_ERASE
-
-ml_eng -- UC_MODEL
-ml_eng -- UC_TRAIN
-ml_eng -- UC_PROMOTE
-labeller -- UC_LABEL
-
-system -- UC_CAPTURE
-system -- UC_INGEST
-system -- UC_REPORT
-system -- UC_RETAIN
-system -- UC_DRIFT
-system -- UC_TRAIN
-system -- UC_FED
-system -- UC_AUDIT
-fed -- UC_FED
-
-UC_RECV ..> UC_DELIVER : <<include>>
-UC_INFRA ..> UC_DELIVER : <<include>>
-UC_DRIFT ..> UC_TRAIN : <<extend>>
-note bottom of UC_DRIFT : KS-test beyond\nthreshold triggers retrain
-
-UC_LOGIN ..> UC_AUDIT : <<include>>
-UC_LOGOUT ..> UC_AUDIT : <<include>>
-UC_ACK ..> UC_AUDIT : <<include>>
-UC_MGCAM ..> UC_AUDIT : <<include>>
-UC_MGUSR ..> UC_AUDIT : <<include>>
-UC_CONFIG ..> UC_AUDIT : <<include>>
-UC_REVOKE ..> UC_AUDIT : <<include>>
-UC_PROMOTE ..> UC_AUDIT : <<include>>
-UC_ERASE ..> UC_AUDIT : <<include>>
-UC_DELIVER ..> UC_AUDIT : <<include>>
-
-am -- UC_INFRA
-UC_DELIVER -- tg
-
-note bottom of UC_AUDIT
-  also records system-generated events
-  (detection written, defense rejected,
-  service lifecycle)
+operator -- UC_DECIDE
+operator -- UC_ANALYZE
+operator -- UC_CAMERAS
+admin -- UC_USERS
+admin -- UC_SETTINGS
+mleng -- UC_DETECTIONS
+mleng -- UC_STATS
+compliance -- UC_QUERY
+compliance -- UC_VERIFY
+compliance -- UC_ERASE
+camera -- UC_CAPTURE
+detector -- UC_SUBMIT
+UC_DELIVER -- telegram
+UC_LOCK ..> UC_LOGIN : <<extend>>
+UC_CAPTURE ..> UC_SUBMIT : <<include>>
+UC_SUBMIT ..> UC_DELIVER : <<include>>
+note bottom of UC_ERASE
+  erasure and chain verification run from
+  the audit command line tool
 end note
-
-note bottom of UC_REPORT
-  handed to notification-service for delivery;
-  channel (telegram / email / push) open
+note bottom of UC_LOCK
+  login is blocked for 15 minutes after
+  repeated failed attempts
 end note
-
-note as N_DEF
-  adversarial-defense keypoint validation is an
-  internal inference-pipeline step (see component /
-  sequence views), not an actor-goal use case
+note bottom of UC_SUBMIT
+  access, alert decisions and administration
+  actions are appended to a hash-chained log
 end note
-
 @enduml

@@ -1,118 +1,61 @@
 @startuml
-title runtime detection flow — frame to alert to acknowledgement
+title from frame to stored alert
+skinparam shadowing false
+skinparam defaultFontName Helvetica
 skinparam activity {
-  BackgroundColor #dae8fc
-  BorderColor #6c8ebf
-  ArrowColor #333333
-  FontName Arial
-  DiamondBackgroundColor #fff2cc
-  DiamondBorderColor #d6b656
+  BackgroundColor #EEF1F5
+  BorderColor #44546A
+  ArrowColor #44546A
+  FontColor #1F2933
+  DiamondBackgroundColor #FFFFFF
+  DiamondBorderColor #8A94A6
 }
 skinparam swimlane {
-  BorderColor #999999
-  TitleBackgroundColor #f5f5f5
-  TitleFontSize 14
+  BorderColor #8A94A6
+  TitleBackgroundColor #FFFFFF
+  TitleFontSize 13
 }
-|#f5f5f5|camera-service|
+|camera-service|
 start
-:capture frame from v4l2 at 15 fps; <<#d5e8d4>>
-:forward frame to detect-gate-service;
-|#f5f5f5|detect-gate-service|
-:request yolov8n-detect inference;
-|#f5f5f5|model-serving-service|
-:run yolov8n forward pass;
+:capture a frame from the video device;
+:append the frame to the redis stream;
 note right
-  detect-model hosting unresolved. inventory lists
-  model-serving-service as a detect-gate dependency,
-  but the edge note says detect runs local. one gives.
+  the publisher keeps a bounded queue and drops
+  the oldest frames when redis falls behind
 end note
-|#f5f5f5|detect-gate-service|
-if (person present?) then (no)
-  stop
-else (yes)
+|detect-gate-service|
+:read the frame from the stream;
+:run person detection;
+if (person in view?) then (no)
+  |camera-service|
+  :hold the idle capture rate;
+  kill
 endif
-:emit person-entered on presence stream;
-|#f5f5f5|camera-service|
-:raise capture rate to 60 fps;
-note right
-  rate-change trigger not in
-  contract map. flagged for
-  post-sprint correction.
-end note
-|#f5f5f5|ai-service|
-:pull frame window from camera-service;
-note right
-  frame transport deferred to step 5
-  (event hub vs grpc stream vs shared fs).
-end note
-:request yolov8-pose inference;
-|#f5f5f5|model-serving-service|
-:run yolov8-pose forward pass;
-|#f5f5f5|ai-service|
-:send keypoints to adversarial-defense-service;
-|#f5f5f5|adversarial-defense-service|
-:validate keypoint geometry, anatomy, velocity;
-switch (verdict?)
-case (reject)
-  |#f5f5f5|audit-service|
-  :append defense_rejected event;
-  |#f5f5f5|ai-service|
-  :drop frame, heavy path ends; <<#f8cecc>>
-  stop
-case (degraded-accept)
-  :return accept with confidence penalty;
-case (accept)
-  :return accept;
-endswitch
-|#f5f5f5|ai-service|
-:update bytetrack tracker state;
-:request poseconv3d inference;
-|#f5f5f5|model-serving-service|
-:run poseconv3d forward pass;
-|#f5f5f5|ai-service|
-if (theft action classified?) then (no)
-  stop
-else (yes)
+|detect-gate-service|
+:send a presence event to the inference service;
+|camera-service|
+:raise the capture rate and hold it for the dwell window;
+|ai-service|
+:read the frame from the stream;
+:track people and objects, one identifier each;
+:score the pose window for anomalies;
+:check whether an object left the shelf near a person;
+if (anomaly or concealment?) then (no)
+  :keep the window open and wait for the next frame;
+  kill
 endif
-|#f5f5f5|privacy-service|
-:blur faces on snapshot before it leaves inference plane;
-|#f5f5f5|ai-service|
-:return detection to backend;
-|#f5f5f5|backend|
-:write detection to mongodb;
-|#f5f5f5|audit-service|
-:append detection_written event;
-|#f5f5f5|backend|
-:write alert to mongodb;
-:publish alerts:created to redis;
-:call notification-service sendalert;
-|#f5f5f5|notification-service|
-:insert notification to mongodb;
-:enqueue celery task on redis broker;
-|#f5f5f5|notification-worker|
-:pop task from redis;
-:read blurred snapshot from bind-mount;
-:send sendmessage or sendphoto to telegram;
-|#f5f5f5|audit-service|
-:append alert_dispatched event;
-|#f5f5f5|backend|
-:broadcastservice receives alerts:created via psubscribe;
-:fan out over websocket to subscribed clients;
-|#f5f5f5|frontend|
-:render alert on dashboard; <<#e1d5e7>>
-|#f5f5f5|operator|
-:review alert; <<#d5e8d4>>
-if (acknowledge?) then (yes)
-else (no)
-  stop
+:write the snapshot to disk;
+:post the alert to the api;
+|backend|
+:check the write permission and the idempotency key;
+|mongodb|
+:insert the alert document;
+|backend|
+:hand the alert to the notification service;
+if (notification reachable?) then (no)
+  :log the failure and keep the stored alert;
 endif
-:click acknowledge;
-|#f5f5f5|frontend|
-:patch /alerts/id/acknowledge;
-|#f5f5f5|backend|
-:mark alert acknowledged in mongodb;
-:publish alerts:acknowledged to redis;
-|#f5f5f5|audit-service|
-:append alert_acknowledged event;
+:drop the cached alert pages;
+:publish the created alert;
 stop
 @enduml
