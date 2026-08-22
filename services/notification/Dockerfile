@@ -17,8 +17,9 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON=/usr/local/bin/python3.11 \
     UV_PYTHON_DOWNLOADS=never \
     UV_LINK_MODE=copy
-COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev --extra server
 
 FROM base AS builder-worker
@@ -27,8 +28,9 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON=/usr/local/bin/python3.11 \
     UV_PYTHON_DOWNLOADS=never \
     UV_LINK_MODE=copy
-COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev --extra worker
 
 FROM base AS probe
