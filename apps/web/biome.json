@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!.next", "!node_modules", "!next-env.d.ts", "!types/api.d.ts"]
+    "includes": ["**", "!.next", "!node_modules", "!next-env.d.ts", "!types/api.d.ts", "!public"]
   },
   "formatter": {
     "enabled": true,
@@ -74,7 +74,10 @@
       }
     },
     {
-      "includes": ["features/cameras/components/live-view.tsx"],
+      "includes": [
+        "features/cameras/components/live-view.tsx",
+        "components/layout/sidebar-frame.tsx"
+      ],
       "linter": {
         "rules": {
           "performance": {
