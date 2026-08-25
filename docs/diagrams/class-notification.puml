@@ -1,0 +1,88 @@
+@startuml
+title notification delivery store
+
+hide circle
+hide empty members
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam class {
+  BackgroundColor White
+  BorderColor Black
+  ArrowColor Black
+  FontColor Black
+}
+
+class DeliveryIntent {
+  +id : ObjectId {id}
+  +source : DeliverySource
+  +source_ref : String
+  +channel : Channel
+  +recipient : String
+  +payload : Document
+  +trace_carrier : Document
+  +status : DeliveryStatus
+  +attempts : Integer = 0
+  +requeue_count : Integer = 0
+  +attempt_started_at : DateTime [0..1]
+  +last_error : String [0..1]
+  +created_at : DateTime
+  +updated_at : DateTime
+}
+
+class DeadLetter {
+  +id : ObjectId {id}
+  +source : DeliverySource
+  +source_ref : String
+  +channel : Channel
+  +recipient : String
+  +payload : Document
+  +trace_carrier : Document
+  +attempts : Integer
+  +last_error : String [0..1]
+  +created_at : DateTime
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  DEAD
+  BUFFERED
+}
+
+enum DeliverySource {
+  ALERT
+  ALERTMANAGER
+}
+
+enum Channel {
+  TELEGRAM
+}
+
+DeliveryIntent "0..1" -- "0..1" DeadLetter : +buried
+DeliveryIntent ..> DeliveryStatus
+DeliveryIntent ..> DeliverySource
+DeliveryIntent ..> Channel
+DeadLetter ..> DeliverySource
+DeadLetter ..> Channel
+
+note bottom of DeliveryIntent
+  one row per delivery. the pair of source, source_ref,
+  channel and recipient is unique, so a repeated request
+  for the same alert does not create a second row.
+end note
+
+note bottom of DeadLetter
+  written when a delivery exhausts its attempts. the intent
+  is removed and the payload kept here for triage.
+end note
+
+note bottom of Channel
+  the channel is stored on the intent, so the same
+  delivery record serves any transport without a
+  second table.
+end note
+@enduml

@@ -1,63 +1,83 @@
 @startuml
 title alert delivery and response
 skinparam shadowing false
-skinparam defaultFontName Helvetica
+skinparam defaultFontName Arial
+skinparam ArrowColor Black
 skinparam activity {
-  BackgroundColor #EEF1F5
-  BorderColor #44546A
-  ArrowColor #44546A
-  FontColor #1F2933
-  DiamondBackgroundColor #FFFFFF
-  DiamondBorderColor #8A94A6
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+  DiamondBackgroundColor White
+  DiamondBorderColor Black
+  DiamondFontColor Black
+  StartColor Black
+  EndColor Black
+  BarColor Black
+}
+skinparam note {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
 }
 skinparam swimlane {
-  BorderColor #8A94A6
-  TitleBackgroundColor #FFFFFF
+  BorderColor Black
+  TitleBackgroundColor White
   TitleFontSize 13
 }
-|notification-service|
+
+|notification-server|
 start
 :receive the stored alert;
 :validate the payload;
 if (payload valid?) then (no)
-  :report the failure\nback and stop;
+  :report the failure back and stop;
   kill
 endif
 :record a delivery intent;
 :queue the delivery task;
+
 fork
 |notification-worker|
-:take the task\nfrom the queue;
-if (gate raised?) then (yes)
-  :buffer until a probe\nclears the gate;
+:take the task from the queue;
+if (telegram gate raised?) then (yes)
+  :buffer the intent until a probe clears the gate;
   kill
 endif
-:send the snapshot\nwith a caption;
+:send the snapshot with a caption, or the text alone;
 if (telegram accepted?) then (no)
-  :retry with a growing delay,\nthen move to the\ndead letter store;
+  :retry with a growing delay, then move to the dead letter store;
   kill
 endif
 :mark the intent delivered;
+
 fork again
 |backend|
-:push the alert over\nthe open websockets;
-|frontend|
-:show the alert\non the dashboard;
+:push the alert over the open websockets;
+|web|
+:show the alert on the dashboard;
 end fork
+
 |operator|
-:open the alert and\nreview the snapshot;
+:open the alert and review the snapshot;
 :acknowledge the alert;
+
 |backend|
-:check the\nacknowledge permission;
-:mark the alert\nacknowledged in mongodb;
-if (already acknowledged?) then (yes)
-  :return the\nalert unchanged;
+:check the acknowledge permission;
+
+|mongo|
+:mark the alert acknowledged if it is not already;
+
+|backend|
+if (state changed?) then (no)
+  :return the alert unchanged;
   kill
 endif
-:drop the cached\nalert pages;
+:drop the cached alert pages;
 :publish the acknowledgement;
-:record it in the\naudit outbox;
-|frontend|
+:record the acknowledgement in the audit outbox;
+
+|web|
 :update the alert in place;
 stop
+
 @enduml

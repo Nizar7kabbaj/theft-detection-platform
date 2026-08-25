@@ -1,0 +1,90 @@
+@startuml
+title authentication and session store
+
+hide circle
+hide empty members
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam class {
+  BackgroundColor White
+  BorderColor Black
+  ArrowColor Black
+  FontColor Black
+}
+
+class User {
+  +id : UUID {id}
+  +username : String {unique}
+  +email : String {unique}
+  +password_hash : String
+  +roles : String [1..*]
+  +is_active : Boolean = true
+  +created_at : DateTime
+  +updated_at : DateTime
+}
+
+class Session {
+  +id : UUID {id}
+  +source_ip : String
+  +user_agent : String
+  +revoked : Boolean = false
+  +created_at : DateTime
+  +last_used_at : DateTime
+}
+
+class RefreshToken {
+  +jti : UUID {id}
+  +family_id : UUID
+  +token_hash : String {unique}
+  +revoked : Boolean = false
+  +rotated_at : DateTime [0..1]
+  +expires_at : DateTime
+  +created_at : DateTime
+}
+
+class Lockout {
+  +id : UUID {id}
+  +username_attempted : String
+  +source_ip : String
+  +user_agent : String
+  +attempt_count : Integer
+  +locked_at : DateTime
+  +expires_at : DateTime
+  +released_at : DateTime [0..1]
+}
+
+enum Role {
+  ADMIN
+  OPERATOR
+  VIEWER
+  ML_ENGINEER
+  COMPLIANCE
+  DETECTOR
+}
+
+User "1" *-- "0..*" Session : +sessions
+User "1" -- "0..*" Lockout : +lockouts
+Session "1" *-- "0..*" RefreshToken : +tokens
+RefreshToken "+rotated_from 0..1" -- "+replaced_by 0..1" RefreshToken
+User ..> Role
+
+note bottom of RefreshToken
+  every refresh issues a new token and marks the old one
+  rotated. all tokens from one login share a family_id, so
+  presenting a rotated token revokes the whole family.
+end note
+
+note bottom of Lockout
+  a lockout row is written when failed attempts cross the
+  threshold. the live counter stays in redis; this table
+  keeps the record after it expires.
+end note
+
+note bottom of Session
+  authentication events reach the audit log through an
+  outbox table written in the same transaction as the
+  session row.
+end note
+@enduml

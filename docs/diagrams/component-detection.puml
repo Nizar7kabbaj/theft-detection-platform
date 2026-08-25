@@ -1,0 +1,116 @@
+@startuml
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor Black
+skinparam componentStyle uml2
+skinparam nodesep 30
+skinparam ranksep 50
+skinparam component {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+skinparam interface {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+skinparam package {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+skinparam database {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+
+title theft-detection-platform - component view, detection plane
+
+component "USB camera" as USBCAM
+
+package "Inference plane" <<subsystem>> {
+  component "camera" as CAM
+  database "redis-stream" as STREAM
+  component "detect-gate" as GATE
+  component "ai" as AI {
+    portin aiInfer
+    portin aiPresence
+  }
+}
+
+package "Application services" <<subsystem>> {
+  component "backend" as BE
+  component "auth" as AUTH
+}
+
+package "Shared store" <<subsystem>> {
+  database "mongo" as MONGO
+}
+
+package "Notification" <<subsystem>> {
+  component "notification-server" as NS {
+    portin nsIn
+  }
+  database "redis-broker" as BROKER
+  component "notification-worker" as NW
+  component "notification-beat" as NB
+}
+
+component "Telegram Bot API" as TG
+
+() "InferenceService" as iInfer
+() "PresenceService" as iPresence
+() "AlertService" as iAlert
+
+aiInfer -- iInfer
+iInfer )-- BE
+
+aiPresence -- iPresence
+iPresence )-- GATE
+
+nsIn -- iAlert
+iAlert )-- BE
+
+USBCAM ..> CAM : v4l2
+CAM ..> STREAM : xadd frames
+STREAM ..> GATE : xread frames
+
+AI ..> AUTH : http login
+AI ..> BE : post alert
+
+BE ..> MONGO : detections, alerts
+NS ..> MONGO : delivery intents
+NS ..> BROKER : enqueue
+NB ..> BROKER : schedule reconcile
+NW ..> BROKER : consume
+NW ..> MONGO : mark delivered
+NW ..> TG : sendmessage
+
+USBCAM -[hidden]down- CAM
+CAM -[hidden]down- STREAM
+STREAM -[hidden]down- GATE
+GATE -[hidden]down- BE
+BE -[hidden]down- NS
+NW -[hidden]right- NB
+
+note bottom of STREAM
+  frames carry no volume. the gate reads them here
+  for detection, the backend reads the same stream
+  for the operator live view on the request plane
+end note
+
+note right of AI
+  the gate opens presence, inference runs only
+  while a person is in frame. the alert leaves
+  over http after a login on the detector account
+end note
+
+note right of NW
+  the worker holds the telegram token. the server
+  writes the intent first, so a delivery failure
+  cannot lose an alert or block the caller
+end note
+
+@enduml

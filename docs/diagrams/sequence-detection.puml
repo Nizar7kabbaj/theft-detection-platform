@@ -1,0 +1,134 @@
+@startuml
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam sequenceMessageAlign left
+skinparam participant {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+skinparam database {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+skinparam sequence {
+  ArrowColor Black
+  LifeLineBorderColor Black
+  GroupBackgroundColor White
+  GroupBorderColor Black
+  DividerBackgroundColor White
+}
+skinparam note {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+hide footbox
+
+title theft-detection-platform - frame to telegram
+
+participant "camera" as CAM
+database "redis-stream" as STREAM
+participant "detect-gate" as GATE
+participant "ai" as AI
+participant "auth" as AUTH
+participant "backend" as BE
+database "mongo" as MONGO
+participant "notification-server" as NS
+database "redis-broker" as BROKER
+participant "notification-worker" as NW
+participant "Telegram" as TG
+
+== capture ==
+
+loop every captured frame
+  CAM -> STREAM : xadd frame payload
+end
+
+GATE -> STREAM : xread frames
+activate GATE
+GATE -> GATE : detect a person in frame
+GATE -> AI : PresenceEvent person entered
+activate AI
+AI --> GATE : accepted
+deactivate GATE
+
+note over CAM, GATE
+  the stream carries no volume. the gate reads it
+  for detection and the backend reads the newest
+  entry for the operator live view
+end note
+
+== classify ==
+
+loop while a person is tracked
+  AI -> AI : pose estimation and action classification
+  alt concealment detected
+    AI -> AUTH : POST /auth/login on the detector account
+    AUTH --> AI : access cookie
+    AI -> BE : POST /api/v1/alerts with bearer token
+  else nothing to report
+    AI -> AI : slide the window
+  end
+end
+deactivate AI
+
+note over AI, AUTH
+  the detector holds its own account, so an alert
+  raised by the machine carries an identity the
+  audit chain can name
+end note
+
+== record and dispatch ==
+
+activate BE
+BE -> MONGO : insert alert
+alt notification reachable
+  BE -> NS : SendAlert
+  activate NS
+  NS -> NS : validate the proto payload
+  alt payload invalid
+    NS --> BE : failed
+  else payload valid
+    NS -> MONGO : acquire delivery intent
+    alt intent write failed
+      NS --> BE : failed
+    else intent written
+      NS -> BROKER : enqueue send task
+      alt enqueue failed
+        NS -> NS : leave the intent for the reconciler
+      end
+      NS --> BE : accepted
+    end
+  end
+  deactivate NS
+else notification unreachable
+  BE -> MONGO : record the alert as pending dispatch
+end
+BE -> BE : invalidate the alert list cache
+BE -> BE : publish alert created to the socket topic
+deactivate BE
+
+note over BE, NS
+  the alert is recorded before it is dispatched, so
+  the operator screen never waits on delivery
+end note
+
+note over NS, MONGO
+  the intent is written before the task is queued, so
+  a lost queue message is recovered by the reconciler
+  rather than dropping the delivery
+end note
+
+== deliver ==
+
+NW -> BROKER : consume send task
+activate NW
+NW -> MONGO : load the intent
+NW -> TG : send message
+TG --> NW : message id
+NW -> MONGO : mark the intent delivered
+deactivate NW
+
+@enduml

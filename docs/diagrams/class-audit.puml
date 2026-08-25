@@ -1,0 +1,155 @@
+@startuml
+title tamper-evident audit log
+
+hide circle
+hide empty members
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam class {
+  BackgroundColor White
+  BorderColor Black
+  ArrowColor Black
+  FontColor Black
+}
+
+class AuditEvent {
+  +sequence_number : BigInteger {id}
+  +event_id : UUID {unique}
+  +schema_version : Integer = 1
+  +occurred_at : DateTime
+  +persisted_at : DateTime
+  +source_service : SourceService
+  +actor : String
+  +severity : Severity
+  +trace_id : String
+  +payload_kind : PayloadKind
+  +hash_algorithm : HashAlgorithm
+  +event_bytes : Binary [0..1]
+  +leaf_hash : Binary
+  +prev_hash : Binary {unique}
+  +chain_hash : Binary {unique}
+  +erased_at : DateTime [0..1]
+  +erasure_reason : ErasureReason
+}
+
+class AuditChainSegment {
+  +segment_id : BigInteger {id}
+  +first_sequence_number : BigInteger {unique}
+  +last_sequence_number : BigInteger {unique}
+  +first_prev_hash : Binary
+  +terminal_chain_hash : Binary {unique}
+  +row_count : BigInteger
+  +hash_algorithm : HashAlgorithm
+  +covers_from : DateTime
+  +covers_to : DateTime
+  +sealed_at : DateTime
+}
+
+class AuditCheckpoint {
+  +checkpoint_id : BigInteger {id}
+  +tail_sequence_number : BigInteger {unique}
+  +tail_chain_hash : Binary
+  +tree_size : BigInteger
+  +hash_algorithm : HashAlgorithm
+  +signature_algorithm : SignatureAlgorithm
+  +signature : Binary
+  +key_id : String
+  +signed_at : DateTime
+  +prev_checkpoint_hash : Binary {unique}
+  +checkpoint_hash : Binary {unique}
+}
+
+enum Severity {
+  UNSPECIFIED
+  INFO
+  NOTICE
+  WARNING
+  CRITICAL
+}
+
+enum SourceService {
+  UNSPECIFIED
+  API
+  AUTH
+  AI
+  CAMERA
+  DETECT_GATE
+  NOTIFICATION
+  AUDIT
+}
+
+enum PayloadKind {
+  UNSPECIFIED
+  LOGIN_SUCCESS
+  LOGIN_FAILURE
+  SESSION_ENDED
+  TOKEN_REFRESHED
+  REFRESH_TOKEN_REUSE_DETECTED
+  AUTH_THROTTLE_TRIGGERED
+  AUTHORIZATION_DENIED
+  DETECTION_WRITTEN
+  ALERT_DISPATCHED
+  ALERT_ACKNOWLEDGED
+  CONFIG_CHANGED
+  ADMIN_ACTION
+  DEFENSE_REJECTED
+  DATA_SUBJECT_ERASURE
+  SERVICE_LIFECYCLE
+  AUDIT_LOG_ACCESSED
+}
+
+enum ErasureReason {
+  NONE
+  DATA_SUBJECT_REQUEST
+  RETENTION_EXPIRY
+  LEGAL_ORDER
+}
+
+enum HashAlgorithm {
+  UNSPECIFIED
+  SHA256
+}
+
+enum SignatureAlgorithm {
+  UNSPECIFIED
+  ED25519
+  ML_DSA_44
+}
+
+AuditEvent "+prev 0..1" -- "0..1" AuditEvent
+AuditChainSegment "1" -- "1..*" AuditEvent : +covers
+AuditCheckpoint "1" -- "0..*" AuditChainSegment : +sealed
+AuditCheckpoint "+prev 0..1" -- "0..1" AuditCheckpoint
+AuditEvent ..> Severity
+AuditEvent ..> SourceService
+AuditEvent ..> PayloadKind
+AuditEvent ..> ErasureReason
+AuditEvent ..> HashAlgorithm
+AuditChainSegment ..> HashAlgorithm
+AuditCheckpoint ..> HashAlgorithm
+AuditCheckpoint ..> SignatureAlgorithm
+
+note bottom of AuditEvent
+  every row carries the hash of the row before it. the table
+  refuses update and delete through database triggers, and
+  the service account holds insert and select only.
+end note
+
+note bottom of PayloadKind
+  the event body is stored as serialized bytes. payload_kind
+  names which message shape those bytes hold.
+end note
+
+note bottom of AuditCheckpoint
+  a checkpoint signs the tail of the chain with ed25519 and
+  links to the checkpoint before it. verifying one signature
+  proves every row up to that point.
+end note
+
+note bottom of AuditChainSegment
+  segments seal a closed range of rows so verification can
+  start from a known point instead of the first row.
+end note
+@enduml
