@@ -1,77 +1,132 @@
-@startuml
-title ml lifecycle — clip selection to live serving
+@startuml activity-ml_lifecycle
+title training the classifier and returning decisions to it
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor Black
 skinparam activity {
-  BackgroundColor #dae8fc
-  BorderColor #6c8ebf
-  ArrowColor #333333
-  FontName Arial
-  DiamondBackgroundColor #fff2cc
-  DiamondBorderColor #d6b656
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+  DiamondBackgroundColor White
+  DiamondBorderColor Black
+  DiamondFontColor Black
+  StartColor Black
+  EndColor Black
+  BarColor Black
+}
+skinparam note {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
 }
 skinparam swimlane {
-  BorderColor #999999
-  TitleBackgroundColor #f5f5f5
-  TitleFontSize 14
+  BorderColor Black
+  TitleFontColor Black
 }
-|#f5f5f5|data labeller|
+
+|me|
 start
-:select clip batch for annotation; <<#d5e8d4>>
-:push batch to label-studio-service;
-|#f5f5f5|label-studio-service|
-:annotator labels actions per clip;
-:store labels to postgresql;
-:export labelled dataset to delta lake silver;
-|#f5f5f5|training-orchestrator-service|
-switch (training trigger?)
-case (manual)
-  :ml engineer triggers run;
-case (drift-driven)
-  :drift-detection-service fires on ks-test breach;
-case (scheduled)
-  :cron tick;
-endswitch
-:request offline features from feature-store-service;
-|#f5f5f5|feature-store-service|
-:read offline store from delta lake;
-:return feature set;
-|#f5f5f5|training-orchestrator-service|
-:checkout dataset version from delta lake (dvc);
-:run poseconv3d training stages as argo steps;
-:log params and metrics to mlflow;
-:upload model artifact to mlflow;
-if (metrics meet threshold?) then (no)
-  :archive failed run; <<#f8cecc>>
-  stop
-else (yes)
-endif
-|#f5f5f5|audit-service|
-:append service_lifecycle event (training run completed);
-|#f5f5f5|MLflow|
-:write run metadata to postgresql;
-:register new model version in registry;
-:store artifact to azure blob;
-|#f5f5f5|ml engineer|
-:review metrics in mlflow ui;
-if (promote candidate?) then (no)
-  :archive candidate;
-  stop
-else (yes)
-endif
-:tag model version as production;
-|#f5f5f5|MLflow|
-:apply production alias to version;
-|#f5f5f5|audit-service|
-:append admin_action event (model promoted);
-|#f5f5f5|model-serving-service|
-:poll model registry, detect new production version;
-:triton pulls artifact from azure blob;
-:hot-swap model into gpu memory, no restart;
+:download the pose archive;
+:extract into the gitignored data path;
+:select the 47 labelled files;
 note right
-  swap is transparent to ai-service.
-  ai-service calls model-serving per frame,
-  does not load models itself.
+  keypoints arrive already extracted, 17 points per
+  person with tracker ids and boxes attached, so no
+  video-to-pose step runs in this project
 end note
-|#f5f5f5|audit-service|
-:append service_lifecycle event (version live);
+
+|notebook|
+repeat
+  :cut 30-frame windows at stride 15;
+  :normalize keypoints against each bounding box;
+  note right
+    normalization is box relative, so absolute screen
+    position cannot become a feature and the model does
+    not bind itself to one camera angle
+  end note
+  :train the two-layer lstm, 51 inputs, 64 hidden;
+  note right
+    the dataset was published for unsupervised anomaly
+    detection, the labelled split is used here as
+    supervised data so the output is a binary verdict
+    rather than a continuous score
+  end note
+  :score the held-out fold;
+  :record precision, recall, f1 and auc;
+  :benchmark latency on the gpu;
+  |me|
+  :read the metrics table;
+backward :change the class weights and train again;
+repeat while (metrics acceptable?) is (no) not (yes)
+
+:select the fold to deploy;
+note right
+  fold 1 deployed, f1 0.693 at recall 0.929 and
+  precision 0.553, five-fold mean f1 0.569 ± 0.077
+  auc 0.455 ranks below chance, so the output is a
+  binary flag and not a ranking, and a person decides
+  every alert
+end note
+:write the checkpoint into the models directory;
+:commit the checkpoint and its sidecar;
+:restart ai;
+
+|ai|
+:read the architecture, the window length and the
+preprocessing constants out of the checkpoint;
+note right
+  the predictor module is imported from the mounted
+  directory at startup, there is no packaged artifact
+  and no model-serving process, so a checkpoint reaches
+  inference only through a restart
+end note
+:track a person and extract keypoints;
+
+|redis|
+:append the box and keypoints to the track window,
+capped at the length the checkpoint declares;
+
+|ai|
+if (window full?) then (no)
+  :emit warming-up;
+  stop
+else (yes)
+  :run the classifier over two classes;
+  if (score at or above threshold?) then (no)
+    :emit normal;
+    stop
+  else (yes)
+    :emit anomaly;
+    :post the alert with the score and the state;
+    :keep the scored window beside the alert;
+    note right
+      a training example is a full window while the alert
+      holds one frame, and the rolling store drops the
+      rest within seconds, so the window is kept when the
+      alert is raised rather than when it is decided
+    end note
+  endif
+endif
+
+|backend|
+:store the alert and its window;
+
+|operator|
+:decide confirmed, dismissed or unsure;
+
+|backend|
+:store the decision and the actor;
+note right
+  every decided alert pairs a stored prediction with a
+  human label, so live precision and recall are
+  countable today
+end note
+if (decision usable as a label?) then (no)
+  :leave the window out of any training set;
+  stop
+else (yes)
+  :add the window to the store dataset;
+endif
 stop
+
 @enduml

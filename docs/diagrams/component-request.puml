@@ -1,0 +1,104 @@
+@startuml
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor Black
+skinparam componentStyle uml2
+skinparam nodesep 30
+skinparam ranksep 55
+skinparam component {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+skinparam interface {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+skinparam package {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+skinparam database {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+
+title theft-detection-platform - component view, request plane
+
+component "Operator browser" as BROWSER
+
+package "Edge" <<subsystem>> {
+  component "traefik" as TRAEFIK
+  component "web" as WEB
+}
+
+package "Application services" <<subsystem>> {
+  component "backend" as BE
+  component "auth" as AUTH {
+    portin authIn
+  }
+  component "audit" as AUD {
+    portin auditIn
+  }
+}
+
+package "Data stores" <<subsystem>> {
+  database "mongo" as MONGO
+  database "postgres" as PG
+  database "redis cache" as REDIS
+  database "redis-stream" as STREAM
+}
+
+() "AuthService" as iAuth
+() "AuditService" as iAudit
+
+authIn -- iAuth
+iAuth )-- BE
+
+auditIn -- iAudit
+iAudit )-- BE
+iAudit )-- AUTH
+
+BROWSER ..> TRAEFIK : https, wss
+TRAEFIK ..> WEB : gateway-chain
+TRAEFIK ..> BE : api-chain, ws route
+TRAEFIK ..> AUTH : login-chain
+WEB ..> BE : rest
+
+BE ..> MONGO : cameras, detections, alerts
+BE ..> REDIS : cache, pub/sub
+BE ..> STREAM : xrevrange newest frame
+AUTH ..> PG : users, sessions
+AUTH ..> REDIS : lockout counters
+AUD ..> PG : audit chain
+
+BROWSER -[hidden]down- TRAEFIK
+WEB -[hidden]down- BE
+BE -[hidden]down- MONGO
+
+note right of TRAEFIK
+  every route carries a chain. the login route
+  is rate limited apart from the rest of the api
+end note
+
+note right of iAudit
+  caller identity comes from the client
+  certificate, not from the message body
+end note
+
+note bottom of STREAM
+  the live view reads the newest entry only, never
+  a consumer group, so a slow viewer skips frames
+  instead of building a backlog. camera health
+  comes from the age of that entry
+end note
+
+note bottom of PG
+  auth and audit hold separate schemas on one
+  cluster. both run alembic, neither uses mongo
+end note
+
+@enduml

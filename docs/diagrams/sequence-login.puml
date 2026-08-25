@@ -1,0 +1,134 @@
+@startuml
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam sequenceMessageAlign left
+skinparam participant {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+skinparam database {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+skinparam sequence {
+  ArrowColor Black
+  LifeLineBorderColor Black
+  GroupBackgroundColor White
+  GroupBorderColor Black
+  DividerBackgroundColor White
+}
+skinparam note {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+}
+hide footbox
+
+title theft-detection-platform - login and live subscription
+
+actor "Operator" as OP
+participant "traefik" as TR
+participant "auth" as AUTH
+participant "backend" as BE
+database "postgres" as PG
+database "redis cache" as REDIS
+
+== login ==
+
+OP -> TR : POST /auth/login
+TR -> AUTH : login-chain
+activate AUTH
+AUTH -> REDIS : check lockout by ip and username
+alt locked out
+  AUTH --> TR : 429 with retry-after
+  TR --> OP : 429 with retry-after
+else not locked
+  AUTH -> PG : select user by username
+  alt unknown user or bad password
+    AUTH -> AUTH : verify against a dummy hash
+    AUTH -> REDIS : record failure
+    AUTH -> PG : enqueue failure event to outbox
+    AUTH --> TR : 401
+    TR --> OP : 401
+  else credentials valid
+    AUTH -> PG : create session
+    AUTH -> AUTH : sign access token
+    AUTH -> PG : store refresh token family
+    AUTH -> PG : enqueue login event to outbox
+    AUTH -> PG : commit
+    AUTH -> REDIS : reset failure counters
+    AUTH --> TR : set access, refresh and csrf cookies
+    TR --> OP : set access, refresh and csrf cookies
+  end
+end
+deactivate AUTH
+
+note over AUTH, PG
+  the session row, the refresh family and the audit
+  event share one commit, so an event cannot exist
+  without the session it describes
+end note
+
+note over AUTH
+  an unknown username still runs a password verify
+  against a fixed hash, so response time does not
+  reveal whether the account exists
+end note
+
+== open the live socket ==
+
+OP -> TR : wss /ws/alerts
+TR -> BE : ws route
+activate BE
+BE -> AUTH : VerifyToken
+activate AUTH
+AUTH -> REDIS : check revocation by jti and session
+alt revocation store unavailable
+  AUTH --> BE : unavailable
+  BE --> TR : socket closed
+  TR --> OP : socket closed
+else token revoked
+  AUTH --> BE : revoked
+  BE --> TR : socket closed
+  TR --> OP : socket closed
+else token valid
+  AUTH --> BE : valid with user id and roles
+  deactivate AUTH
+  BE -> REDIS : subscribe alert topics
+  BE --> TR : socket open
+  TR --> OP : socket open
+end
+deactivate BE
+
+note over AUTH, REDIS
+  a token is only accepted when the revocation
+  store answers. losing redis closes the socket
+  rather than letting a revoked token through
+end note
+
+== refresh ==
+
+OP -> TR : POST /auth/refresh
+TR -> AUTH : login-chain
+activate AUTH
+AUTH -> PG : look up presented refresh token
+alt token already used
+  AUTH -> PG : revoke the whole family
+  AUTH --> TR : 401
+  TR --> OP : 401
+else token unused
+  AUTH -> PG : rotate token within the family
+  AUTH --> TR : new cookies
+  TR --> OP : new cookies
+end
+deactivate AUTH
+
+note over AUTH, PG
+  a refresh token is a family. presenting one that
+  was already spent kills every token in it, so a
+  stolen token cannot outlive its first reuse
+end note
+
+@enduml

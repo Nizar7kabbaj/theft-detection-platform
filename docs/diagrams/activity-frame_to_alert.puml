@@ -1,41 +1,52 @@
 @startuml
 title from frame to stored alert
 skinparam shadowing false
-skinparam defaultFontName Helvetica
+skinparam defaultFontName Arial
+skinparam ArrowColor Black
 skinparam activity {
-  BackgroundColor #EEF1F5
-  BorderColor #44546A
-  ArrowColor #44546A
-  FontColor #1F2933
-  DiamondBackgroundColor #FFFFFF
-  DiamondBorderColor #8A94A6
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+  DiamondBackgroundColor White
+  DiamondBorderColor Black
+  DiamondFontColor Black
+  StartColor Black
+  EndColor Black
+  BarColor Black
+}
+skinparam note {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
 }
 skinparam swimlane {
-  BorderColor #8A94A6
-  TitleBackgroundColor #FFFFFF
+  BorderColor Black
+  TitleBackgroundColor White
   TitleFontSize 13
 }
-|camera-service|
+
+|camera|
 start
 :capture a frame from the video device;
-:append the frame to the redis stream;
+:append the frame to the stream;
 note right
   the publisher keeps a bounded queue and drops
   the oldest frames when redis falls behind
 end note
-|detect-gate-service|
+
+|detect-gate|
 :read the frame from the stream;
 :run person detection;
 if (person in view?) then (no)
-  |camera-service|
-  :hold the idle capture rate;
+  :leave presence closed and read the next frame;
   kill
 endif
-|detect-gate-service|
-:send a presence event to the inference service;
-|camera-service|
+:send a presence event to ai;
+
+|camera|
 :raise the capture rate and hold it for the dwell window;
-|ai-service|
+
+|ai|
 :read the frame from the stream;
 :track people and objects, one identifier each;
 :score the pose window for anomalies;
@@ -46,16 +57,20 @@ if (anomaly or concealment?) then (no)
 endif
 :write the snapshot to disk;
 :post the alert to the api;
+
 |backend|
 :check the write permission and the idempotency key;
-|mongodb|
+
+|mongo|
 :insert the alert document;
+
 |backend|
-:hand the alert to the notification service;
+:hand the alert to notification;
 if (notification reachable?) then (no)
-  :log the failure and keep the stored alert;
+  :record the alert as pending dispatch;
 endif
 :drop the cached alert pages;
 :publish the created alert;
 stop
+
 @enduml

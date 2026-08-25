@@ -1,0 +1,159 @@
+@startuml
+title detection and alert store
+
+hide circle
+hide empty members
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam class {
+  BackgroundColor White
+  BorderColor Black
+  ArrowColor Black
+  FontColor Black
+}
+
+class Camera {
+  +id : ObjectId {id}
+  +camera_id : String {unique}
+  +name : String {unique}
+  +location : String
+  +stream_url : String [0..1]
+  +status : String = "active"
+  +created_at : DateTime
+}
+
+class Detection {
+  +id : ObjectId {id}
+  +session_id : Int64
+  +frame_index : Integer
+  +occurred_at : DateTime
+  +created_at : DateTime
+  +class_name : String
+  +inference_state : InferenceState
+  +confidence : Float {0..1}
+  +track_id : Integer = 0
+  +detection_present : Boolean = false
+}
+
+class Alert {
+  +id : ObjectId {id}
+  +alert_id : String {unique}
+  +session_id : Int64
+  +frame_index : Integer
+  +occurred_at : DateTime
+  +created_at : DateTime
+  +severity : Severity
+  +alert_type : AlertType
+  +frame_width : Integer [0..1]
+  +frame_height : Integer [0..1]
+  +snapshot_path : String [0..1]
+  +classifier_score : Float [0..1]
+  +classifier_state : String [0..1]
+  +acknowledged : Boolean = false
+  +acknowledged_at : DateTime [0..1]
+  +decision : Decision
+  +decided_at : DateTime [0..1]
+  +decided_by : String [0..1]
+}
+
+class Person {
+  +track_id : Integer = 0
+}
+
+class Object {
+  +class_name : String
+}
+
+class Bbox {
+  +x1 : Float
+  +y1 : Float
+  +x2 : Float
+  +y2 : Float
+}
+
+class Keypoint {
+  +name : String [0..1]
+  +x : Float
+  +y : Float
+  +confidence : Float {0..1}
+}
+
+class Concealment {
+  +object_track_id : Integer
+  +object_class : String
+  +person_track_id : Integer
+  +last_seen_frame : Integer
+  +missing_frames : Integer
+  +wrist_index : Integer
+  +wrist_x : Float
+  +wrist_y : Float
+  +grab_distance : Float
+}
+
+enum Severity {
+  UNSPECIFIED
+  INFO
+  NOTICE
+  WARNING
+  CRITICAL
+}
+
+enum AlertType {
+  UNSPECIFIED
+  OBJECT_PROXIMITY
+  CONCEALMENT
+  LOITERING
+}
+
+enum Decision {
+  UNSPECIFIED
+  CONFIRMED
+  DISMISSED
+  UNSURE
+}
+
+enum InferenceState {
+  UNSPECIFIED
+  WARMING_UP
+  NORMAL
+  ANOMALY
+}
+
+Camera "1" -- "0..*" Detection : +detections
+Camera "1" -- "0..*" Alert : +alerts
+Detection "1" *-- "1" Bbox
+Detection "1" *-- "0..*" Keypoint
+Alert "1" *-- "0..1" Person
+Alert "1" *-- "0..1" Object
+Alert "1" *-- "0..1" Concealment
+Person "1" *-- "0..1" Bbox
+Person "1" *-- "0..*" Keypoint
+Object "1" *-- "0..1" Bbox
+
+Detection -[hidden]down- Keypoint
+Person -[hidden]down- Bbox
+Alert -[hidden]right- Concealment
+
+Detection ..> InferenceState
+Alert ..> Severity
+Alert ..> AlertType
+Alert ..> Decision
+
+note bottom of Alert
+  acknowledgement and decision are separate. an operator can
+  acknowledge without deciding, and a decision can be cleared
+  back to unspecified.
+end note
+
+note bottom of Camera
+  camera health is derived from the timestamp of the last
+  frame on the stream, not stored on the document.
+end note
+
+note bottom of Concealment
+  recorded when a tracked object stops appearing within grab
+  distance of a wrist keypoint.
+end note
+@enduml

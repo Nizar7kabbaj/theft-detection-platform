@@ -1,0 +1,96 @@
+@startuml
+title audit event outbox
+
+hide circle
+hide empty members
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam class {
+  BackgroundColor White
+  BorderColor Black
+  ArrowColor Black
+  FontColor Black
+}
+
+package "auth-service" {
+
+  class AuthOutbox {
+    +id : BigInteger {id}
+    +event_id : UUID {unique}
+    +event_bytes : Binary
+    +occurred_at : DateTime
+    +attempts : Integer = 0
+    +next_attempt_at : DateTime
+    +created_at : DateTime
+  }
+
+  class AuthOutboxDead {
+    +id : BigInteger {id}
+    +event_id : UUID {unique}
+    +event_bytes : Binary
+    +occurred_at : DateTime
+    +attempts : Integer
+    +last_status : OutboxDeadStatus
+    +created_at : DateTime
+    +failed_at : DateTime
+  }
+}
+
+package "backend" {
+
+  class BackendOutbox {
+    +id : ObjectId {id}
+    +event_id : String {unique}
+    +event_bytes : Binary
+    +occurred_at : DateTime
+    +attempts : Integer = 0
+    +next_attempt_at : DateTime
+    +claimed_at : DateTime [0..1]
+    +created_at : DateTime
+  }
+
+  class BackendOutboxDead {
+    +id : ObjectId {id}
+    +event_id : String
+    +event_bytes : Binary
+    +occurred_at : DateTime
+    +attempts : Integer
+    +last_status : OutboxDeadStatus
+    +created_at : DateTime
+    +buried_at : DateTime
+  }
+}
+
+enum OutboxDeadStatus {
+  UNAVAILABLE
+  DEADLINE_EXCEEDED
+  PERMISSION_DENIED
+  INVALID_ARGUMENT
+  INTERNAL
+}
+
+AuthOutbox "0..1" -- "0..1" AuthOutboxDead : +buried
+BackendOutbox "0..1" -- "0..1" BackendOutboxDead : +buried
+AuthOutboxDead ..> OutboxDeadStatus
+BackendOutboxDead ..> OutboxDeadStatus
+
+AuthOutbox -[hidden]right- BackendOutbox
+
+note bottom of AuthOutbox
+  the event is written in the same transaction as the row it
+  describes. a drain task reads it and calls the audit
+  service, then deletes the row.
+end note
+
+note bottom of BackendOutbox
+  the mongo store has no transaction across the two writes,
+  so a worker claims a row for a fixed lease before sending
+  and releases it if the send fails.
+end note
+
+note bottom of OutboxDeadStatus
+  the grpc status returned by the last failed delivery.
+end note
+@enduml

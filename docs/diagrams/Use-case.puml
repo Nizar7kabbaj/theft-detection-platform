@@ -3,7 +3,6 @@ left to right direction
 skinparam shadowing false
 skinparam defaultFontName Helvetica
 skinparam ArrowColor #44546A
-skinparam packageStyle rectangle
 skinparam usecase {
   BackgroundColor #EEF1F5
   BorderColor #44546A
@@ -25,30 +24,47 @@ actor "ML Engineer" as mleng
 actor "Compliance Officer" as compliance
 actor "Camera" as camera
 actor "Detection Service" as detector
+actor "Telegram Bot API" as telegram
+actor "Alertmanager" as alertmanager
 viewer <|-- operator
 operator <|-- admin
 rectangle "theft-detection-platform" {
-  usecase "Log In" as UC_LOGIN
-  usecase "Log Out" as UC_LOGOUT
-  usecase "Lock Account" as UC_LOCK
-  usecase "View Live Camera Feed" as UC_FEED
-  usecase "Browse Alerts" as UC_ALERTS
-  usecase "Browse Detections" as UC_DETECTIONS
-  usecase "View Statistics" as UC_STATS
-  usecase "Acknowledge Alert" as UC_ACK
-  usecase "Decide on Alert" as UC_DECIDE
-  usecase "Run Analysis" as UC_ANALYZE
-  usecase "Manage Cameras" as UC_CAMERAS
-  usecase "Manage Users" as UC_USERS
-  usecase "Configure Detection Settings" as UC_SETTINGS
-  usecase "Query Audit Log" as UC_QUERY
-  usecase "Verify Audit Chain" as UC_VERIFY
-  usecase "Erase Subject Data" as UC_ERASE
-  usecase "Capture Video Stream" as UC_CAPTURE
-  usecase "Submit Detection Alert" as UC_SUBMIT
-  usecase "Deliver via Telegram" as UC_DELIVER
+  rectangle "Access" {
+    usecase "Log In" as UC_LOGIN
+    usecase "Log Out" as UC_LOGOUT
+    usecase "Lock Account" as UC_LOCK
+  }
+  rectangle "Capture and detection" {
+    usecase "Capture Video Stream" as UC_CAPTURE
+    usecase "Submit Detection Alert" as UC_SUBMIT
+  }
+  rectangle "Monitoring" {
+    usecase "View Live Camera Feed" as UC_FEED
+    usecase "Browse Alerts" as UC_ALERTS
+    usecase "Browse Detections" as UC_DETECTIONS
+    usecase "View Statistics" as UC_STATS
+  }
+  rectangle "Alert response" {
+    usecase "Acknowledge Alert" as UC_ACK
+    usecase "Decide on Alert" as UC_DECIDE
+    usecase "Run Analysis" as UC_ANALYZE
+  }
+  rectangle "Administration" {
+    usecase "Manage Cameras" as UC_CAMERAS
+    usecase "Manage Users" as UC_USERS
+    usecase "Configure Detection Settings" as UC_SETTINGS
+  }
+  rectangle "Audit and compliance" {
+    usecase "Record Audit Event" as UC_RECORD
+    usecase "Query Audit Log" as UC_QUERY
+    usecase "Verify Audit Chain" as UC_VERIFY
+    usecase "Erase Subject Data" as UC_ERASE
+  }
+  rectangle "Notification" {
+    usecase "Deliver via Telegram" as UC_DELIVER
+    usecase "Forward Infrastructure Alert" as UC_INFRA
+  }
 }
-actor "Telegram Bot API" as telegram
 viewer -- UC_LOGIN
 viewer -- UC_LOGOUT
 viewer -- UC_FEED
@@ -63,25 +79,28 @@ admin -- UC_USERS
 admin -- UC_SETTINGS
 mleng -- UC_DETECTIONS
 mleng -- UC_STATS
+compliance -- UC_ALERTS
 compliance -- UC_QUERY
 compliance -- UC_VERIFY
 compliance -- UC_ERASE
 camera -- UC_CAPTURE
 detector -- UC_SUBMIT
 UC_DELIVER -- telegram
+UC_INFRA -- alertmanager
 UC_LOCK ..> UC_LOGIN : <<extend>>
-UC_CAPTURE ..> UC_SUBMIT : <<include>>
 UC_SUBMIT ..> UC_DELIVER : <<include>>
+UC_CAPTURE ..> UC_SUBMIT : <<include>>
+note right of UC_LOCK
+  login is blocked for 15 minutes
+  after repeated failed attempts
+end note
+note right of UC_RECORD
+  access, alert decisions and
+  administration actions are appended
+  to a hash-chained log
+end note
 note bottom of UC_ERASE
-  erasure and chain verification run from
-  the audit command line tool
-end note
-note bottom of UC_LOCK
-  login is blocked for 15 minutes after
-  repeated failed attempts
-end note
-note bottom of UC_SUBMIT
-  access, alert decisions and administration
-  actions are appended to a hash-chained log
+  erasure and chain verification run
+  from the audit command line tool
 end note
 @enduml

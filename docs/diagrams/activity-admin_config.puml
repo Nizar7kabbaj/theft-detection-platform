@@ -1,55 +1,62 @@
 @startuml
 title adding a camera
 skinparam shadowing false
-skinparam defaultFontName Helvetica
+skinparam defaultFontName Arial
+skinparam ArrowColor Black
 skinparam activity {
-  BackgroundColor #EEF1F5
-  BorderColor #44546A
-  ArrowColor #44546A
-  FontColor #1F2933
-  DiamondBackgroundColor #FFFFFF
-  DiamondBorderColor #8A94A6
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+  DiamondBackgroundColor White
+  DiamondBorderColor Black
+  DiamondFontColor Black
+  StartColor Black
+  EndColor Black
+  BarColor Black
+}
+skinparam note {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
 }
 skinparam swimlane {
-  BorderColor #8A94A6
-  TitleBackgroundColor #FFFFFF
+  BorderColor Black
+  TitleBackgroundColor White
   TitleFontSize 13
 }
+
 |operator|
 start
 :open the camera page;
 :submit name and device path;
-|frontend|
+
+|web|
 :post to /api/v1/cameras with session cookie;
+
 |backend|
 :resolve permissions from token roles;
 if (camera write granted?) then (no)
-  |backend|
   :return 403;
   kill
 endif
-|backend|
 if (idempotency key already used?) then (yes)
-  |backend|
   :return the stored response;
   kill
 endif
-|backend|
 :validate the request body;
 if (body valid?) then (no)
-  |backend|
   :return 422;
   kill
 endif
-|mongodb|
+
+|mongo|
 :insert the camera document;
+
 |backend|
 if (name already taken?) then (yes)
-  |backend|
   :return 409;
   kill
 endif
-|backend|
 :drop the cached camera list;
 :record the create in the audit outbox;
 note right
@@ -57,14 +64,19 @@ note right
   reach the audit service through a background
   loop, so the response does not wait for them
 end note
+
 |redis|
 :publish cameras created;
+
 |backend|
 :store the response under the idempotency key;
 :return 201;
-|frontend|
+
+|web|
 :refresh the camera list;
+
 |operator|
 :see the new camera;
 stop
+
 @enduml
