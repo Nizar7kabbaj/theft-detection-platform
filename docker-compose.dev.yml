@@ -8,11 +8,13 @@ services:
       NODE_ENV: development
       NEXT_PUBLIC_ALLOW_DEV_CSP: "1"
       API_BASE_URL: http://backend:8000
-      WATCHPACK_POLLING: "true"
+      WATCHPACK_POLLING: "false"
     volumes:
       - ./apps/web:/app
-      - /app/node_modules
-      - /app/.next
+      - web_dev_modules:/app/node_modules
+      - web_dev_next:/app/.next
+    healthcheck:
+      start_period: 180s
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=theft-detection-platform_edge"
@@ -22,3 +24,7 @@ services:
       - "traefik.http.routers.web.tls=true"
       - "traefik.http.routers.web.middlewares=dev-chain@file"
       - "traefik.http.services.web.loadbalancer.server.port=3000"
+
+volumes:
+  web_dev_modules:
+  web_dev_next:

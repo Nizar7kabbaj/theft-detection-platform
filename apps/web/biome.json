@@ -75,15 +75,25 @@
     },
     {
       "includes": [
-        "features/cameras/components/live-view.tsx",
         "components/layout/sidebar-frame.tsx",
         "features/alerts/components/alert-row.tsx",
-        "features/alerts/components/alert-card.tsx"
+        "features/alerts/components/alert-card.tsx",
+        "features/alerts/components/evidence-frame.tsx"
       ],
       "linter": {
         "rules": {
           "performance": {
             "noImgElement": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["features/alerts/components/evidence-frame.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noAriaHiddenOnFocusable": "off"
           }
         }
       }

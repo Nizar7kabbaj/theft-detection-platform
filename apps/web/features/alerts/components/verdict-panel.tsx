@@ -1,9 +1,8 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { classifierStateLabel } from "@/features/alerts/lib/format"
 
-const ROW_CLASS = "flex items-baseline justify-between gap-4 py-1"
-const LABEL_CLASS = "text-muted-foreground text-sm"
-const VALUE_CLASS = "text-foreground text-sm tabular-nums"
+const LABEL_CLASS = "font-mono text-[10px] text-muted-foreground uppercase tracking-[0.16em]"
+const NOTE_CLASS = "font-mono text-muted-foreground text-xs"
 
 export function VerdictPanel({
   score,
@@ -14,31 +13,24 @@ export function VerdictPanel({
 }) {
   const hasScore = score !== null && score !== undefined
   const hasState = state !== null && state !== undefined
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle>second opinion</CardTitle>
-        <CardDescription>
-          the motion classifier scored this sequence. it did not fire the alert, and it is wrong
-          often enough that it carries no weight on its own
-        </CardDescription>
+        <p className={LABEL_CLASS}>secondary opinion</p>
+        <CardTitle className="text-lg">classifier</CardTitle>
       </CardHeader>
-      <CardContent>
-        <dl>
-          <div className={ROW_CLASS}>
-            <dt className={LABEL_CLASS}>score</dt>
-            <dd className={hasScore ? VALUE_CLASS : LABEL_CLASS}>
-              {hasScore ? score.toFixed(3) : "not scored"}
-            </dd>
-          </div>
-          <div className={ROW_CLASS}>
-            <dt className={LABEL_CLASS}>state</dt>
-            <dd className={hasState ? VALUE_CLASS : LABEL_CLASS}>
-              {hasState ? classifierStateLabel(state) : "no state recorded"}
-            </dd>
-          </div>
-        </dl>
+      <CardContent className="flex flex-col gap-2">
+        {hasScore || hasState ? (
+          <>
+            <p className="font-mono text-foreground text-sm tabular-nums">
+              {hasScore ? score.toFixed(3) : "no score"}
+              {hasState ? ` · ${classifierStateLabel(state)}` : ""}
+            </p>
+            <p className={NOTE_CLASS}>did not fire this alert, carries no weight alone</p>
+          </>
+        ) : (
+          <p className={NOTE_CLASS}>classifier score not available for this alert</p>
+        )}
       </CardContent>
     </Card>
   )
