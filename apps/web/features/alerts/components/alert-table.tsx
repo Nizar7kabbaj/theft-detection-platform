@@ -1,24 +1,40 @@
 "use client"
+
 import { ShieldAlert } from "lucide-react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
 import type { AlertFilters } from "@/features/alerts/api/alert-keys"
+import { AlertCard } from "@/features/alerts/components/alert-card"
 import { AlertRow } from "@/features/alerts/components/alert-row"
 import { NewAlertPill } from "@/features/alerts/components/new-alert-pill"
+import { StreamIndicator } from "@/features/alerts/components/stream-indicator"
 import { useAlertPage } from "@/features/alerts/hooks/use-alert-page"
 import { useAlertSocket } from "@/features/alerts/hooks/use-alert-socket"
 
-const HEAD_CLASS = "px-3 py-2 text-left font-medium text-muted-foreground"
+const HEAD_CLASS =
+  "px-3 py-2 text-left font-mono font-normal text-[10px] text-muted-foreground uppercase tracking-wider"
+
+const CLOCK_INTERVAL_MS = 30_000
 
 export function AlertTable({
   filters,
   canAcknowledge,
+  text,
 }: {
   filters: AlertFilters
   canAcknowledge: boolean
+  text: string
 }) {
   const query = useAlertPage(filters)
   const { pendingCount, clearPending } = useAlertSocket(filters)
+  const [now, setNow] = useState<number | null>(null)
+
+  useEffect(() => {
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), CLOCK_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const refresh = () => {
     clearPending()
@@ -40,7 +56,17 @@ export function AlertTable({
     )
   }
 
-  const rows = query.data.pages.flatMap((page) => page.items)
+  const needle = text.trim().toLowerCase()
+  const loaded = query.data.pages.flatMap((page) => page.items)
+  const rows =
+    needle === ""
+      ? loaded
+      : loaded.filter((alert) =>
+          [alert.alert_id, alert.camera_id, alert.object_name, alert.severity]
+            .join(" ")
+            .toLowerCase()
+            .includes(needle),
+        )
 
   if (rows.length === 0) {
     return (
@@ -48,8 +74,8 @@ export function AlertTable({
         <NewAlertPill count={pendingCount} onRefresh={refresh} />
         <EmptyState
           icon={ShieldAlert}
-          title="no alerts match"
-          description="clear the filters or wait for the pipeline to escalate an event"
+          title="no events match these filters"
+          description="clear the filters or wait for the edge to escalate an event"
         />
       </div>
     )
@@ -58,53 +84,85 @@ export function AlertTable({
   return (
     <div className="flex flex-col gap-4">
       <NewAlertPill count={pendingCount} onRefresh={refresh} />
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full border-collapse text-sm">
-          <caption className="sr-only">alerts escalated for human review</caption>
-          <thead className="border-border border-b bg-muted/40">
-            <tr>
-              <th className={HEAD_CLASS} scope="col">
-                time
-              </th>
-              <th className={HEAD_CLASS} scope="col">
-                camera
-              </th>
-              <th className={HEAD_CLASS} scope="col">
-                severity
-              </th>
-              <th className={HEAD_CLASS} scope="col">
-                object
-              </th>
-              <th className={HEAD_CLASS} scope="col">
-                confidence
-              </th>
-              <th className={HEAD_CLASS} scope="col">
-                state
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((alert) => (
-              <AlertRow
-                alert={alert}
-                canAcknowledge={canAcknowledge}
-                filters={filters}
-                key={alert._id}
-              />
-            ))}
-          </tbody>
-        </table>
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <ul className="flex flex-col md:hidden">
+          {rows.map((alert) => (
+            <AlertCard
+              alert={alert}
+              canAcknowledge={canAcknowledge}
+              filters={filters}
+              key={alert._id}
+              now={now}
+            />
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto md:block">
+          <table className="w-full border-collapse text-sm">
+            <caption className="sr-only">events escalated for human review</caption>
+            <thead className="border-border border-b">
+              <tr>
+                <th className={HEAD_CLASS} scope="col">
+                  evidence
+                </th>
+                <th className={HEAD_CLASS} scope="col">
+                  severity
+                </th>
+                <th className={HEAD_CLASS} scope="col">
+                  event
+                </th>
+                <th className={HEAD_CLASS} scope="col">
+                  object
+                </th>
+                <th className={HEAD_CLASS} scope="col">
+                  camera
+                </th>
+                <th className={HEAD_CLASS} scope="col">
+                  confidence
+                </th>
+                <th className={HEAD_CLASS} scope="col">
+                  occurred
+                </th>
+                <th className={HEAD_CLASS} scope="col">
+                  state
+                </th>
+                <th className={`${HEAD_CLASS} text-right`} scope="col">
+                  actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((alert) => (
+                <AlertRow
+                  alert={alert}
+                  canAcknowledge={canAcknowledge}
+                  filters={filters}
+                  key={alert._id}
+                  now={now}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="grid grid-cols-3 items-center gap-3 border-border border-t px-3 py-2">
+          <StreamIndicator />
+          {query.hasNextPage ? (
+            <Button
+              className="justify-self-center"
+              disabled={query.isFetchingNextPage}
+              onClick={() => void query.fetchNextPage()}
+              size="sm"
+              variant="outline"
+            >
+              {query.isFetchingNextPage ? "loading" : "load more"}
+            </Button>
+          ) : (
+            <span />
+          )}
+          <span className="text-right font-mono text-[10px] text-muted-foreground tabular-nums">
+            {rows.length === 1 ? "1 event loaded" : `${rows.length} events loaded`}
+          </span>
+        </div>
       </div>
-      {query.hasNextPage ? (
-        <Button
-          disabled={query.isFetchingNextPage}
-          onClick={() => void query.fetchNextPage()}
-          size="sm"
-          variant="outline"
-        >
-          {query.isFetchingNextPage ? "loading" : "load more"}
-        </Button>
-      ) : null}
     </div>
   )
 }

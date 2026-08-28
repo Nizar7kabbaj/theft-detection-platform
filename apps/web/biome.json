@@ -76,7 +76,9 @@
     {
       "includes": [
         "features/cameras/components/live-view.tsx",
-        "components/layout/sidebar-frame.tsx"
+        "components/layout/sidebar-frame.tsx",
+        "features/alerts/components/alert-row.tsx",
+        "features/alerts/components/alert-card.tsx"
       ],
       "linter": {
         "rules": {
