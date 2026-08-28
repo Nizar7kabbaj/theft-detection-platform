@@ -15,24 +15,29 @@ import type {
 } from "@/features/analytics/schemas/timeseries"
 
 const ALERT_CONFIG = {
-  critical: { label: "critical", color: "var(--chart-1)" },
-  warning: { label: "warning", color: "var(--chart-2)" },
-  notice: { label: "notice", color: "var(--chart-3)" },
-  info: { label: "info", color: "var(--chart-4)" },
+  critical: { label: "critical", color: "var(--chart-4)" },
+  warning: { label: "warning", color: "var(--chart-1)" },
+  notice: { label: "notice", color: "var(--chart-2)" },
+  info: { label: "info", color: "var(--chart-3)" },
   unspecified: { label: "unspecified", color: "var(--chart-5)" },
 } satisfies ChartConfig
 
 const DECISION_CONFIG = {
-  confirmed: { label: "confirmed", color: "var(--chart-1)" },
+  confirmed: { label: "confirmed", color: "var(--chart-4)" },
   dismissed: { label: "dismissed", color: "var(--chart-3)" },
-  unsure: { label: "unsure", color: "var(--chart-2)" },
+  unsure: { label: "unsure", color: "var(--chart-1)" },
 } satisfies ChartConfig
 
 const ALERT_KEYS = ["unspecified", "info", "notice", "warning", "critical"] as const
 const DECISION_KEYS = ["dismissed", "unsure", "confirmed"] as const
 
-const CHART_CLASS = "aspect-auto h-64 w-full"
-const AXIS_PROPS = { axisLine: false, tickLine: false, tickMargin: 8 } as const
+const CHART_CLASS = "aspect-auto h-56 w-full [&_.recharts-cartesian-grid_line]:stroke-border/50"
+const AXIS_PROPS = {
+  axisLine: false,
+  tickLine: false,
+  tickMargin: 8,
+  tick: { fontSize: 9, fontFamily: "var(--font-mono)", fill: "var(--muted-foreground)" },
+} as const
 
 function tickLabel(bucket: string, unit: BucketUnit): string {
   const at = new Date(bucket)
