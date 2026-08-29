@@ -1,4 +1,4 @@
-import { dehydrate, HydrationBoundary, QueryClient } from "@tanstack/react-query"
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
 import type { Metadata } from "next"
 import { Suspense } from "react"
 import {
@@ -23,6 +23,7 @@ import { NeedsAttention } from "@/features/dashboard/components/needs-attention"
 import { RecentAlerts } from "@/features/dashboard/components/recent-alerts"
 import { SeverityFilter } from "@/features/dashboard/components/severity-filter"
 import { FloorConsoleLazy } from "@/features/floorplan/components/floor-console-lazy"
+import { createServerQueryClient } from "@/lib/api/query-server"
 
 export const metadata: Metadata = { title: "Dashboard" }
 export const dynamic = "force-dynamic"
@@ -30,7 +31,7 @@ export const dynamic = "force-dynamic"
 const SKELETON_CLASS = "h-64 w-full animate-pulse rounded-lg bg-muted"
 
 async function StatsPanel() {
-  const queryClient = new QueryClient()
+  const queryClient = createServerQueryClient()
   try {
     await queryClient.fetchQuery({ queryKey: statsQueryKey, queryFn: fetchStats })
   } catch {

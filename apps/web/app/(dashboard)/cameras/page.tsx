@@ -15,18 +15,15 @@ import { cameraKeys } from "@/features/cameras/api/camera-keys"
 import { fetchCameras } from "@/features/cameras/api/cameras-server"
 import { CameraConsole } from "@/features/cameras/components/camera-console"
 import { createServerQueryClient } from "@/lib/api/query-server"
-
 export const metadata: Metadata = { title: "cameras" }
 export const dynamic = "force-dynamic"
-
 export default async function CamerasPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const identity = await fetchIdentity()
-  const canRead = identity.permissions.includes("camera:read")
-  if (!canRead) {
+  const [identity, params, store] = await Promise.all([fetchIdentity(), searchParams, cookies()])
+  if (!identity.permissions.includes("camera:read")) {
     return (
       <section className="flex flex-1 flex-col gap-5">
         <PageHeader title="cameras" description="registered capture sources and their state" />
@@ -38,19 +35,15 @@ export default async function CamerasPage({
       </section>
     )
   }
-
-  const [params, store] = await Promise.all([searchParams, cookies()])
   const requested = params.id
   const fromUrl = parseCameraId(typeof requested === "string" ? requested : null)
   const fromCookie = parseCameraId(store.get(CAMERA_COOKIE_NAME)?.value ?? null)
   const initialFilter = parseFleetFilter(store.get(FLEET_FILTER_COOKIE_NAME)?.value ?? null)
-
   const queryClient = createServerQueryClient()
   await queryClient.prefetchQuery({
     queryKey: cameraKeys.list(),
     queryFn: () => fetchCameras(),
   })
-
   return (
     <section className="flex flex-1 flex-col gap-5">
       <PageHeader title="cameras" description="registered capture sources and their state" />

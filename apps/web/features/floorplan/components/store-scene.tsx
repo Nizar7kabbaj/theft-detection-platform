@@ -18,6 +18,7 @@ import { cssRgb, type Palette, type Rgb } from "@/features/floorplan/lib/palette
 import {
   cachedLabels,
   cachedSolids,
+  dropSceneCache,
   LABEL_HEIGHT,
   type LabelEntry,
   peekLabels,
@@ -398,6 +399,17 @@ export function StoreScene({
   const container = useRef<HTMLDivElement>(null)
   const [awake, setAwake] = useState(true)
   const [hovered, setHovered] = useState<ZoneId | null>(null)
+  const [generation, setGeneration] = useState(0)
+  const onContextLost = useCallback((event: Event) => {
+    event.preventDefault()
+    dropSceneCache()
+    setGeneration((current) => current + 1)
+  }, [])
+  useEffect(() => {
+    return () => {
+      dropSceneCache()
+    }
+  }, [])
   useEffect(() => {
     const node = container.current
     if (node === null) {
@@ -437,6 +449,10 @@ export function StoreScene({
   return (
     <div ref={container} className="aspect-[16/10] w-full">
       <Canvas
+        key={generation}
+        onCreated={({ gl }) => {
+          gl.domElement.addEventListener("webglcontextlost", onContextLost)
+        }}
         flat
         dpr={[1, 2]}
         frameloop={awake ? "demand" : "never"}

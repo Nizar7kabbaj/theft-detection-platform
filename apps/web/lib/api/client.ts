@@ -11,7 +11,7 @@ import {
 import { refreshSession } from "@/lib/api/refresh"
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"])
-
+const REQUEST_TIMEOUT_MS = 15_000
 type RequestOptions<T> = {
   method?: string
   body?: unknown
@@ -19,15 +19,11 @@ type RequestOptions<T> = {
   headers?: Record<string, string>
   schema?: StandardSchemaV1<unknown, T>
 }
-
 type SessionFailureHandler = (error: ApiError) => void
-
 let onSessionFailure: SessionFailureHandler | null = null
-
 export function setSessionFailureHandler(handler: SessionFailureHandler | null): void {
   onSessionFailure = handler
 }
-
 function buildHeaders(method: string, extra: Record<string, string>, hasBody: boolean): Headers {
   const headers = new Headers(extra)
   headers.set("Accept", "application/json")
@@ -42,7 +38,10 @@ function buildHeaders(method: string, extra: Record<string, string>, hasBody: bo
   }
   return headers
 }
-
+function deadline(caller: AbortSignal | undefined): AbortSignal {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  return caller === undefined ? timeout : AbortSignal.any([caller, timeout])
+}
 async function readPayload<T>(
   response: Response,
   path: string,
@@ -61,7 +60,6 @@ async function readPayload<T>(
   }
   return result.value
 }
-
 export async function apiRequest<T>(path: string, options: RequestOptions<T> = {}): Promise<T> {
   const method = (options.method ?? "GET").toUpperCase()
   const serialized = options.body === undefined ? null : JSON.stringify(options.body)
@@ -72,12 +70,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions<T> = {
       credentials: "same-origin",
       cache: "no-store",
       headers: buildHeaders(method, extra, serialized !== null),
+      signal: deadline(options.signal),
     }
     if (serialized !== null) {
       init.body = serialized
-    }
-    if (options.signal !== undefined) {
-      init.signal = options.signal
     }
     try {
       return await fetch(path, init)

@@ -7,11 +7,14 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
   experimental: {
     taint: true,
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
   },
   productionBrowserSourceMaps: false,
   images: {
     formats: ["image/avif", "image/webp"],
   },
 }
-
 export default nextConfig

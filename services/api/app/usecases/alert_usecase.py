@@ -75,7 +75,10 @@ def decode_cursor(cursor: str, sort: str) -> tuple[datetime, str]:
 
 
 def _snapshot_url(doc: dict[str, Any]) -> str | None:
-    if not (doc.get("snapshot_path") or doc.get("snapshot_url")):
+    stored = doc.get("snapshot_path")
+    if not stored:
+        return None
+    if _resolve_snapshot(settings.SNAPSHOTS_DIR, stored) is None:
         return None
     return f"/api/v1/alerts/{doc['_id']}/snapshot"
 

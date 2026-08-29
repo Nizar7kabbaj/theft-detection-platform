@@ -11,16 +11,15 @@ import "client-only"
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react"
 
 const SERVER_STATUS: StreamStatus = "idle"
-
 export function useStream(topic: StreamTopic, onEvent: (envelope: StreamEnvelope) => void): void {
   const handler = useRef(onEvent)
-  handler.current = onEvent
-
+  useEffect(() => {
+    handler.current = onEvent
+  })
   useEffect(() => {
     return subscribe(topic, (envelope) => handler.current(envelope))
   }, [topic])
 }
-
 export function useStreamStatus(topic: StreamTopic): StreamStatus {
   const subscribeToStatus = useCallback(
     (listener: () => void) => subscribeStatus(topic, listener),
@@ -30,7 +29,6 @@ export function useStreamStatus(topic: StreamTopic): StreamStatus {
   const readServer = useCallback(() => SERVER_STATUS, [])
   return useSyncExternalStore(subscribeToStatus, read, readServer)
 }
-
 export function useStreamRetry(topic: StreamTopic): () => void {
   return useCallback(() => retry(topic), [topic])
 }

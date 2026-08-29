@@ -106,3 +106,20 @@ export function cachedLabels(fill: string): readonly LabelEntry[] {
 export function tintsFrom(goods: Color, produce: Color): Tints {
   return { goods, produce }
 }
+
+export function dropSceneCache(): void {
+  if (solidCache !== null) {
+    for (const entry of solidCache) {
+      disposeSolid(entry.parts)
+    }
+  }
+  if (labelCache !== null) {
+    for (const entry of labelCache) {
+      entry.texture.dispose()
+    }
+  }
+  solidKey = null
+  solidCache = null
+  labelKey = null
+  labelCache = null
+}

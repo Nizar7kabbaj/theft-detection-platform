@@ -1,20 +1,20 @@
 "use client"
 import { useQuery } from "@tanstack/react-query"
+import { fetchStatsClient } from "@/features/analytics/api/stats-client"
 import { statsQueryKey } from "@/features/analytics/api/stats-key"
 import type { Stats } from "@/features/analytics/schemas/stats"
+import { DEFAULT_GC_MS, DEFAULT_STALE_MS } from "@/lib/api/query-config"
 import { cn } from "@/lib/utils"
 
 const LABEL_CLASS =
   "font-mono text-[9px] text-muted-foreground uppercase leading-none tracking-[0.09em]"
-
 const VALUE_CLASS = "mt-2 font-mono text-2xl leading-none tabular-nums"
-
 export function StatsSummary() {
   const { data } = useQuery<Stats>({
     queryKey: statsQueryKey,
-    queryFn: () => {
-      throw new Error("stats are provided by the server")
-    },
+    queryFn: ({ signal }) => fetchStatsClient(signal),
+    staleTime: DEFAULT_STALE_MS,
+    gcTime: DEFAULT_GC_MS,
   })
   if (data === undefined) {
     return null
