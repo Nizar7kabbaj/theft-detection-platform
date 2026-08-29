@@ -6,7 +6,7 @@ import type {
   DecisionBucket,
 } from "@/features/analytics/schemas/timeseries"
 
-const SKELETON_CLASS = "h-64 w-full animate-pulse rounded-lg bg-muted"
+const SKELETON_CLASS = "h-64 w-full animate-pulse rounded-sm bg-muted motion-reduce:animate-none"
 
 const AlertChart = dynamic(
   () => import("@/features/analytics/components/analytics-charts").then((m) => m.AlertVolumeChart),
@@ -16,9 +16,8 @@ const AlertChart = dynamic(
   },
 )
 
-const DecisionChart = dynamic(
-  () =>
-    import("@/features/analytics/components/analytics-charts").then((m) => m.DecisionVolumeChart),
+const Throughput = dynamic(
+  () => import("@/features/analytics/components/analytics-charts").then((m) => m.ThroughputChart),
   {
     ssr: false,
     loading: () => <div className={SKELETON_CLASS} />,
@@ -35,12 +34,14 @@ export function AlertVolumeChartLazy({
   return <AlertChart buckets={buckets} unit={unit} />
 }
 
-export function DecisionVolumeChartLazy({
-  buckets,
+export function ThroughputChartLazy({
+  alerts,
+  decisions,
   unit,
 }: {
-  buckets: readonly DecisionBucket[]
+  alerts: readonly AlertBucket[]
+  decisions: readonly DecisionBucket[]
   unit: BucketUnit
 }) {
-  return <DecisionChart buckets={buckets} unit={unit} />
+  return <Throughput alerts={alerts} decisions={decisions} unit={unit} />
 }
