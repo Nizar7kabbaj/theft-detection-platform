@@ -19,11 +19,19 @@ type AssertNever<T extends never> = T
 export type DecisionDrift = AssertNever<UncoveredDecision>
 export type SortDrift = AssertNever<UncoveredSort>
 
+export const RANGE_VALUES = ["today", "7d", "30d"] as const
+export type HistoryRange = (typeof RANGE_VALUES)[number]
+export const DEFAULT_RANGE: HistoryRange = "30d"
+
 export const HISTORY_PAGE_SIZE = 25
-export const DEFAULT_SORT: AlertSort = "decided_at"
-const CAMERA_ID_MAX_LENGTH = 128
+export const DEFAULT_SORT: AlertSort = "created_at"
+
+const CAMERA_ID_MAX_LENGTH = 64
+const DAY_MS = 86_400_000
+const RANGE_DAYS: Record<HistoryRange, number> = { today: 0, "7d": 7, "30d": 30 }
 
 export type HistoryFilters = {
+  range: HistoryRange
   decision: Decision | null
   severity: AlertSeverity | null
   camera: string | null
@@ -31,10 +39,29 @@ export type HistoryFilters = {
 }
 
 export const DEFAULT_FILTERS: HistoryFilters = {
+  range: DEFAULT_RANGE,
   decision: null,
   severity: null,
   camera: null,
   sort: DEFAULT_SORT,
+}
+
+export type RangeBounds = { start: string; end: string }
+
+export function rangeBounds(range: HistoryRange, now: Date): RangeBounds {
+  const end = now
+  if (range === "today") {
+    const start = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0),
+    )
+    return { start: start.toISOString(), end: end.toISOString() }
+  }
+  const start = new Date(end.getTime() - RANGE_DAYS[range] * DAY_MS)
+  return { start: start.toISOString(), end: end.toISOString() }
+}
+
+export function bucketUnit(range: HistoryRange): "hour" | "day" {
+  return range === "today" ? "hour" : "day"
 }
 
 type RawParams = Record<string, string | string[] | undefined>
@@ -48,6 +75,14 @@ function single(value: string | string[] | undefined): string | null {
     return first === undefined || first === "" ? null : first
   }
   return null
+}
+
+function toRange(value: string | null): HistoryRange {
+  if (value === null) {
+    return DEFAULT_RANGE
+  }
+  const match = RANGE_VALUES.find((candidate) => candidate === value)
+  return match ?? DEFAULT_RANGE
 }
 
 function toDecision(value: string | null): Decision | null {
@@ -87,6 +122,7 @@ function toSort(value: string | null): AlertSort {
 
 export function parseHistoryFilters(params: RawParams): HistoryFilters {
   return {
+    range: toRange(single(params.range)),
     decision: toDecision(single(params.decision)),
     severity: toSeverity(single(params.severity)),
     camera: toCamera(single(params.camera_id)),
@@ -100,6 +136,7 @@ export function parseHistoryCursor(params: RawParams): string | null {
 
 function searchFor(filters: HistoryFilters, cursor: string | null): URLSearchParams {
   const search = new URLSearchParams()
+  search.set("range", filters.range)
   if (filters.decision !== null) {
     search.set("decision", filters.decision)
   }
@@ -116,13 +153,19 @@ function searchFor(filters: HistoryFilters, cursor: string | null): URLSearchPar
   return search
 }
 
-export function historyListPath(filters: HistoryFilters, cursor: string | null): string {
+export function historyListPath(
+  filters: HistoryFilters,
+  cursor: string | null,
+  bounds: RangeBounds,
+): string {
   const search = searchFor(filters, cursor)
+  search.delete("range")
+  search.set("start", bounds.start)
+  search.set("end", bounds.end)
   search.set("limit", String(HISTORY_PAGE_SIZE))
   return `/api/v1/alerts?${search.toString()}`
 }
 
 export function historyHref(filters: HistoryFilters, cursor: string | null): string {
-  const encoded = searchFor(filters, cursor).toString()
-  return encoded === "" ? "/history" : `/history?${encoded}`
+  return `/history?${searchFor(filters, cursor).toString()}`
 }

@@ -38,6 +38,14 @@ def _readable_alert_type(alert_type: str | None) -> str:
     return alert_type.replace("ALERT_TYPE_", "").lower().replace("_", " ")
 
 
+def _as_utc(moment: datetime | None) -> datetime | None:
+    if moment is None:
+        return None
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=UTC)
+    return moment.astimezone(UTC)
+
+
 def encode_cursor(sort: str, boundary: datetime, id_: str) -> str:
     raw = f"{sort}|{boundary.astimezone(UTC).isoformat()}|{id_}"
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
@@ -192,9 +200,15 @@ class AlertUseCase:
         sort: AlertSort = AlertSort.CREATED_AT,
         limit: int = 50,
         cursor: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> AlertPage:
         order = SORT_DECIDED if sort is AlertSort.DECIDED_AT else SORT_CREATED
         after = decode_cursor(cursor, order) if cursor else None
+        window_start = _as_utc(start)
+        window_end = _as_utc(end)
+        if window_start is not None and window_end is not None and window_start > window_end:
+            raise ValidationError("start must not be later than end")
         params = {
             "severity": severity.value if severity else None,
             "acknowledged": acknowledged,
@@ -203,6 +217,8 @@ class AlertUseCase:
             "sort": order,
             "limit": limit,
             "cursor": cursor,
+            "start": window_start.isoformat() if window_start else None,
+            "end": window_end.isoformat() if window_end else None,
         }
         key = make_list_key("alerts", params)
 
@@ -215,6 +231,8 @@ class AlertUseCase:
                 sort=order,
                 limit=limit + 1,
                 after=after,
+                start=window_start,
+                end=window_end,
             )
             has_more = len(docs) > limit
             page = docs[:limit]

@@ -3,7 +3,6 @@
 import type { Route } from "next"
 import { useRouter } from "next/navigation"
 import { useCallback, useState } from "react"
-import { Button } from "@/components/ui/button"
 import { ALERT_FILTERS_COOKIE_NAME } from "@/features/alerts/api/alert-cookie"
 import type { AlertFilters, CameraOption } from "@/features/alerts/api/alert-keys"
 import { AlertFilterControls } from "@/features/alerts/components/alert-filters"
@@ -38,14 +37,17 @@ export function AlertsWorkspace({
     <div className="flex flex-col gap-5">
       <QueueSummary filters={filters} stats={stats} />
       {restored ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5">
-          <span className="font-mono text-[11px] text-warning uppercase tracking-wider">
-            filters restored from your last session
-          </span>
-          <Button onClick={reset} size="xs" variant="outline">
+        <p className="flex flex-wrap items-center gap-3 rounded-lg border border-warning/30 bg-warning/[0.06] px-4 py-2.5 text-sm">
+          <span className="size-1.5 shrink-0 rounded-full bg-warning" />
+          <span className="text-foreground">filters restored from your last session</span>
+          <button
+            className="ml-auto rounded-sm font-mono text-[10px] text-warning uppercase tracking-wide underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={reset}
+            type="button"
+          >
             show all events
-          </Button>
-        </div>
+          </button>
+        </p>
       ) : null}
       <AlertFilterControls
         cameras={cameras}

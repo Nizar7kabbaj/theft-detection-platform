@@ -22,6 +22,8 @@ class AlertRepository(BaseRepository[dict[str, Any]]):
         sort: str = SORT_CREATED,
         limit: int = 51,
         after: tuple[datetime, str] | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> list[dict[str, Any]]:
         field = SORT_DECIDED if sort == SORT_DECIDED else SORT_CREATED
         query: dict[str, Any] = {}
@@ -33,8 +35,15 @@ class AlertRepository(BaseRepository[dict[str, Any]]):
             query["decision"] = decision
         if camera_id:
             query["camera_id"] = camera_id
+        field_clause: dict[str, Any] = {}
         if field == SORT_DECIDED:
-            query[SORT_DECIDED] = {"$type": "date"}
+            field_clause["$type"] = "date"
+        if start is not None:
+            field_clause["$gte"] = start
+        if end is not None:
+            field_clause["$lte"] = end
+        if field_clause:
+            query[field] = field_clause
         if after is not None:
             boundary, id_ = after
             page_clause = [

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import FileResponse
 
@@ -51,6 +53,8 @@ async def list_alerts(
     sort: AlertSort = Query(default=AlertSort.CREATED_AT),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None, max_length=256),
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
     usecase: AlertUseCase = Depends(get_alert_usecase),
 ) -> AlertPage:
     return await usecase.list(
@@ -61,15 +65,8 @@ async def list_alerts(
         sort=sort,
         limit=limit,
         cursor=cursor,
-    )
-    return await usecase.list(
-        severity=severity,
-        acknowledged=acknowledged,
-        decision=decision,
-        camera_id=camera_id,
-        sort=sort,
-        limit=limit,
-        cursor=cursor,
+        start=start,
+        end=end,
     )
 
 

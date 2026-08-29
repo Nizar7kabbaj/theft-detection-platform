@@ -108,7 +108,7 @@ async function collect(): Promise<Item[] | null> {
     }
     const rank: Rank = alert.severity === "SEVERITY_CRITICAL" ? "critical" : "warning"
     const item: Item = {
-      key: `alert-${alert.alert_id}`,
+      key: `alert-${alert._id}`,
       rank,
       icon: <ShieldAlert aria-hidden="true" className="size-4" />,
       title: rank === "critical" ? "critical event unreviewed" : "warning event unreviewed",

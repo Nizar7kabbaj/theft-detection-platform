@@ -1,6 +1,6 @@
 "use client"
 
-import { ShieldAlert } from "lucide-react"
+import { Download, ShieldAlert } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -11,6 +11,8 @@ import { NewAlertPill } from "@/features/alerts/components/new-alert-pill"
 import { StreamIndicator } from "@/features/alerts/components/stream-indicator"
 import { useAlertPage } from "@/features/alerts/hooks/use-alert-page"
 import { useAlertSocket } from "@/features/alerts/hooks/use-alert-socket"
+import { buildCsv, downloadCsv } from "@/features/alerts/lib/export-csv"
+import type { Alert } from "@/features/alerts/schemas/alert"
 
 const HEAD_CLASS =
   "px-3 py-2 text-left font-mono font-normal text-[10px] text-muted-foreground uppercase tracking-wider"
@@ -39,6 +41,10 @@ export function AlertTable({
   const refresh = () => {
     clearPending()
     void query.refetch()
+  }
+  const exportRows = (items: readonly Alert[]) => {
+    const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "")
+    downloadCsv(buildCsv(items, new Map()), `alerts-${stamp}.csv`)
   }
 
   if (query.isPending) {
@@ -158,8 +164,14 @@ export function AlertTable({
           ) : (
             <span />
           )}
-          <span className="text-right font-mono text-[10px] text-muted-foreground tabular-nums">
-            {rows.length === 1 ? "1 event loaded" : `${rows.length} events loaded`}
+          <span className="flex items-center justify-end gap-3">
+            <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+              {rows.length === 1 ? "1 event loaded" : `${rows.length} events loaded`}
+            </span>
+            <Button onClick={() => exportRows(rows)} size="xs" variant="ghost">
+              <Download aria-hidden="true" className="size-3" />
+              export
+            </Button>
           </span>
         </div>
       </div>
