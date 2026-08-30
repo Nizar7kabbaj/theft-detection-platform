@@ -1,5 +1,9 @@
 import type { AlertDetail, Decision } from "@/features/alerts/schemas/alert"
 
+const ID_FULL_LENGTH = 32
+const ID_HEAD_LENGTH = 5
+const ID_TAIL_LENGTH = 8
+
 export const SEVERITY_LABEL: Record<AlertDetail["severity"], string> = {
   SEVERITY_UNSPECIFIED: "unspecified",
   SEVERITY_INFO: "info",
@@ -37,6 +41,13 @@ export function classifierStateLabel(value: string | null | undefined): string {
   return value.replace("INFERENCE_STATE_", "").toLowerCase().replace(/_/g, " ")
 }
 
+export function shortAlertId(value: string): string {
+  if (value.length <= ID_FULL_LENGTH) {
+    return value
+  }
+  return `${value.slice(0, ID_HEAD_LENGTH)}…${value.slice(-ID_TAIL_LENGTH)}`
+}
+
 export function formatTimestamp(value: string): string {
   return new Date(value).toLocaleString("en-GB", {
     year: "numeric",
@@ -47,6 +58,31 @@ export function formatTimestamp(value: string): string {
     second: "2-digit",
     timeZone: "UTC",
   })
+}
+
+export function clockTime(value: string): string {
+  return new Date(value).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "UTC",
+  })
+}
+
+export function relativeAge(value: string, now: number): string {
+  const seconds = Math.max(0, Math.round((now - new Date(value).getTime()) / 1000))
+  if (seconds < 60) {
+    return `${seconds}s ago`
+  }
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) {
+    return `${minutes}m ago`
+  }
+  const hours = Math.round(minutes / 60)
+  if (hours < 48) {
+    return `${hours}h ago`
+  }
+  return `${Math.round(hours / 24)}d ago`
 }
 
 export function objectLabel(alert: AlertDetail): string {

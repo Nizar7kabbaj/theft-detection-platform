@@ -1,4 +1,7 @@
 "use client"
+import type { Route } from "next"
+import { useRouter } from "next/navigation"
+import { useCallback } from "react"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import {
   type ChartConfig,
@@ -15,50 +18,58 @@ import type {
 } from "@/features/analytics/schemas/timeseries"
 
 const ALERT_CONFIG = {
-  critical: { label: "critical", color: "var(--chart-1)" },
-  warning: { label: "warning", color: "var(--chart-2)" },
-  notice: { label: "notice", color: "var(--chart-3)" },
-  info: { label: "info", color: "var(--chart-4)" },
+  info: { label: "info", color: "var(--chart-3)" },
+  notice: { label: "notice", color: "var(--chart-2)" },
+  warning: { label: "warning", color: "var(--chart-1)" },
+  critical: { label: "critical", color: "var(--chart-4)" },
   unspecified: { label: "unspecified", color: "var(--chart-5)" },
 } satisfies ChartConfig
 
-const DECISION_CONFIG = {
-  confirmed: { label: "confirmed", color: "var(--chart-1)" },
-  dismissed: { label: "dismissed", color: "var(--chart-3)" },
-  unsure: { label: "unsure", color: "var(--chart-2)" },
+const THROUGHPUT_CONFIG = {
+  raised: { label: "raised", color: "var(--chart-2)" },
+  decided: { label: "decided", color: "var(--chart-3)" },
 } satisfies ChartConfig
 
 const ALERT_KEYS = ["unspecified", "info", "notice", "warning", "critical"] as const
-const DECISION_KEYS = ["dismissed", "unsure", "confirmed"] as const
-
-const CHART_CLASS = "aspect-auto h-64 w-full"
-const AXIS_PROPS = { axisLine: false, tickLine: false, tickMargin: 8 } as const
+const CHART_CLASS =
+  "aspect-auto h-64 w-full [&_.recharts-cartesian-grid_line]:stroke-border/50 motion-reduce:[&_.recharts-layer]:animate-none"
+const AXIS_PROPS = {
+  axisLine: false,
+  tickLine: false,
+  tickMargin: 8,
+  tick: { fontSize: 9, fontFamily: "var(--font-mono)", fill: "var(--muted-foreground)" },
+} as const
 
 function tickLabel(bucket: string, unit: BucketUnit): string {
-  const at = new Date(bucket)
-  if (unit === "hour") {
-    return at.toLocaleString("en-GB", { day: "2-digit", hour: "2-digit", timeZone: "UTC" })
-  }
-  return at.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" })
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "UTC",
+    ...(unit === "hour"
+      ? { hour: "2-digit", minute: "2-digit", hour12: false }
+      : { day: "2-digit", month: "short" }),
+  }).format(new Date(bucket))
 }
 
 function fullLabel(bucket: string, unit: BucketUnit): string {
-  const at = new Date(bucket)
-  if (unit === "hour") {
-    return `${at.toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "UTC",
-    })} UTC`
-  }
-  return `${at.toLocaleDateString("en-GB", {
+  const stamp = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "UTC",
     day: "2-digit",
     month: "short",
     year: "numeric",
-    timeZone: "UTC",
-  })} UTC`
+    ...(unit === "hour" ? { hour: "2-digit", minute: "2-digit", hour12: false } : {}),
+  }).format(new Date(bucket))
+  return `${stamp} UTC`
+}
+
+function useBucketLink(): (bucket: string) => void {
+  const router = useRouter()
+  return useCallback(
+    (bucket: string) => {
+      const day = bucket.slice(0, 10)
+      const search = new URLSearchParams({ start: day, end: day })
+      router.push(`/history?${search.toString()}` as Route)
+    },
+    [router],
+  )
 }
 
 export function AlertVolumeChart({
@@ -68,6 +79,7 @@ export function AlertVolumeChart({
   buckets: readonly AlertBucket[]
   unit: BucketUnit
 }) {
+  const open = useBucketLink()
   const data = buckets.map((entry) => ({ ...entry, label: tickLabel(entry.bucket, unit) }))
   return (
     <ChartContainer className={CHART_CLASS} config={ALERT_CONFIG}>
@@ -88,10 +100,18 @@ export function AlertVolumeChart({
         <ChartLegend content={<ChartLegendContent />} />
         {ALERT_KEYS.map((key, index) => (
           <Bar
+            className="cursor-pointer"
             dataKey={key}
             fill={`var(--color-${key})`}
             key={key}
-            radius={index === ALERT_KEYS.length - 1 ? [4, 4, 0, 0] : 0}
+            onClick={(data) => {
+              const row = data as unknown as { payload?: { bucket?: string } }
+              const bucket = row.payload?.bucket
+              if (bucket !== undefined) {
+                open(bucket)
+              }
+            }}
+            radius={index === ALERT_KEYS.length - 1 ? [3, 3, 0, 0] : 0}
             stackId="alerts"
           />
         ))}
@@ -100,16 +120,24 @@ export function AlertVolumeChart({
   )
 }
 
-export function DecisionVolumeChart({
-  buckets,
+export function ThroughputChart({
+  alerts,
+  decisions,
   unit,
 }: {
-  buckets: readonly DecisionBucket[]
+  alerts: readonly AlertBucket[]
+  decisions: readonly DecisionBucket[]
   unit: BucketUnit
 }) {
-  const data = buckets.map((entry) => ({ ...entry, label: tickLabel(entry.bucket, unit) }))
+  const decided = new Map(decisions.map((entry) => [entry.bucket, entry.total]))
+  const data = alerts.map((entry) => ({
+    bucket: entry.bucket,
+    label: tickLabel(entry.bucket, unit),
+    raised: entry.total,
+    decided: decided.get(entry.bucket) ?? 0,
+  }))
   return (
-    <ChartContainer className={CHART_CLASS} config={DECISION_CONFIG}>
+    <ChartContainer className={CHART_CLASS} config={THROUGHPUT_CONFIG}>
       <BarChart accessibilityLayer data={data} margin={{ left: 4, right: 4, top: 4 }}>
         <CartesianGrid vertical={false} />
         <XAxis {...AXIS_PROPS} dataKey="label" interval="preserveStartEnd" minTickGap={16} />
@@ -125,15 +153,8 @@ export function DecisionVolumeChart({
           }
         />
         <ChartLegend content={<ChartLegendContent />} />
-        {DECISION_KEYS.map((key, index) => (
-          <Bar
-            dataKey={key}
-            fill={`var(--color-${key})`}
-            key={key}
-            radius={index === DECISION_KEYS.length - 1 ? [4, 4, 0, 0] : 0}
-            stackId="decisions"
-          />
-        ))}
+        <Bar dataKey="raised" fill="var(--color-raised)" radius={[3, 3, 0, 0]} />
+        <Bar dataKey="decided" fill="var(--color-decided)" radius={[3, 3, 0, 0]} />
       </BarChart>
     </ChartContainer>
   )

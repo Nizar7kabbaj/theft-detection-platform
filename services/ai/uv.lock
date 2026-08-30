@@ -21,6 +21,7 @@ dependencies = [
     { name = "grpcio-health-checking" },
     { name = "lap" },
     { name = "numpy" },
+    { name = "nvidia-ml-py" },
     { name = "opencv-python-headless" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
@@ -54,6 +55,7 @@ requires-dist = [
     { name = "grpcio-tools", marker = "extra == 'dev'", specifier = "==1.71.2" },
     { name = "lap", specifier = "==0.5.12" },
     { name = "numpy", specifier = "==1.26.4" },
+    { name = "nvidia-ml-py", specifier = "==12.560.30" },
     { name = "opencv-python-headless", specifier = "==4.10.0.84" },
     { name = "opentelemetry-api", specifier = "==1.29.0" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = "==1.29.0" },
@@ -697,6 +699,15 @@ source = { registry = "https://pypi.org/simple" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/73/b9/598f6ff36faaece4b3c50d26f50e38661499ff34346f00e057760b35cc9d/nvidia_cusparselt_cu12-0.7.1-py3-none-manylinux2014_aarch64.whl", hash = "sha256:8878dce784d0fac90131b6817b607e803c36e629ba34dc5b433471382196b6a5", size = 283835557, upload-time = "2025-02-26T00:16:54.265Z" },
     { url = "https://files.pythonhosted.org/packages/56/79/12978b96bd44274fe38b5dde5cfb660b1d114f70a65ef962bcbbed99b549/nvidia_cusparselt_cu12-0.7.1-py3-none-manylinux2014_x86_64.whl", hash = "sha256:f1bb701d6b930d5a7cea44c19ceb973311500847f81b634d802b7b539dc55623", size = 287193691, upload-time = "2025-02-26T00:15:44.104Z" },
+]
+
+[[package]]
+name = "nvidia-ml-py"
+version = "12.560.30"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/53/10/5f34de4a71db8b2b7ec4269f4a33287f24c23e2857ea3187c977b7bc3604/nvidia-ml-py-12.560.30.tar.gz", hash = "sha256:f0254dc7400647680a072ee02509bfd46102b60bdfeca321576d4d4817e7fe97", size = 39194, upload-time = "2024-08-14T16:27:12.647Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/f3/a69ce0b1a1e12fbf6b2ad9f4c14c9999fdbdf15f2478d210f0fd501ddc98/nvidia_ml_py-12.560.30-py3-none-any.whl", hash = "sha256:fea371c94d63e38a611c17bbb85fe400e9c8ddb9e8684a9cd0e47786a4bc3c73", size = 40526, upload-time = "2024-08-14T16:27:11.379Z" },
 ]
 
 [[package]]

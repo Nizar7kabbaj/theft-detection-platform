@@ -16,6 +16,7 @@ from app.services.camera_health import HealthState
 logger = logging.getLogger(__name__)
 
 _PAYLOAD_FIELD = b"payload"
+_BODY_FIELD = b"body"
 
 
 class ViewerLimit:
@@ -64,6 +65,31 @@ async def _send_state(ws: WebSocket, state: HealthState, age: float | None) -> N
     )
 
 
+async def _send_detection(ws: WebSocket, body: bytes) -> None:
+    try:
+        data = json.loads(body)
+    except ValueError:
+        return
+    await ws.send_text(json.dumps({"event": "detection", "data": data}))
+
+
+async def _read_detection(
+    stream: Redis, camera_id: str, last_entry: bytes
+) -> tuple[bytes, bytes | None]:
+    key = f"{settings.STREAM_DETECT_PREFIX}:{camera_id}"
+    try:
+        entries = await stream.xrevrange(key, count=1)
+    except RedisError:
+        return last_entry, None
+    if not entries:
+        return last_entry, None
+    entry_id, fields = entries[0]
+    if entry_id == last_entry:
+        return last_entry, None
+    body = fields.get(_BODY_FIELD)
+    return entry_id, body
+
+
 async def run_frame_pump(ws: WebSocket, stream: Redis, camera_id: str) -> None:
     key = f"{settings.STREAM_FRAME_PREFIX}:{camera_id}"
     interval = settings.FRAME_STREAM_INTERVAL_SECONDS
@@ -71,8 +97,8 @@ async def run_frame_pump(ws: WebSocket, stream: Redis, camera_id: str) -> None:
     max_failures = settings.FRAME_STREAM_MAX_READ_FAILURES
     failures = 0
     last_entry = b""
+    last_detect_entry = b""
     last_state: HealthState | None = None
-
     while ws.client_state == WebSocketState.CONNECTED:
         try:
             entries = await stream.xrevrange(key, count=1)
@@ -84,33 +110,31 @@ async def run_frame_pump(ws: WebSocket, stream: Redis, camera_id: str) -> None:
                 last_state = HealthState.UNKNOWN
             await asyncio.sleep(interval)
             continue
-
         failures = 0
         now = time.time()
-
         if not entries:
             if last_state is not HealthState.OFFLINE:
                 await _send_state(ws, HealthState.OFFLINE, None)
                 last_state = HealthState.OFFLINE
             await asyncio.sleep(interval)
             continue
-
         entry_id, fields = entries[0]
         age = _entry_age(entry_id, now)
         state = _state_for(age)
         if state is not last_state:
             await _send_state(ws, state, age)
             last_state = state
-
         payload = fields.get(_PAYLOAD_FIELD)
         if payload is None or entry_id == last_entry or state is HealthState.OFFLINE:
             await asyncio.sleep(interval)
             continue
-
         last_entry = entry_id
         try:
             await asyncio.wait_for(ws.send_bytes(payload), send_timeout)
         except TimeoutError:
             logger.info("frame send timed out camera=%s, dropping viewer", camera_id)
             return
+        last_detect_entry, body = await _read_detection(stream, camera_id, last_detect_entry)
+        if body is not None:
+            await _send_detection(ws, body)
         await asyncio.sleep(interval)

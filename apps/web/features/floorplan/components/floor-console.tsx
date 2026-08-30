@@ -1,7 +1,7 @@
 "use client"
 import { useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { LiveView } from "@/features/cameras/components/live-view"
+import { CameraPreview } from "@/features/cameras/components/camera-preview"
 import { useCameraGrid } from "@/features/cameras/hooks/use-camera-grid"
 import { HEALTH_DETAIL, HEALTH_DOT, HEALTH_TEXT } from "@/features/cameras/lib/health"
 import { type Camera, cameraHealth, type HealthState } from "@/features/cameras/schemas/camera"
@@ -92,14 +92,14 @@ export function FloorConsole() {
   const active = selected === null ? undefined : byId.get(selected)
 
   return (
-    <div className="grid min-w-0 gap-5 2xl:grid-cols-[minmax(0,1fr)_22rem]">
-      <div className="flex min-w-0 flex-col gap-4">
+    <div className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="flex min-w-0 flex-col gap-3">
         {palette === null ? (
           <div className={SURFACE_CLASS} />
         ) : (
           <StoreScene palette={palette} health={health} selected={selected} onSelect={select} />
         )}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           {PLACEMENTS.map((placement) => {
             const camera = byId.get(placement.cameraId)
             const state = health[placement.cameraId] ?? "unknown"
@@ -112,37 +112,44 @@ export function FloorConsole() {
                 onClick={() => {
                   select(placement.cameraId)
                 }}
-                className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
-                  isActive ? "border-foreground/40 bg-accent" : "border-border hover:bg-accent/50"
+                className={`flex items-center gap-2 rounded-sm border px-2.5 py-1.5 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${
+                  isActive ? "border-foreground/30 bg-accent" : "border-border hover:bg-accent/50"
                 }`}
               >
-                <span aria-hidden="true" className={`size-2 rounded-full ${HEALTH_DOT[state]}`} />
-                <span>{camera === undefined ? placement.cameraId : camera.name}</span>
-                <span className={`text-xs ${HEALTH_TEXT[state]}`}>{HEALTH_DETAIL[state]}</span>
+                <span aria-hidden="true" className={`size-1.5 rounded-full ${HEALTH_DOT[state]}`} />
+                <span className="leading-none">
+                  {camera === undefined ? placement.cameraId : camera.name}
+                </span>
+                <span
+                  className={`font-mono text-[9px] uppercase leading-none tracking-[0.04em] ${HEALTH_TEXT[state]}`}
+                >
+                  {HEALTH_DETAIL[state]}
+                </span>
               </button>
             )
           })}
         </div>
         {blind.length === 0 ? null : (
-          <p className="text-muted-foreground text-sm">
+          <p className="font-mono text-[10px] text-muted-foreground">
             no camera covers {blind.map((zone) => ZONE_LABEL[zone]).join(", ")}
           </p>
         )}
       </div>
       <div className="flex min-w-0 flex-col gap-3">
         {isError ? (
-          <p className="text-muted-foreground text-sm">camera list is unavailable</p>
+          <p className="font-mono text-[11px] text-muted-foreground">camera list is unavailable</p>
         ) : isPending ? (
-          <div className="aspect-video w-full animate-pulse rounded-xl bg-muted" />
+          <div className="aspect-video w-full animate-pulse rounded-lg bg-muted" />
         ) : active === undefined ? (
-          <div className="flex aspect-video w-full items-center justify-center rounded-xl border border-border border-dashed px-6 text-center text-muted-foreground text-sm">
+          <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-border border-dashed px-6 text-center font-mono text-[11px] text-muted-foreground">
             pick a camera on the floor to open its stream
           </div>
         ) : (
-          <LiveView
+          <CameraPreview
             cameraId={active.camera_id}
             cameraName={active.name}
             lastFrameAt={cameraHealth(active).last_frame_at ?? null}
+            registeredState={cameraHealth(active).state}
           />
         )}
       </div>

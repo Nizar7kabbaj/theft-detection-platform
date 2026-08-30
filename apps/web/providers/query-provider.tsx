@@ -26,7 +26,8 @@ function shouldRetry(failureCount: number, error: Error): boolean {
 }
 
 function retryDelay(attemptIndex: number): number {
-  return Math.min(RETRY_BASE_DELAY_MS * 2 ** attemptIndex, RETRY_MAX_DELAY_MS)
+  const ceiling = Math.min(RETRY_BASE_DELAY_MS * 2 ** attemptIndex, RETRY_MAX_DELAY_MS)
+  return Math.max(RETRY_BASE_DELAY_MS, Math.round(Math.random() * ceiling))
 }
 
 function createQueryClient() {

@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     REDIS_PASSWORD_FILE: str = "/run/secrets/camera_redis_password"
     FRAME_STREAM_PREFIX: str = "frame"
     FRAME_STREAM_MAXLEN: Annotated[int, Field(ge=1)] = 900
+    DETECT_STREAM_PREFIX: str = "detect"
+    DETECT_STREAM_MAXLEN: Annotated[int, Field(ge=1)] = 300
+    STATS_KEY_PREFIX: str = "stats:camera"
+    STATS_INTERVAL_SECONDS: Annotated[float, Field(gt=0)] = 1.0
+    STATS_TTL_SECONDS: Annotated[int, Field(ge=1)] = 10
     PUBLISH_QUEUE_DEPTH: Annotated[int, Field(ge=1)] = 30
     PUBLISH_RETRY_BACKOFF_SECONDS: Annotated[float, Field(gt=0)] = 0.5
     PUBLISH_RETRY_BACKOFF_MAX_SECONDS: Annotated[float, Field(gt=0)] = 10.0
@@ -91,6 +96,14 @@ class Settings(BaseSettings):
     @property
     def frame_stream_key(self) -> str:
         return f"{self.FRAME_STREAM_PREFIX}:{self.CAMERA_ID}"
+
+    @property
+    def detect_stream_key(self) -> str:
+        return f"{self.DETECT_STREAM_PREFIX}:{self.CAMERA_ID}"
+
+    @property
+    def stats_key(self) -> str:
+        return f"{self.STATS_KEY_PREFIX}:{self.CAMERA_ID}"
 
 
 @lru_cache

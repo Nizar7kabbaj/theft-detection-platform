@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 import grpc
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from app.capture.buffer import CapturedFrame, ForwardBuffer
+from app.capture.detection_publisher import DetectionPublisher
 from app.capture.rate import RateController
 from app.grpc_gen import inference_pb2, inference_pb2_grpc
 
 logger = logging.getLogger(__name__)
+
+LATENCY_WINDOW = 30
 
 
 class Forwarder:
@@ -22,6 +26,7 @@ class Forwarder:
         retry_backoff_max_seconds: float,
         rate_controller: RateController,
         credentials: grpc.ChannelCredentials,
+        detection_publisher: DetectionPublisher | None = None,
     ) -> None:
         self._buffer = buffer
         self._target = target
@@ -29,11 +34,13 @@ class Forwarder:
         self._retry_backoff = retry_backoff_seconds
         self._retry_backoff_max = retry_backoff_max_seconds
         self._rate_controller = rate_controller
+        self._detection_publisher = detection_publisher
         self._channel: grpc.aio.Channel | None = None
         self._stub: inference_pb2_grpc.InferenceServiceStub | None = None
         self._running = False
         self._forwarded_total = 0
         self._failed_total = 0
+        self._latency_samples: list[float] = []
 
     @property
     def counters(self) -> dict[str, int]:
@@ -41,6 +48,18 @@ class Forwarder:
             "forwarded_total": self._forwarded_total,
             "failed_total": self._failed_total,
         }
+
+    @property
+    def latency_ms(self) -> float | None:
+        samples = self._latency_samples
+        if not samples:
+            return None
+        return sum(samples) / len(samples)
+
+    def _record_latency(self, seconds: float) -> None:
+        self._latency_samples.append(seconds * 1000.0)
+        if len(self._latency_samples) > LATENCY_WINDOW:
+            del self._latency_samples[:-LATENCY_WINDOW]
 
     def _connect(self) -> None:
         self._channel = grpc.aio.secure_channel(self._target, self._credentials)
@@ -74,10 +93,19 @@ class Forwarder:
                 await asyncio.sleep(idle_sleep)
                 continue
             try:
+                started = time.monotonic()
                 detection = await self._stub.Analyze(self._to_proto(record), timeout=1.0)
+                self._record_latency(time.monotonic() - started)
                 self._forwarded_total += 1
                 backoff = self._retry_backoff
                 self._rate_controller.observe(detection.detection_present)
+                if self._detection_publisher is not None:
+                    await self._detection_publisher.publish(
+                        detection,
+                        record.session_id,
+                        record.frame_index,
+                        record.timestamp_unix,
+                    )
             except grpc.aio.AioRpcError as exc:
                 self._failed_total += 1
                 logger.warning(
@@ -91,6 +119,8 @@ class Forwarder:
     async def stop(self) -> None:
         self._running = False
         await self._disconnect()
+        if self._detection_publisher is not None:
+            await self._detection_publisher.close()
         logger.info(
             "forwarder stopped forwarded=%d failed=%d", self._forwarded_total, self._failed_total
         )

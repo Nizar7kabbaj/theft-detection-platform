@@ -1,7 +1,3 @@
 services:
   backend:
     runtime: runc
-
-  # frontend override re-added when the next.js service lands.
-  # frontend:
-  #   runtime: runc

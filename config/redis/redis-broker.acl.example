@@ -1,0 +1,5 @@
+user default on #<sha256-hex> ~* &* -@all +ping +@connection
+user broker on #<sha256-hex> ~celery* ~_kombu* ~unacked* ~results:* ~*pidbox* ~*.reply.celery* ~kombu* allchannels -@all +@connection +@list +@set +@sortedset +@string +@hash +@transaction +@pubsub +@scripting +client +ttl +expire +persist +del +exists +type +scan +info +unlink +dump +restore
+user exporter on #<sha256-hex> resetchannels -@all +@connection +info +client +ping +latency +slowlog
+user notify on #<sha256-hex> resetchannels ~notify:* -@all +@connection +get +set +del +exists +expire +ttl
+user ops on #<sha256-hex> resetchannels ~* -@all +@connection +acl|load +acl|list +acl|whoami +client +ping

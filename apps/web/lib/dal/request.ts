@@ -4,12 +4,11 @@ import { ApiError, apiErrorFromResponse, NetworkError, ResponseShapeError } from
 import { readAccessToken } from "@/lib/dal/session"
 
 const ACCESS_COOKIE_NAME = "__Host-access_token"
-
+const SERVER_TIMEOUT_MS = 10_000
 type ServerReadOptions<T> = {
   signal?: AbortSignal
   schema?: StandardSchemaV1<unknown, T>
 }
-
 function apiBaseUrl(): string {
   const configured = process.env.API_BASE_URL
   if (configured === undefined || configured === "") {
@@ -17,7 +16,10 @@ function apiBaseUrl(): string {
   }
   return configured.replace(/\/+$/, "")
 }
-
+function deadline(caller: AbortSignal | undefined): AbortSignal {
+  const timeout = AbortSignal.timeout(SERVER_TIMEOUT_MS)
+  return caller === undefined ? timeout : AbortSignal.any([caller, timeout])
+}
 async function readPayload<T>(
   response: Response,
   path: string,
@@ -36,7 +38,6 @@ async function readPayload<T>(
   }
   return result.value
 }
-
 export async function serverRead<T>(path: string, options: ServerReadOptions<T> = {}): Promise<T> {
   const token = await readAccessToken()
   if (token === null) {
@@ -51,9 +52,7 @@ export async function serverRead<T>(path: string, options: ServerReadOptions<T> 
     headers,
     cache: "no-store",
     redirect: "manual",
-  }
-  if (options.signal !== undefined) {
-    init.signal = options.signal
+    signal: deadline(options.signal),
   }
   let response: Response
   try {
