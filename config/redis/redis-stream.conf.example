@@ -1,29 +1,18 @@
 bind 0.0.0.0
 port 0
 protected-mode yes
-
 requirepass <password>
-user default on #<password> ~* &* -@all +ping +@connection
-user ai on #<password> ~ai:track:* resetchannels -@all +@connection +xadd +xrange +xlen +ttl +expire +del +client +ping
-user camera on #<password> ~frame:* resetchannels -@all +@connection +xadd +client +ping
-user gate on #<password> ~frame:* resetchannels -@all +@connection +xread +xlen +client +ping
-user exporter on #CHANGEME resetchannels ~* -@all +@connection +info +client +ping +latency +slowlog
-user api-health on #<sha256-hex> ~frame:* resetchannels -@all +@connection +xrevrange +xlen +client +ping
-
+aclfile /etc/redis/redis-stream.acl
 appendonly no
 save ""
-
 maxmemory 1500mb
 maxmemory-policy allkeys-lru
-
 rename-command FLUSHALL ""
 rename-command FLUSHDB ""
 rename-command DEBUG ""
-
 loglevel notice
 logfile ""
 databases 3
-
 tls-port 6380
 tls-cert-file /etc/redis/tls/tls.crt
 tls-key-file /etc/redis/tls/tls.key

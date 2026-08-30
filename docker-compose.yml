@@ -621,11 +621,12 @@ services:
     volumes:
       - redis_data:/data
       - ./config/redis/redis.conf:/etc/redis/redis.conf:ro
+      - ./config/redis/redis.acl:/etc/redis/redis.acl:ro
       - ./config/pki/redis/tls.crt:/etc/redis/tls/tls.crt:ro
       - ./config/pki/redis/tls.key:/etc/redis/tls/tls.key:ro
       - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis.conf)\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt --user health -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis.conf)\" ping | grep -q PONG"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -644,11 +645,12 @@ services:
     volumes:
       - redis_broker_data:/data
       - ./config/redis/redis-broker.conf:/etc/redis/redis-broker.conf:ro
+      - ./config/redis/redis-broker.acl:/etc/redis/redis-broker.acl:ro
       - ./config/pki/redis-broker/tls.crt:/etc/redis/tls/tls.crt:ro
       - ./config/pki/redis-broker/tls.key:/etc/redis/tls/tls.key:ro
       - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-broker.conf)\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt --user health -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-broker.conf)\" ping | grep -q PONG"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -667,6 +669,7 @@ services:
     command: ["redis-server", "/etc/redis/redis-stream.conf"]
     volumes:
       - ./config/redis/redis-stream.conf:/etc/redis/redis-stream.conf:ro
+      - ./config/redis/redis-stream.acl:/etc/redis/redis-stream.acl:ro
       - ./config/pki/redis-stream/tls.crt:/etc/redis/tls/tls.crt:ro
       - ./config/pki/redis-stream/tls.key:/etc/redis/tls/tls.key:ro
       - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro

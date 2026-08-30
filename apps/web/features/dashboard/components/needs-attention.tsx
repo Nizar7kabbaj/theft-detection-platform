@@ -32,7 +32,7 @@ const ICON_TONE: Record<Rank, string> = {
 
 const MAX_ITEMS = 6
 
-const NOT_WATCHED = "not watched yet: frame rate, stream latency, edge temperature, storage"
+const NOT_WATCHED = "not watched yet: storage"
 
 function occurredLabel(iso: string): string {
   const parsed = new Date(iso)

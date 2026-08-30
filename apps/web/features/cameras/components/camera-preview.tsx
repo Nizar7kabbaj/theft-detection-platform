@@ -24,7 +24,7 @@ export function CameraPreview({
   registeredState: HealthState
   height?: string
 }) {
-  const { bitmapRef, status, health, stats } = useFrameBitmap(cameraId)
+  const { bitmapRef, status, health, stats, pose } = useFrameBitmap(cameraId)
   const state = health === null ? registeredState : toHealthState(health)
   const seconds = useElapsedSeconds(stats.lastFrameAt ?? lastFrameAt)
 
@@ -35,7 +35,7 @@ export function CameraPreview({
         cameraName={cameraName}
         health={health}
         height={height}
-        pose={null}
+        pose={pose}
         status={status}
         threshold={0.3}
       />

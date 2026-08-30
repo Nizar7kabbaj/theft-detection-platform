@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import signal
 from concurrent.futures import ThreadPoolExecutor
@@ -12,6 +13,7 @@ from app.alert_client import AlertClient
 from app.core.config import settings
 from app.grpc_gen import inference_pb2_grpc, presence_pb2_grpc
 from app.inference import LSTMDetector
+from app.node_stats import NodeStatsPublisher
 from app.observability import register_presence_gauge, setup_observability
 from app.presence_servicer import PresenceServicer
 from app.server.interceptors import IdentityInterceptor
@@ -66,7 +68,6 @@ async def _serve() -> None:
         expiry_frames=settings.CONCEALMENT_EXPIRY_FRAMES,
         snapshot_dir=settings.SNAPSHOT_DIR,
     )
-
     alert_client = AlertClient(
         api_base_url=settings.API_BASE_URL,
         auth_base_url=settings.AUTH_BASE_URL,
@@ -77,6 +78,14 @@ async def _serve() -> None:
         csrf_header_name=settings.CSRF_HEADER_NAME,
         verify=True,
         timeout_seconds=settings.ALERT_TIMEOUT_SECONDS,
+    )
+    node_stats = NodeStatsPublisher(
+        redis_url=settings.REDIS_URL,
+        connection_kwargs=settings.redis_tls_options,
+        stats_key=settings.NODE_STATS_KEY,
+        interval_seconds=settings.NODE_STATS_INTERVAL_SECONDS,
+        ttl_seconds=settings.NODE_STATS_TTL_SECONDS,
+        device_index=settings.NODE_STATS_DEVICE_INDEX,
     )
     server = grpc.aio.server(interceptors=[IdentityInterceptor()])
     health_servicer = AsyncHealthServicer()
@@ -97,6 +106,7 @@ async def _serve() -> None:
     await asyncio.get_running_loop().run_in_executor(executor, detector.load)
     log.info("detector ready")
     await server.start()
+    node_stats_task = asyncio.create_task(node_stats.run())
     health_servicer.set(INFERENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.SERVING)
     health_servicer.set(PRESENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.SERVING)
     health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
@@ -114,6 +124,10 @@ async def _serve() -> None:
     health_servicer.set(INFERENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
     health_servicer.set(PRESENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
     health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
+    await node_stats.stop()
+    node_stats_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await node_stats_task
     await server.stop(grace=5)
     executor.shutdown(wait=True)
     detector.close()

@@ -246,6 +246,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/edge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Edge Stats */
+        get: operations["get_edge_stats_api_v1_stats_edge_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -636,6 +653,21 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** EdgeStatsResponse */
+        EdgeStatsResponse: {
+            /** Average Fps */
+            average_fps: number | null;
+            /** Latency Ms */
+            latency_ms: number | null;
+            /** Gpu Temperature C */
+            gpu_temperature_c: number | null;
+            /** Gpu Name */
+            gpu_name: string | null;
+            /** Reporting Cameras */
+            reporting_cameras: number;
+            /** Total Cameras */
+            total_cameras: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1050,6 +1082,8 @@ export interface operations {
                 sort?: components["schemas"]["AlertSort"];
                 limit?: number;
                 cursor?: string | null;
+                start?: string | null;
+                end?: string | null;
             };
             header?: never;
             path?: never;
@@ -1305,6 +1339,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_edge_stats_api_v1_stats_edge_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeStatsResponse"];
                 };
             };
         };

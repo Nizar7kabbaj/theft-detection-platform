@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     refresh_cookie_name: str = "__Host-refresh_token"
     csrf_cookie_name: str = "__Host-csrf"
     csrf_header_name: str = "X-CSRF-Token"
-    cookie_samesite: str = "strict"
+    cookie_samesite: str = "lax"
 
     login_max_attempts: int = 5
     login_window_seconds: int = 900

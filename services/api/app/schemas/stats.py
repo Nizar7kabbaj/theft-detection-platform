@@ -48,3 +48,12 @@ class StatsTimeseriesResponse(BaseModel):
     unit: BucketUnit
     alerts: list[AlertBucket]
     decisions: list[DecisionBucket]
+
+
+class EdgeStatsResponse(BaseModel):
+    average_fps: float | None
+    latency_ms: float | None
+    gpu_temperature_c: int | None
+    gpu_name: str | None
+    reporting_cameras: int
+    total_cameras: int

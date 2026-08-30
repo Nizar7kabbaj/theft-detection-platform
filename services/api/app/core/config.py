@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     STREAM_REDIS_USER: str = "api-health"
     STREAM_REDIS_PASSWORD_FILE: Path = Path("/run/secrets/stream_reader_redis_password")
     STREAM_FRAME_PREFIX: str = "frame"
+    STREAM_DETECT_PREFIX: str = "detect"
+    STREAM_STATS_CAMERA_PREFIX: str = "stats:camera"
+    STREAM_STATS_NODE_KEY: str = "stats:node"
     HEALTH_ONLINE_MAX_AGE_SECONDS: float = 5.0
     HEALTH_DEGRADED_MAX_AGE_SECONDS: float = 15.0
     HEALTH_RECONCILE_INTERVAL_SECONDS: float = 3.0

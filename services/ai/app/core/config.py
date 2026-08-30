@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     REDIS_USER: str = "ai"
     REDIS_PASSWORD_FILE: str = "/run/secrets/ai_redis_password"
     TRACKER_TTL_SECONDS: int = 60
+    NODE_STATS_KEY: str = "stats:node"
+    NODE_STATS_INTERVAL_SECONDS: float = 2.0
+    NODE_STATS_TTL_SECONDS: int = 15
+    NODE_STATS_DEVICE_INDEX: int = 0
     TLS_CERT_FILE: Path = Path("/run/secrets/ai_tls_cert")
     TLS_KEY_FILE: Path = Path("/run/secrets/ai_tls_key")
     TLS_CA_FILE: Path = Path("/run/secrets/ai_tls_ca")
@@ -48,7 +52,6 @@ class Settings(BaseSettings):
     CSRF_HEADER_NAME: str = "X-CSRF-Token"
     ALERT_TIMEOUT_SECONDS: float = 5.0
     SNAPSHOT_DIR: str = "/app/snapshots"
-
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @computed_field

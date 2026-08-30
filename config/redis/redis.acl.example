@@ -1,0 +1,6 @@
+user default on #<sha256-hex> ~* &* -@all +ping +@connection
+user api on sanitize-payload #<sha256-hex> ~cache:* ~idem:* ~rl:* resetchannels &alerts:* &cameras:* &session:revoked -@all +@connection +get +set +del +scan +time +eval +evalsha +script +publish +subscribe +unsubscribe +psubscribe +punsubscribe
+user exporter on #<sha256-hex> resetchannels -@all +@connection +info +client +ping +latency +slowlog
+user auth on #<sha256-hex> resetchannels &session:revoked ~revoked:jti:* ~revoked:sid:* ~login:fail:* -@all +@connection +publish +set +exists +eval +evalsha +script +incr +get +pttl +pexpire +del
+user audit on #<sha256-hex> resetchannels ~audit:rl:* -@all +@connection +incrby +pexpire +pttl +ttl
+user ops on #<sha256-hex> resetchannels ~* -@all +@connection +acl|load +acl|list +acl|whoami +client +ping

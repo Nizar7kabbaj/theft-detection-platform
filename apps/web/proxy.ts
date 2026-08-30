@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server"
-
 const CSP_HEADER = "content-security-policy"
 const CSP_REPORT_HEADER = "content-security-policy-report-only"
 const ACCESS_COOKIE_NAME = "__Host-access_token"
@@ -49,6 +48,21 @@ function loosePolicyAllowed(): boolean {
     )
   }
   return true
+}
+function noteAuthRedirect(request: NextRequest, reason: string): void {
+  process.stdout.write(
+    `${JSON.stringify({
+      event: "session_redirect_to_login",
+      path: request.nextUrl.pathname,
+      reason,
+      cookies: request.cookies.getAll().map((entry) => entry.name),
+      secFetchSite: request.headers.get("sec-fetch-site"),
+      secFetchMode: request.headers.get("sec-fetch-mode"),
+      secFetchDest: request.headers.get("sec-fetch-dest"),
+      purpose: request.headers.get("next-router-prefetch"),
+      at: new Date().toISOString(),
+    })}\n`,
+  )
 }
 function authBaseUrl(): string | null {
   const configured = process.env.AUTH_BASE_URL
@@ -138,10 +152,12 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   if (!hasAccess && hasRefresh && pathname !== LOGIN_PATH) {
     renewed = await renewSession(request)
     if (!renewed.ok) {
+      noteAuthRedirect(request, renewed.reason)
       return loginRedirect(request)
     }
   }
   if (!hasAccess && renewed === null && pathname !== LOGIN_PATH) {
+    noteAuthRedirect(request, "no-access-cookie-no-refresh-cookie")
     return loginRedirect(request)
   }
   if (pathname === "/") {

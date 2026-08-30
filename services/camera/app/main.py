@@ -8,11 +8,13 @@ import signal
 import grpc
 
 from app.capture.buffer import ForwardBuffer
+from app.capture.detection_publisher import DetectionPublisher
 from app.capture.device import CameraDevice
 from app.capture.forwarder import Forwarder
 from app.capture.loop import CaptureLoop
 from app.capture.publisher import FramePublisher
 from app.capture.rate import RateController
+from app.capture.stats_publisher import StatsPublisher
 from app.core.config import Settings, get_settings
 from app.observability import register_capture_metrics, setup_observability
 
@@ -52,6 +54,12 @@ async def _serve() -> None:
         retry_backoff_seconds=settings.PUBLISH_RETRY_BACKOFF_SECONDS,
         retry_backoff_max_seconds=settings.PUBLISH_RETRY_BACKOFF_MAX_SECONDS,
     )
+    detection_publisher = DetectionPublisher(
+        redis_url=settings.REDIS_URL,
+        connection_kwargs=settings.redis_tls_options,
+        stream_key=settings.detect_stream_key,
+        maxlen=settings.DETECT_STREAM_MAXLEN,
+    )
     loop = CaptureLoop(
         device=device,
         buffer=buffer,
@@ -73,6 +81,17 @@ async def _serve() -> None:
         retry_backoff_max_seconds=settings.FORWARD_RETRY_BACKOFF_MAX_SECONDS,
         rate_controller=rate_controller,
         credentials=_channel_credentials(settings),
+        detection_publisher=detection_publisher,
+    )
+    stats_publisher = StatsPublisher(
+        redis_url=settings.REDIS_URL,
+        connection_kwargs=settings.redis_tls_options,
+        stats_key=settings.stats_key,
+        interval_seconds=settings.STATS_INTERVAL_SECONDS,
+        ttl_seconds=settings.STATS_TTL_SECONDS,
+        published_total=lambda: publisher.counters["published_total"],
+        latency_ms=lambda: forwarder.latency_ms,
+        target_fps=lambda: float(rate_controller.current_fps),
     )
     register_capture_metrics(
         camera_id=settings.CAMERA_ID,
@@ -89,9 +108,14 @@ async def _serve() -> None:
     publisher.start()
     loop.start()
     forward_task = asyncio.create_task(forwarder.run())
+    stats_task = asyncio.create_task(stats_publisher.run())
     log.info("camera service running")
     await stop_event.wait()
     log.info("shutdown signal received")
+    await stats_publisher.stop()
+    stats_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await stats_task
     await forwarder.stop()
     forward_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):

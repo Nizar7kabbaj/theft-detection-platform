@@ -1,0 +1,7 @@
+user default on #<sha256-hex> ~* &* -@all +ping +@connection
+user ai on #<sha256-hex> ~ai:track:* ~stats:node resetchannels -@all +@connection +set +xadd +xrange +xlen +ttl +expire +del +client +ping
+user exporter on #<sha256-hex> resetchannels ~* -@all +@connection +info +client +ping +latency +slowlog
+user camera on #<sha256-hex> ~frame:* ~detect:* ~stats:camera:* resetchannels -@all +@connection +set +xadd +client +ping
+user gate on #<sha256-hex> ~frame:* resetchannels -@all +@connection +xread +xlen +client +ping
+user api-health on #<sha256-hex> ~frame:* ~detect:* ~stats:* resetchannels -@all +@connection +get +xrevrange +xlen +client +ping
+user ops on #<sha256-hex> resetchannels ~* -@all +@connection +acl|load +acl|list +acl|whoami +client +ping

@@ -12,10 +12,26 @@ const TERMINAL_REASONS = new Set([
 export type FrameStatus = "connecting" | "open" | "waiting" | "stopped"
 export type FrameHealth = "online" | "degraded" | "offline" | "unknown"
 
+export type DetectionPerson = {
+  track_id: number
+  bbox: { x1: number; y1: number; x2: number; y2: number }
+  keypoints: { x: number; y: number; confidence: number }[]
+  score: number
+  inference_state: string
+}
+
+export type DetectionFrame = {
+  frame_width: number
+  frame_height: number
+  detection_present: boolean
+  persons: DetectionPerson[]
+}
+
 export type FrameHandlers = {
   onFrame: (blob: Blob) => void
   onHealth: (health: FrameHealth) => void
   onStatus: (status: FrameStatus) => void
+  onDetection: (detection: DetectionFrame) => void
 }
 
 type StateEvent = {
@@ -56,6 +72,20 @@ export function openFrameSocket(cameraId: string, handlers: FrameHandlers): () =
       clearTimeout(watchdog)
       watchdog = null
     }
+  }
+
+  function readDetection(raw: string): DetectionFrame | null {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return null
+    }
+    const envelope = parsed as { event?: string; data?: DetectionFrame }
+    if (envelope.event !== "detection" || envelope.data === undefined) {
+      return null
+    }
+    return envelope.data
   }
 
   const drop = (): void => {
@@ -129,6 +159,11 @@ export function openFrameSocket(cameraId: string, handlers: FrameHandlers): () =
         const health = readHealth(event.data)
         if (health !== null) {
           handlers.onHealth(health)
+          return
+        }
+        const detection = readDetection(event.data)
+        if (detection !== null) {
+          handlers.onDetection(detection)
         }
         return
       }

@@ -15,6 +15,7 @@ import { CameraDetail } from "@/features/cameras/components/camera-detail"
 import { FleetColumn } from "@/features/cameras/components/fleet-column"
 import { FrameCanvas } from "@/features/cameras/components/frame-canvas"
 import { FreshnessRing } from "@/features/cameras/components/freshness-ring"
+import { useCameraAlertCount } from "@/features/cameras/hooks/use-camera-alert-count"
 import { useCameraGrid } from "@/features/cameras/hooks/use-camera-grid"
 import { useFrameBitmap } from "@/features/cameras/hooks/use-frame-bitmap"
 import { useElapsedSeconds } from "@/features/cameras/lib/health"
@@ -27,7 +28,6 @@ import {
 import { writeCookie } from "@/lib/cookies/write"
 
 const SKELETON_KEYS = ["a", "b", "c"] as const
-const ABSENT = "not on this stream"
 
 const STATE_DOT: Record<HealthState, string> = {
   online: "bg-success",
@@ -111,7 +111,8 @@ function ConsoleView({
   onSelect: (cameraId: string) => void
   initialFilter: FleetFilter
 }) {
-  const { bitmapRef, status, health, stats } = useFrameBitmap(camera.camera_id)
+  const { bitmapRef, status, health, stats, pose } = useFrameBitmap(camera.camera_id)
+  const alertCount = useCameraAlertCount(camera.camera_id)
   const registered = cameraHealth(camera)
   const state = health === null ? registered.state : toHealthState(health)
   const seconds = useElapsedSeconds(stats.lastFrameAt ?? registered.last_frame_at ?? null)
@@ -129,10 +130,32 @@ function ConsoleView({
           note="measured at viewer"
           value={stats.fps === null || stats.frames === 0 ? "--" : `${stats.fps} fps`}
         />
-        <Reading label="persons" note={ABSENT} value="--" />
-        <Reading label="inference" note={ABSENT} value="--" />
-        <Reading label="resolution" note={ABSENT} value="--" />
-        <Reading label="alerts" note="not wired yet" value="--" />
+        <Reading
+          label="persons"
+          note="tracked this frame"
+          value={stats.persons === null ? "--" : String(stats.persons)}
+        />
+        <Reading
+          label="inference"
+          note="lead track"
+          value={
+            stats.inferenceState === null
+              ? "--"
+              : stats.inferenceState.replace("INFERENCE_STATE_", "").toLowerCase()
+          }
+        />
+        <Reading
+          label="resolution"
+          note="decoded frame"
+          value={
+            stats.width === null || stats.height === null ? "--" : `${stats.width}x${stats.height}`
+          }
+        />
+        <Reading
+          label="alerts"
+          note="stored for this camera"
+          value={alertCount === null ? "--" : String(alertCount)}
+        />
       </div>
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card p-3.5">
@@ -159,7 +182,7 @@ function ConsoleView({
             bitmapRef={bitmapRef}
             cameraName={camera.name}
             health={health}
-            pose={null}
+            pose={pose}
             status={status}
             threshold={0.3}
           />

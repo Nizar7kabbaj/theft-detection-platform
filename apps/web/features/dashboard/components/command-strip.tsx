@@ -1,6 +1,7 @@
 import { Activity, Camera, Clock, ShieldCheck, Thermometer, Wifi } from "lucide-react"
 import type { ReactNode } from "react"
 import { Suspense } from "react"
+import { EdgeCells } from "@/features/dashboard/components/edge-cells"
 import { FleetCells } from "@/features/dashboard/components/fleet-cells"
 import { StoreClock } from "@/features/dashboard/components/store-clock"
 import { cn } from "@/lib/utils"
@@ -70,6 +71,34 @@ function FleetFallback() {
   )
 }
 
+function EdgeLoading() {
+  return (
+    <>
+      <Cell
+        icon={<Activity aria-hidden="true" className="size-4" />}
+        label="average fps"
+        value="reading"
+        note="edge metrics loading"
+        tone="muted"
+      />
+      <Cell
+        icon={<Wifi aria-hidden="true" className="size-4" />}
+        label="edge latency"
+        value="reading"
+        note="edge metrics loading"
+        tone="muted"
+      />
+      <Cell
+        icon={<Thermometer aria-hidden="true" className="size-4" />}
+        label="edge temperature"
+        value="reading"
+        note="edge metrics loading"
+        tone="muted"
+      />
+    </>
+  )
+}
+
 export function CommandStrip() {
   return (
     <div className="grid grid-cols-2 rounded-lg border border-border bg-card shadow-panel md:grid-cols-3 xl:grid-cols-6">
@@ -82,27 +111,9 @@ export function CommandStrip() {
       <Suspense fallback={<FleetFallback />}>
         <FleetCells />
       </Suspense>
-      <Cell
-        icon={<Activity aria-hidden="true" className="size-4" />}
-        label="average fps"
-        value="no reading"
-        note="metric not published"
-        tone="muted"
-      />
-      <Cell
-        icon={<Wifi aria-hidden="true" className="size-4" />}
-        label="edge latency"
-        value="no reading"
-        note="metric not published"
-        tone="muted"
-      />
-      <Cell
-        icon={<Thermometer aria-hidden="true" className="size-4" />}
-        label="edge temperature"
-        value="no reading"
-        note="metric not published"
-        tone="muted"
-      />
+      <Suspense fallback={<EdgeLoading />}>
+        <EdgeCells />
+      </Suspense>
     </div>
   )
 }

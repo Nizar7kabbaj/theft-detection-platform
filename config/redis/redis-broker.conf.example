@@ -3,11 +3,8 @@ port 0
 protected-mode yes
 
 requirepass CHANGE_ME
+aclfile /etc/redis/redis-broker.acl
 
-user default on #CHANGE_ME_SHA256 ~* &* -@all +ping +@connection
-user broker on #CHANGE_ME_SHA256 ~celery* ~_kombu* ~unacked* ~results:* ~*pidbox* ~*.reply.celery* ~kombu* allchannels -@all +@connection +@list +@set +@sortedset +@string +@hash +@transaction +@pubsub +@scripting +client +ttl +expire +persist +del +exists +type +scan +info +unlink +dump +restore
-user exporter on #CHANGE_ME_SHA256 resetchannels ~* -@all +@connection +info +client +ping +latency +slowlog
-user notify on #CHANGE_ME_SHA256 resetchannels ~notify:* -@all +@connection +get +set +del +exists +expire +ttl
 
 appendonly yes
 appendfsync everysec
