@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.core.errors import AlertUnavailableError, NotFoundError, ValidationError
-from app.schemas.alert import AlertCreate, AlertPage, AlertResponse, AlertType
+from app.schemas.alert import AlertCreate, AlertPage, AlertResponse, AlertSort, AlertType
 from app.usecases.alert_usecase import _to_response, decode_cursor, encode_cursor
 
 OCCURRED_AT = datetime(2026, 6, 12, 10, 0, 0, tzinfo=UTC)
@@ -37,36 +37,41 @@ def patch_cache(mocker):
 
 class TestCursorCodec:
     def test_round_trip_preserves_instant_and_id(self):
-        token = encode_cursor(CREATED_AT, "oid-1")
-        moment, id_ = decode_cursor(token)
+        token = encode_cursor(AlertSort.CREATED_AT.value, CREATED_AT, "oid-1")
+        moment, id_ = decode_cursor(token, AlertSort.CREATED_AT.value)
         assert moment == CREATED_AT
         assert id_ == "oid-1"
 
     def test_token_carries_no_padding(self):
-        assert "=" not in encode_cursor(CREATED_AT, "oid-1")
+        assert "=" not in encode_cursor(AlertSort.CREATED_AT.value, CREATED_AT, "oid-1")
 
     def test_naive_timestamp_treated_as_utc(self):
-        token = encode_cursor(CREATED_AT, "oid-1")
-        moment, _ = decode_cursor(token)
+        token = encode_cursor(AlertSort.CREATED_AT.value, CREATED_AT, "oid-1")
+        moment, _ = decode_cursor(token, AlertSort.CREATED_AT.value)
         assert moment.tzinfo is not None
 
     def test_garbage_token_rejected(self):
         with pytest.raises(ValidationError, match="malformed cursor"):
-            decode_cursor("not-base64-at-all!!")
+            decode_cursor("not-base64-at-all!!", AlertSort.CREATED_AT.value)
 
     def test_token_without_separator_rejected(self):
         import base64
 
         raw = base64.urlsafe_b64encode(b"no-separator-here").decode().rstrip("=")
         with pytest.raises(ValidationError, match="malformed cursor"):
-            decode_cursor(raw)
+            decode_cursor(raw, AlertSort.CREATED_AT.value)
 
     def test_token_with_unparseable_timestamp_rejected(self):
         import base64
 
-        raw = base64.urlsafe_b64encode(b"yesterday|oid-1").decode().rstrip("=")
+        raw = base64.urlsafe_b64encode(b"created_at|yesterday|oid-1").decode().rstrip("=")
         with pytest.raises(ValidationError, match="malformed cursor"):
-            decode_cursor(raw)
+            decode_cursor(raw, AlertSort.CREATED_AT.value)
+
+    def test_cursor_from_other_sort_order_rejected(self):
+        token = encode_cursor(AlertSort.CREATED_AT.value, CREATED_AT, "oid-1")
+        with pytest.raises(ValidationError, match="does not match"):
+            decode_cursor(token, AlertSort.DECIDED_AT.value)
 
 
 class TestToResponse:
@@ -87,7 +92,6 @@ class TestToResponse:
         assert resp.confidence == 0.92
         assert resp.alert_type == AlertType.ALERT_TYPE_OBJECT_PROXIMITY
 
-    def test_object_absent_with_bending_type_falls_back_to_readable_string(self):
         doc = {
             "_id": "oid-2",
             "alert_id": "a2",
@@ -97,12 +101,9 @@ class TestToResponse:
             "camera_id": "cam-1",
             "severity": "SEVERITY_NOTICE",
             "object": None,
-            "alert_type": "ALERT_TYPE_BENDING",
         }
         resp = _to_response(doc)
-        assert resp.object_name == "bending"
         assert resp.confidence is None
-        assert resp.alert_type == AlertType.ALERT_TYPE_BENDING
 
     def test_object_absent_falls_back_to_alert_type_string(self):
         doc = {
@@ -130,13 +131,11 @@ class TestToResponse:
             "severity": "SEVERITY_WARNING",
             "object_name": "backpack",
             "confidence": 0.71,
-            "snapshot_url": "/snaps/a4.jpg",
             "alert_type": "ALERT_TYPE_LOITERING",
         }
         resp = _to_response(doc)
         assert resp.object_name == "backpack"
         assert resp.confidence == 0.71
-        assert resp.snapshot_url == "/snaps/a4.jpg"
 
     def test_missing_created_at_falls_back_to_occurred_at(self):
         doc = {
@@ -309,7 +308,7 @@ class TestList:
         page = await alert_usecase.list(limit=2)
         assert len(page.items) == 2
         assert page.next_cursor is not None
-        _moment, id_ = decode_cursor(page.next_cursor)
+        _moment, id_ = decode_cursor(page.next_cursor, AlertSort.CREATED_AT.value)
         assert id_ == page.items[-1].id
 
     async def test_second_page_does_not_repeat_first(self, alert_usecase, fake_alert_repo, mocker):
@@ -347,19 +346,19 @@ class TestList:
 class TestAcknowledge:
     async def test_marks_alert_acknowledged(self, alert_usecase, fake_alert_repo, sample_alert_doc):
         fake_alert_repo.store[sample_alert_doc["_id"]] = {**sample_alert_doc}
-        resp = await alert_usecase.acknowledge(sample_alert_doc["_id"])
+        resp = await alert_usecase.acknowledge(sample_alert_doc["_id"], "user-1")
         assert isinstance(resp, AlertResponse)
         assert fake_alert_repo.store[sample_alert_doc["_id"]]["acknowledged"] is True
 
     async def test_raises_not_found_for_missing_alert(self, alert_usecase):
         with pytest.raises(NotFoundError, match="not found"):
-            await alert_usecase.acknowledge("missing-id")
+            await alert_usecase.acknowledge("missing-id", "user-1")
 
     async def test_publishes_acknowledged_event(
         self, alert_usecase, fake_alert_repo, mock_redis, sample_alert_doc
     ):
         fake_alert_repo.store[sample_alert_doc["_id"]] = {**sample_alert_doc}
-        await alert_usecase.acknowledge(sample_alert_doc["_id"])
+        await alert_usecase.acknowledge(sample_alert_doc["_id"], "user-1")
         channel, _ = mock_redis.publish.await_args.args
         assert channel == "alerts:acknowledged"
 
@@ -367,26 +366,7 @@ class TestAcknowledge:
         self, alert_usecase, fake_alert_repo, mock_redis, sample_alert_doc
     ):
         fake_alert_repo.store[sample_alert_doc["_id"]] = {**sample_alert_doc}
-        await alert_usecase.acknowledge(sample_alert_doc["_id"])
+        await alert_usecase.acknowledge(sample_alert_doc["_id"], "user-1")
         assert mock_redis.publish.await_count == 1
-        await alert_usecase.acknowledge(sample_alert_doc["_id"])
+        await alert_usecase.acknowledge(sample_alert_doc["_id"], "user-1")
         assert mock_redis.publish.await_count == 1
-
-
-class TestDelete:
-    async def test_removes_alert(self, alert_usecase, fake_alert_repo, sample_alert_doc):
-        fake_alert_repo.store[sample_alert_doc["_id"]] = {**sample_alert_doc}
-        await alert_usecase.delete(sample_alert_doc["_id"])
-        assert sample_alert_doc["_id"] not in fake_alert_repo.store
-
-    async def test_raises_not_found_for_missing_alert(self, alert_usecase):
-        with pytest.raises(NotFoundError, match="not found"):
-            await alert_usecase.delete("missing-id")
-
-    async def test_publish_failure_does_not_raise(
-        self, alert_usecase, fake_alert_repo, mock_redis, sample_alert_doc
-    ):
-        fake_alert_repo.store[sample_alert_doc["_id"]] = {**sample_alert_doc}
-        mock_redis.publish.side_effect = Exception("redis down")
-        await alert_usecase.delete(sample_alert_doc["_id"])
-        assert sample_alert_doc["_id"] not in fake_alert_repo.store

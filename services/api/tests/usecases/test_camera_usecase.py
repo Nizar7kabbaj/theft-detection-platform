@@ -7,14 +7,30 @@ import pytest
 
 from app.core.errors import ConflictError, NotFoundError
 from app.schemas.camera import CameraCreate, CameraResponse
+from app.services.camera_health import HealthState
 
 
 def _camera_create() -> CameraCreate:
     return CameraCreate(
+        camera_id="cam-a",
         name="front-door",
         location="entrance",
         stream_url="rtsp://cam-1/stream",
         status="active",
+    )
+
+
+@pytest.fixture(autouse=True)
+def patch_health(mocker):
+    mocker.patch(
+        "app.usecases.camera_usecase.read_health",
+        new=mocker.AsyncMock(
+            return_value=mocker.MagicMock(
+                state=HealthState.UNKNOWN,
+                last_frame_at=None,
+                age_seconds=None,
+            )
+        ),
     )
 
 

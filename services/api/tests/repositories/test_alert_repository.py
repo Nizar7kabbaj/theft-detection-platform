@@ -185,9 +185,13 @@ class TestListPage:
         moment = datetime(2026, 8, 13, 12, 16, 26, 160000, tzinfo=UTC)
         await repo.list_page(after=(moment, VALID_OID))
         query = mock_collection.find.call_args[0][0]
-        assert query["$or"] == [
-            {"created_at": {"$lt": moment}},
-            {"created_at": moment, "_id": {"$lt": ObjectId(VALID_OID)}},
+        assert query["$and"] == [
+            {
+                "$or": [
+                    {"created_at": {"$lt": moment}},
+                    {"created_at": moment, "_id": {"$lt": ObjectId(VALID_OID)}},
+                ]
+            }
         ]
 
     async def test_malformed_cursor_id_rejected(self, repo, mock_collection):

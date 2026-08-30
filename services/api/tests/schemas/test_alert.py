@@ -69,14 +69,14 @@ class TestAlertCreate:
             },
             "object": {"class_name": "phone"},
             "snapshot_path": "snaps/a1.jpg",
-            "alert_type": "ALERT_TYPE_BENDING",
+            "alert_type": "ALERT_TYPE_CONCEALMENT",
         }
         alert = AlertCreate(**payload)
         assert alert.person.track_id == 1
         assert alert.person.bbox.x2 == 100.0
         assert alert.object.class_name == "phone"
         assert alert.snapshot_path == "snaps/a1.jpg"
-        assert alert.alert_type == AlertType.ALERT_TYPE_BENDING
+        assert alert.alert_type == AlertType.ALERT_TYPE_CONCEALMENT
 
 
 class TestAlertResponse:
@@ -110,14 +110,14 @@ class TestAlertResponse:
             **VALID_RESPONSE_DOC,
             "confidence": 0.87,
             "snapshot_url": "snaps/a1.jpg",
-            "alert_type": "ALERT_TYPE_BENDING",
+            "alert_type": "ALERT_TYPE_CONCEALMENT",
             "acknowledged": True,
             "acknowledged_at": CREATED_AT,
         }
         resp = AlertResponse.model_validate(doc)
         assert resp.confidence == 0.87
         assert resp.snapshot_url == "snaps/a1.jpg"
-        assert resp.alert_type == AlertType.ALERT_TYPE_BENDING
+        assert resp.alert_type == AlertType.ALERT_TYPE_CONCEALMENT
         assert resp.acknowledged is True
         assert resp.acknowledged_at == CREATED_AT
 
