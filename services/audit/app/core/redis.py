@@ -5,6 +5,7 @@ import time
 from functools import lru_cache
 
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 from app.core.config import get_settings
 
@@ -79,7 +80,7 @@ async def check_append_rate(source_service: int) -> bool:
         if count == 1:
             await client.pexpire(key, span * 2000)
         return count <= settings.append_rate_limit
-    except Exception as exc:
+    except (RedisError, OSError) as exc:
         logger.error("rate limit check failed: %s", exc)
         return not get_settings().append_rate_fail_closed
 

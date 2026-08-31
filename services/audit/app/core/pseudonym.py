@@ -50,12 +50,14 @@ def pseudonymize(domain: str, value: str) -> bytes:
     if not value:
         return b""
     key = _load_key()
+    domain_bytes = domain.encode("utf-8")
+    value_bytes = value.encode("utf-8")
     message = b"".join(
         [
-            len(domain).to_bytes(8, "big"),
-            domain.encode("utf-8"),
-            len(value.encode("utf-8")).to_bytes(8, "big"),
-            value.encode("utf-8"),
+            len(domain_bytes).to_bytes(8, "big"),
+            domain_bytes,
+            len(value_bytes).to_bytes(8, "big"),
+            value_bytes,
         ]
     )
     return hmac.new(key, message, sha256).digest()
