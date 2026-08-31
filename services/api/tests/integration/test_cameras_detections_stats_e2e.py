@@ -32,6 +32,7 @@ def _tiny_jpeg() -> bytes:
 
 def _camera_payload(name: str = "cam-a", location: str = "lobby") -> dict[str, Any]:
     return {
+        "camera_id": name,
         "name": name,
         "location": location,
         "stream_url": "rtsp://cam.local/stream1",
@@ -82,7 +83,7 @@ async def test_list_cameras_returns_all(client: httpx.AsyncClient) -> None:
 
 async def test_get_camera_by_id_returns_camera(client: httpx.AsyncClient) -> None:
     create = await client.post("/api/v1/cameras", json=_camera_payload("cam-g"))
-    cam_id = create.json()["_id"]
+    cam_id = create.json()["camera_id"]
 
     resp = await client.get(f"/api/v1/cameras/{cam_id}")
 
@@ -100,7 +101,7 @@ async def test_get_missing_camera_returns_404(client: httpx.AsyncClient) -> None
 
 async def test_delete_camera_removes_doc(client: httpx.AsyncClient, test_db) -> None:
     create = await client.post("/api/v1/cameras", json=_camera_payload("cam-d"))
-    cam_id = create.json()["_id"]
+    cam_id = create.json()["camera_id"]
 
     resp = await client.delete(f"/api/v1/cameras/{cam_id}")
 

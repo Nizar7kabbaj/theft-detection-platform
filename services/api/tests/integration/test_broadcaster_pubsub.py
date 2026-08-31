@@ -15,6 +15,12 @@ pytestmark = [
     pytest.mark.asyncio(loop_scope="session"),
 ]
 
+_ORIGIN = "https://localhost"
+
+
+def _connect(url: str):
+    return websockets.connect(url, additional_headers={"Origin": _ORIGIN})
+
 
 async def _recv_with_timeout(
     ws: websockets.ClientConnection, timeout: float = 2.0
@@ -43,7 +49,7 @@ async def test_ws_connects_and_receives_alert_event(
     redis_client: Redis,
 ) -> None:
     base_url, _ = ws_server
-    async with websockets.connect(f"{base_url}/ws/alerts") as ws:
+    async with _connect(f"{base_url}/ws/alerts") as ws:
         await asyncio.sleep(0.1)
 
         payload = {"alert_id": "ws-1", "severity": "SEVERITY_WARNING"}
@@ -59,7 +65,7 @@ async def test_ws_receives_multiple_events(
     redis_client: Redis,
 ) -> None:
     base_url, _ = ws_server
-    async with websockets.connect(f"{base_url}/ws/alerts") as ws:
+    async with _connect(f"{base_url}/ws/alerts") as ws:
         await asyncio.sleep(0.1)
 
         await redis_client.publish("alerts:created", json.dumps({"alert_id": "ws-m1"}))
@@ -80,7 +86,7 @@ async def test_ws_topic_isolation(
     redis_client: Redis,
 ) -> None:
     base_url, _ = ws_server
-    async with websockets.connect(f"{base_url}/ws/alerts") as ws:
+    async with _connect(f"{base_url}/ws/alerts") as ws:
         await asyncio.sleep(0.1)
 
         await redis_client.publish("cameras:created", json.dumps({"camera_id": "iso-1"}))
@@ -101,7 +107,7 @@ async def test_ws_unknown_topic_closes(
             websockets.exceptions.ConnectionClosed,
         )
     ):
-        async with websockets.connect(f"{base_url}/ws/unknown"):
+        async with _connect(f"{base_url}/ws/unknown"):
             pass
 
 
@@ -110,7 +116,7 @@ async def test_ws_drops_non_json_pubsub_message(
     redis_client: Redis,
 ) -> None:
     base_url, _ = ws_server
-    async with websockets.connect(f"{base_url}/ws/alerts") as ws:
+    async with _connect(f"{base_url}/ws/alerts") as ws:
         await asyncio.sleep(0.1)
 
         await redis_client.publish("alerts:created", "not-valid-json")
@@ -125,7 +131,7 @@ async def test_ws_cameras_receives_created_event(
     redis_client: Redis,
 ) -> None:
     base_url, _ = ws_server
-    async with websockets.connect(f"{base_url}/ws/cameras") as ws:
+    async with _connect(f"{base_url}/ws/cameras") as ws:
         await asyncio.sleep(0.1)
 
         payload = {"_id": "cam-1", "name": "front-door", "status": "active"}
@@ -141,7 +147,7 @@ async def test_ws_cameras_receives_deleted_event(
     redis_client: Redis,
 ) -> None:
     base_url, _ = ws_server
-    async with websockets.connect(f"{base_url}/ws/cameras") as ws:
+    async with _connect(f"{base_url}/ws/cameras") as ws:
         await asyncio.sleep(0.1)
 
         payload = {"_id": "cam-2", "name": "back-door", "status": "active"}

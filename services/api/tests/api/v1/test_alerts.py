@@ -13,7 +13,7 @@ from app.core.authz import get_current_user
 from app.core.errors import NotFoundError
 from app.core.idempotency import IdempotencyState, idempotency
 from app.dependencies import get_alert_usecase
-from app.schemas.alert import AlertCreate, AlertPage, AlertResponse, Severity
+from app.schemas.alert import AlertCreate, AlertPage, AlertResponse, AlertSort, Decision, Severity
 from app.schemas.identity import CurrentUser
 
 
@@ -57,15 +57,25 @@ class FakeAlertUseCase:
         self,
         severity: Severity | None = None,
         acknowledged: bool | None = None,
+        decision: Decision | None = None,
+        camera_id: str | None = None,
+        sort: AlertSort = AlertSort.CREATED_AT,
         limit: int = 50,
         cursor: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> AlertPage:
         self.list_calls.append(
             {
                 "severity": severity,
                 "acknowledged": acknowledged,
+                "decision": decision,
+                "camera_id": camera_id,
+                "sort": sort,
                 "limit": limit,
                 "cursor": cursor,
+                "start": start,
+                "end": end,
             }
         )
         return self._list_result
@@ -84,7 +94,7 @@ class FakeAlertUseCase:
         assert self._create_result is not None
         return self._create_result
 
-    async def acknowledge(self, alert_id: str) -> AlertResponse:
+    async def acknowledge(self, alert_id: str, actor_id: str) -> AlertResponse:
         self.acknowledge_calls.append(alert_id)
         if self._acknowledge_raises is not None:
             raise self._acknowledge_raises
@@ -204,7 +214,7 @@ class TestCreate:
 
         resp = await client.post("/api/v1/alerts", json=body)
 
-        assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert resp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 class TestList:
@@ -236,8 +246,13 @@ class TestList:
             {
                 "severity": Severity.SEVERITY_WARNING,
                 "acknowledged": False,
+                "decision": None,
+                "camera_id": None,
+                "sort": AlertSort.CREATED_AT,
                 "limit": 10,
                 "cursor": "tok",
+                "start": None,
+                "end": None,
             }
         ]
 
@@ -247,16 +262,26 @@ class TestList:
         fake_usecase.set_list_result([])
         await client.get("/api/v1/alerts")
         assert fake_usecase.list_calls == [
-            {"severity": None, "acknowledged": None, "limit": 50, "cursor": None}
+            {
+                "severity": None,
+                "acknowledged": None,
+                "decision": None,
+                "camera_id": None,
+                "sort": AlertSort.CREATED_AT,
+                "limit": 50,
+                "cursor": None,
+                "start": None,
+                "end": None,
+            }
         ]
 
     async def test_limit_above_ceiling_rejected(self, client: AsyncClient) -> None:
         resp = await client.get("/api/v1/alerts?limit=500")
-        assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert resp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     async def test_limit_below_floor_rejected(self, client: AsyncClient) -> None:
         resp = await client.get("/api/v1/alerts?limit=0")
-        assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert resp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 class TestAcknowledge:
@@ -277,24 +302,5 @@ class TestAcknowledge:
         fake_usecase.set_acknowledge_raises(NotFoundError("alert missing not found"))
 
         resp = await client.patch("/api/v1/alerts/missing/acknowledge")
-
-        assert resp.status_code == 404
-
-
-class TestDelete:
-    async def test_returns_204_on_success(
-        self, client: AsyncClient, fake_usecase: FakeAlertUseCase
-    ) -> None:
-        resp = await client.delete("/api/v1/alerts/a1")
-
-        assert resp.status_code == status.HTTP_204_NO_CONTENT
-        assert fake_usecase.delete_calls == ["a1"]
-
-    async def test_returns_404_when_not_found(
-        self, client: AsyncClient, fake_usecase: FakeAlertUseCase
-    ) -> None:
-        fake_usecase.set_delete_raises(NotFoundError("alert missing not found"))
-
-        resp = await client.delete("/api/v1/alerts/missing")
 
         assert resp.status_code == 404

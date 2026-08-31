@@ -63,6 +63,31 @@ services:
       - ai_snapshots:/app/snapshots:ro
     restart: unless-stopped
 
+  backend-test:
+    build:
+      context: ./services/api
+      target: test
+    image: theft-backend-test:dev
+    container_name: theft-backend-test
+    profiles:
+      - test
+    networks:
+      - edge
+      - data
+      - observability
+    env_file:
+      - ./services/api/.env
+    volumes:
+      - ./services/api/tests:/app/tests
+      - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
+      - ./config/mongodb/secrets/mongo_api_password:/run/secrets/mongo_password:ro
+      - ./config/redis/api_redis_password:/run/secrets/api_redis_password:ro
+      - ./config/redis/stream_reader_redis_password:/run/secrets/stream_reader_redis_password:ro
+      - ./config/pki/api/tls.crt:/run/secrets/api_tls_cert:ro
+      - ./config/pki/api/tls.key:/run/secrets/api_tls_key:ro
+      - ./config/pki/ca/ca.crt:/run/secrets/api_tls_ca:ro
+      - ai_snapshots:/app/snapshots:ro
+
   web:
     build:
       context: ./apps/web

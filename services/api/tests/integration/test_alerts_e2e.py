@@ -106,9 +106,9 @@ async def test_list_alerts_filters_by_severity(
 
     assert warning.status_code == 200
     assert notice.status_code == 200
-    assert len(warning.json()) == 2
-    assert len(notice.json()) == 1
-    assert all(item["severity"] == "SEVERITY_WARNING" for item in warning.json())
+    assert len(warning.json()["items"]) == 2
+    assert len(notice.json()["items"]) == 1
+    assert all(item["severity"] == "SEVERITY_WARNING" for item in warning.json()["items"])
 
 
 async def test_list_alerts_uses_redis_cache(
@@ -161,36 +161,6 @@ async def test_acknowledge_malformed_id_returns_422(
     resp = await client.patch("/api/v1/alerts/not-a-real-oid/acknowledge")
 
     assert resp.status_code == 422
-
-
-async def test_delete_alert_removes_doc_and_publishes(
-    client: httpx.AsyncClient,
-    test_db,
-    pubsub_listener,
-) -> None:
-    create = await client.post("/api/v1/alerts", json=_alert_payload("test-a-del"))
-    mongo_id = create.json()["_id"]
-    await _drain(pubsub_listener, timeout=0.3)
-
-    resp = await client.delete(f"/api/v1/alerts/{mongo_id}")
-
-    assert resp.status_code == 204
-    stored = await test_db.alerts.find_one({"alert_id": "test-a-del"})
-    assert stored is None
-
-    messages = await _drain(pubsub_listener, timeout=1.0)
-    channels = [m["channel"] for m in messages]
-    assert "alerts:deleted" in channels
-
-
-async def test_delete_missing_alert_returns_404(
-    client: httpx.AsyncClient,
-) -> None:
-    ghost_id = str(ObjectId())
-
-    resp = await client.delete(f"/api/v1/alerts/{ghost_id}")
-
-    assert resp.status_code == 404
 
 
 async def test_idempotency_key_replays_first_response(

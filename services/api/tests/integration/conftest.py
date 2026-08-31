@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import socket
 from collections.abc import AsyncIterator
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 import grpc
@@ -21,6 +22,7 @@ from motor.motor_asyncio import (
 from redis.asyncio import Redis
 
 from app.api.v1 import alerts, cameras, detections, stats, streams
+from app.core.authz import get_current_user
 from app.core.config import settings
 from app.core.errors import (
     AlertUnavailableError,
@@ -34,18 +36,30 @@ from app.core.redis import get_redis
 from app.dependencies import get_db
 from app.grpc_gen.alert_pb2_grpc import AlertServiceStub
 from app.grpc_gen.inference_pb2_grpc import InferenceServiceStub
+from app.schemas.identity import CurrentUser
 from app.services.broadcast_service import BroadcastService
+from app.services.revocation_service import RevocationService
 
 INTEGRATION_REDIS_DB = 15
 TEST_COLLECTION_PREFIX = "test_"
+TEST_USER = CurrentUser(
+    user_id="65f1a2b3c4d5e6f7a8b9c0d2",
+    username="integration-admin",
+    roles=frozenset({"admin"}),
+    session_id="integration-session",
+)
 
 
 def _mongo_url() -> str:
-    return settings.MONGODB_URL_LOCAL
+    from app.core.database import _resolve_mongodb_url
+
+    return _resolve_mongodb_url()
 
 
 def _redis_url_for_test_db() -> str:
-    parsed = urlparse(settings.REDIS_URL_LOCAL)
+    from app.core.redis import _resolve_redis_url
+
+    parsed = urlparse(_resolve_redis_url())
     return urlunparse(parsed._replace(path=f"/{INTEGRATION_REDIS_DB}"))
 
 
@@ -59,6 +73,9 @@ class _PrefixedDatabase:
     def __init__(self, real: AsyncIOMotorDatabase, prefix: str) -> None:
         self._real = real
         self._prefix = prefix
+
+    def get_collection(self, name: str, **kwargs: Any) -> AsyncIOMotorCollection:
+        return self._real.get_collection(f"{self._prefix}{name}", **kwargs)
 
     def __getattr__(self, name: str) -> AsyncIOMotorCollection:
         return self._real[f"{self._prefix}{name}"]
@@ -86,7 +103,22 @@ async def test_db(real_db: AsyncIOMotorDatabase) -> _PrefixedDatabase:
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def redis_client() -> AsyncIterator[Redis]:
-    client = Redis.from_url(_redis_url_for_test_db(), decode_responses=True)
+    from app.core.redis import _tls_options
+
+    client = Redis.from_url(
+        _redis_url_for_test_db(),
+        decode_responses=True,
+        **_tls_options(),
+    )
+    yield client
+    await client.aclose()
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def stream_redis_client() -> AsyncIterator[Redis]:
+    from app.core.redis import open_stream_redis
+
+    client = await open_stream_redis()
     yield client
     await client.aclose()
 
@@ -175,6 +207,7 @@ async def test_app(
     real_db: AsyncIOMotorDatabase,
     test_db: _PrefixedDatabase,
     redis_client: Redis,
+    stream_redis_client: Redis,
     inference_stub: InferenceServiceStub,
     alert_stub: AlertServiceStub,
 ) -> FastAPI:
@@ -188,8 +221,14 @@ async def test_app(
     app.state.inference_stub = inference_stub
     app.state.alert_stub = alert_stub
     app.state.redis = redis_client
+    app.state.stream_redis = stream_redis_client
+
+    async def _current_user() -> CurrentUser:
+        return TEST_USER
+
     app.dependency_overrides[get_db] = lambda: test_db
     app.dependency_overrides[get_redis] = lambda: redis_client
+    app.dependency_overrides[get_current_user] = _current_user
     return app
 
 
@@ -205,12 +244,24 @@ async def ws_server(
     redis_client: Redis,
 ) -> AsyncIterator[tuple[str, BroadcastService]]:
     app = FastAPI()
+    from app.core import ws_authz
+
+    async def _authenticate(ws) -> CurrentUser:
+        return TEST_USER
+
+    ws_authz.authenticate = _authenticate
+
+    async def _reverify_loop(ws, user, permission) -> None:
+        await asyncio.Event().wait()
+
+    streams.reverify_loop = _reverify_loop
     app.include_router(streams.router)
     broadcaster = BroadcastService(
         redis=redis_client,
         max_connections=64,
         heartbeat_seconds=30,
     )
+    app.state.revocations = RevocationService(redis_client)
     app.state.broadcaster = broadcaster
     await broadcaster.start()
 
@@ -251,7 +302,13 @@ async def _clean_mongo(real_db: AsyncIOMotorDatabase) -> AsyncIterator[None]:
             await real_db[name].delete_many({})
 
 
+_CLEAN_PREFIXES = ("cache:*", "idem:*")
+
+
 @pytest_asyncio.fixture(autouse=True, loop_scope="session")
 async def _clean_redis(redis_client: Redis) -> AsyncIterator[None]:
     yield
-    await redis_client.flushdb()
+    for pattern in _CLEAN_PREFIXES:
+        keys = [key async for key in redis_client.scan_iter(pattern)]
+        if keys:
+            await redis_client.delete(*keys)
