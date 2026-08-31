@@ -17,7 +17,7 @@ async def csrf_protect(request: Request) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="csrf token missing",
         )
-    if not secrets.compare_digest(cookie_value, header_value):
+    if not secrets.compare_digest(cookie_value.encode("utf-8"), header_value.encode("utf-8")):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="csrf token mismatch",
