@@ -9,6 +9,8 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from testcontainers.mongodb import MongoDbContainer
 
+from app.core import database
+from app.migrations import runner
 from app.migrations.runner import _run
 from app.repositories.dead_letter import DeadLetterRepository
 from app.repositories.delivery_intent import DeliveryIntentRepository
@@ -23,8 +25,9 @@ def mongo_uri() -> Iterator[str]:
 
 
 def _point_settings_at(mongo_uri: str, db_name: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "MONGODB_URL_LOCAL", mongo_uri)
     monkeypatch.setattr(settings, "DATABASE_NAME", db_name)
+    monkeypatch.setattr(database, "_resolve_mongodb_url", lambda: mongo_uri)
+    monkeypatch.setattr(runner, "_resolve_mongodb_url", lambda: mongo_uri)
 
 
 @pytest.fixture
@@ -74,7 +77,7 @@ def alert_payload() -> dict:
         "occurred_at": "2026-06-18T00:00:00Z",
         "camera_id": "cam-1",
         "severity": "SEVERITY_CRITICAL",
-        "alert_type": "ALERT_TYPE_BENDING",
+        "alert_type": "ALERT_TYPE_CONCEALMENT",
     }
 
 

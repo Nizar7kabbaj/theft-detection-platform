@@ -20,8 +20,8 @@ def _readable_severity(value: Severity) -> str:
 
 def _render_alert(payload: dict[str, Any]) -> Rendered:
     alert = AlertMessage.model_validate(payload)
-    if alert.alert_type == AlertType.ALERT_TYPE_BENDING:
-        what = "person bending, possible concealment"
+    if alert.alert_type == AlertType.ALERT_TYPE_CONCEALMENT:
+        what = "possible concealment"
     elif alert.object is not None:
         what = f"person near {alert.object.class_name}"
     else:

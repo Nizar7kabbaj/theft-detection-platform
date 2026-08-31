@@ -28,7 +28,7 @@ def _alert(alert_id: str = "a-1") -> alert_pb2.Alert:
         .enum_type.values_by_name["SEVERITY_CRITICAL"]
         .number,
         alert_type=alert_pb2.Alert.DESCRIPTOR.fields_by_name["alert_type"]
-        .enum_type.values_by_name["ALERT_TYPE_BENDING"]
+        .enum_type.values_by_name["ALERT_TYPE_CONCEALMENT"]
         .number,
     )
     request.occurred_at.FromDatetime(datetime(2026, 6, 18, tzinfo=UTC))
