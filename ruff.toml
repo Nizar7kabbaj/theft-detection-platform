@@ -12,7 +12,7 @@ ignore = ["PLR0913", "PLR0917", "RET504", "SIM108", "ASYNC109", "PLW0603", "UP04
 
 [lint.per-file-ignores]
 "services/*/tests/**" = [
-    "S101", "PLR2004", "PLR0915", "SLF001", "S105", "S106", "S108", "S110",
+    "S101", "PLR2004", "PLR0915", "SLF001", "S105", "S106", "S108", "S110", "S603",
     "PT017", "PT018", "SIM103", "SIM105", "E501", "PLC0415", "BLE001",
 ]
 "services/*/tools/*.py" = ["S608", "T201"]

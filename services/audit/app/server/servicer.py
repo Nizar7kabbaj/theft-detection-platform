@@ -7,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 import grpc
 from google.protobuf.message import DecodeError
 from google.protobuf.timestamp_pb2 import Timestamp
-from redis.exceptions import RedisError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.core.chain import DEFAULT_HASH_ALGORITHM, is_supported
@@ -35,10 +34,10 @@ _PAYLOAD_FIELD_NUMBERS = {
 }
 
 
-def _to_datetime(ts: Timestamp) -> datetime | None:
-    if ts.seconds == 0 and ts.nanos == 0:
+def _to_datetime(message, field: str) -> datetime | None:
+    if not message.HasField(field):
         return None
-    return ts.ToDatetime(tzinfo=UTC)
+    return getattr(message, field).ToDatetime(tzinfo=UTC)
 
 
 def _to_timestamp(value: datetime) -> Timestamp:
@@ -104,7 +103,7 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
             or schema_version > settings.schema_version
         ):
             return audit_pb2.AppendEventReply(status=audit_pb2.APPEND_STATUS_SCHEMA_UNSUPPORTED)
-        occurred_at = _to_datetime(request.occurred_at)
+        occurred_at = _to_datetime(request, "occurred_at")
         if occurred_at is None or not _clock_within_bounds(occurred_at):
             return _rejected()
         payload_kind = _payload_kind(request)
@@ -114,10 +113,7 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
         if not is_supported(DEFAULT_HASH_ALGORITHM):
             return _rejected()
 
-        try:
-            allowed = await check_append_rate(int(request.source_service))
-        except RedisError:
-            allowed = not settings.append_rate_fail_closed
+        allowed = await check_append_rate(int(request.source_service))
         if not allowed:
             return audit_pb2.AppendEventReply(status=audit_pb2.APPEND_STATUS_RATE_LIMITED)
 
@@ -209,8 +205,8 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
         after, ok = _parse_sequence(request.page_token)
         if not ok:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "malformed page token")
-        from_time = _to_datetime(request.from_time)
-        to_time = _to_datetime(request.to_time)
+        from_time = _to_datetime(request, "from_time")
+        to_time = _to_datetime(request, "to_time")
         factory = get_sessionmaker()
         try:
             async with factory() as db:
