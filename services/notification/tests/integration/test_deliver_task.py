@@ -3,11 +3,11 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-import requests
 from bson import ObjectId
 
 from app.shared.recipient import UNCONFIGURED_RECIPIENT
 from app.shared.schemas.delivery import DeliveryStatus
+from app.shared.telegram_service import TelegramTransientError
 from app.worker import tasks
 
 pytestmark = pytest.mark.integration
@@ -46,13 +46,11 @@ async def test_retry_on_transport_error_non_final(
     monkeypatch.setattr(
         tasks,
         "_dispatch",
-        MagicMock(side_effect=requests.exceptions.RequestException("net")),
+        MagicMock(side_effect=TelegramTransientError("net")),
     )
     intent = await intent_repo.acquire(make_create())
-
-    with pytest.raises(requests.exceptions.RequestException):
+    with pytest.raises(TelegramTransientError):
         await tasks._deliver(intent.id, final_attempt=False)
-
     refetched = await intent_repo.get_by_id(intent.id)
     assert refetched.status == DeliveryStatus.FAILED
     assert refetched.attempts == 1
@@ -65,12 +63,10 @@ async def test_dead_on_transport_error_final(
     monkeypatch.setattr(
         tasks,
         "_dispatch",
-        MagicMock(side_effect=requests.exceptions.RequestException("net")),
+        MagicMock(side_effect=TelegramTransientError("net")),
     )
     intent = await intent_repo.acquire(make_create())
-
     result = await tasks._deliver(intent.id, final_attempt=True)
-
     assert result["reason"] == "dead"
     refetched = await intent_repo.get_by_id(intent.id)
     assert refetched.status == DeliveryStatus.DEAD

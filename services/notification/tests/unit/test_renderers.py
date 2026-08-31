@@ -19,9 +19,9 @@ def test_render_alert_object_proximity(alert_payload) -> None:
     assert photo == "/tmp/snap.jpg"
 
 
-def test_render_alert_bending(alert_payload) -> None:
+def test_render_alert_concealment(alert_payload) -> None:
     text, photo = render(DeliverySource.ALERT, alert_payload)
-    assert "bending" in text
+    assert "concealment" in text
     assert photo is None
 
 
