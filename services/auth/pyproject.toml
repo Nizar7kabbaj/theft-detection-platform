@@ -33,6 +33,8 @@ dev = [
     "httpx==0.28.1",
     "grpcio-tools==1.71.2",
     "ruff==0.16.2",
+    "pytest-cov==7.1.0",
+    "testcontainers[postgres,redis]==4.13.3",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -42,6 +44,7 @@ packages = ["app"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+addopts = ["--strict-markers", "-ra"]
 markers = [
     "unit: pure unit tests, no external services",
     "integration: tests against a running grpc or http server",
