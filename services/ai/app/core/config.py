@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     ANOMALY_THRESHOLD: float = 0.6
     YOLO_PERSON_CLASS: int = 0
+    PERSON_CONFIDENCE: float = 0.7
     YOLO_OBJECT_CLASSES: str = "39,67"
     OBJECT_CONFIDENCE: float = 0.35
     CONCEALMENT_GRAB_RATIO: float = 0.6

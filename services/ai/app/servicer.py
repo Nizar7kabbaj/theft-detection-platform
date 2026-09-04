@@ -44,7 +44,7 @@ class InferenceServicer(inference_pb2_grpc.InferenceServiceServicer):
             return inference_pb2.Detection(detection_present=False)
         if result.concealments and self._alert_client is not None:
             await self._emit_alerts(request, result)
-        return _to_proto(result)
+        return _to_proto(result, detection_present=bool(result.persons))
 
     async def _emit_alerts(
         self,
@@ -167,7 +167,7 @@ def _bbox(values: tuple[float, float, float, float]) -> common_pb2.Bbox:
     return common_pb2.Bbox(x1=values[0], y1=values[1], x2=values[2], y2=values[3])
 
 
-def _to_proto(result: DetectionResult) -> inference_pb2.Detection:
+def _to_proto(result: DetectionResult, detection_present: bool = True) -> inference_pb2.Detection:
     return inference_pb2.Detection(
         bbox=_bbox(result.bbox),
         keypoints=[
@@ -176,7 +176,7 @@ def _to_proto(result: DetectionResult) -> inference_pb2.Detection:
         score=result.score,
         inference_state=result.inference_state,
         track_id=result.track_id,
-        detection_present=True,
+        detection_present=detection_present,
         persons=[
             inference_pb2.TrackedPerson(
                 track_id=person.track_id,

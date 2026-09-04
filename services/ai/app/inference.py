@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -75,6 +76,7 @@ class LSTMDetector:
         device: str,
         anomaly_threshold: float,
         person_class: int,
+        person_confidence: float,
         object_classes: list[int],
         object_confidence: float,
         grab_ratio: float,
@@ -89,6 +91,7 @@ class LSTMDetector:
         self._device = device
         self._anomaly_threshold = anomaly_threshold
         self._person_class = person_class
+        self._person_confidence = person_confidence
         self._object_classes = object_classes
         self._object_confidence = object_confidence
         self._snapshot_dir = Path(snapshot_dir)
@@ -102,6 +105,7 @@ class LSTMDetector:
         self._objects: YOLO | None = None
         self._predictor: ShoplifterPredictor | None = None
         self._store: TrackerStore | None = None
+        self._analyze_lock = threading.Lock()
 
     def load(self) -> None:
         self._store = TrackerStore(
@@ -134,45 +138,46 @@ class LSTMDetector:
         frame_index: int,
         camera_id: str,
     ) -> DetectionResult | None:
-        if self._yolo is None or self._objects is None or self._predictor is None:
-            raise RuntimeError("detector not loaded")
-        arr = np.frombuffer(image_bytes, dtype=np.uint8)
-        frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-        if frame is None:
-            return None
-        height, width = frame.shape[:2]
-        persons = self._track_persons(frame, camera_id, frame_index)
-        objects = self._track_objects(frame)
-        concealments = self._concealment.observe(
-            camera_id=camera_id,
-            frame_index=frame_index,
-            persons=[(person.track_id, person.keypoints) for person in persons],
-            objects=[(obj.track_id, obj.class_name, obj.bbox) for obj in objects],
-        )
-        snapshots: dict[int, str] = {}
-        for verdict in concealments:
-            alert_id = f"{camera_id}-{session_id}-{frame_index}-{verdict.object_track_id}"
-            written = self.write_snapshot(frame, alert_id)
-            if written is not None:
-                snapshots[verdict.object_track_id] = written
-        if not persons and not objects and not concealments:
-            return None
-        lead = persons[0] if persons else None
-        return DetectionResult(
-            bbox=lead.bbox if lead else (0.0, 0.0, 0.0, 0.0),
-            keypoints=lead.keypoints if lead else [],
-            score=lead.score if lead else 0.0,
-            inference_state=(
-                lead.inference_state if lead else InferenceState.INFERENCE_STATE_UNSPECIFIED
-            ),
-            track_id=lead.track_id if lead else 0,
-            persons=persons,
-            objects=objects,
-            concealments=concealments,
-            snapshots=snapshots,
-            frame_width=width,
-            frame_height=height,
-        )
+        with self._analyze_lock:
+            if self._yolo is None or self._objects is None or self._predictor is None:
+                raise RuntimeError("detector not loaded")
+            arr = np.frombuffer(image_bytes, dtype=np.uint8)
+            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if frame is None:
+                return None
+            height, width = frame.shape[:2]
+            persons = self._track_persons(frame, camera_id, frame_index)
+            objects = self._track_objects(frame)
+            concealments = self._concealment.observe(
+                camera_id=camera_id,
+                frame_index=frame_index,
+                persons=[(person.track_id, person.keypoints) for person in persons],
+                objects=[(obj.track_id, obj.class_name, obj.bbox) for obj in objects],
+            )
+            snapshots: dict[int, str] = {}
+            for verdict in concealments:
+                alert_id = f"{camera_id}-{session_id}-{frame_index}-{verdict.object_track_id}"
+                written = self.write_snapshot(frame, alert_id)
+                if written is not None:
+                    snapshots[verdict.object_track_id] = written
+            if not persons and not objects and not concealments:
+                return None
+            lead = persons[0] if persons else None
+            return DetectionResult(
+                bbox=lead.bbox if lead else (0.0, 0.0, 0.0, 0.0),
+                keypoints=lead.keypoints if lead else [],
+                score=lead.score if lead else 0.0,
+                inference_state=(
+                    lead.inference_state if lead else InferenceState.INFERENCE_STATE_UNSPECIFIED
+                ),
+                track_id=lead.track_id if lead else 0,
+                persons=persons,
+                objects=objects,
+                concealments=concealments,
+                snapshots=snapshots,
+                frame_width=width,
+                frame_height=height,
+            )
 
     def _track_persons(
         self,
@@ -186,6 +191,7 @@ class LSTMDetector:
             frame,
             persist=True,
             classes=[self._person_class],
+            conf=self._person_confidence,
             verbose=False,
         )
         if not results:
