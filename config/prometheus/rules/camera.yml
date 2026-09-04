@@ -1,0 +1,14 @@
+groups:
+  - name: camera
+    interval: 30s
+    rules:
+      - alert: CameraFramesDropped
+        expr: |
+          rate(theft_camera_frames_dropped_overflow[1m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          service: camera
+        annotations:
+          summary: camera dropping frames on {{ $labels.camera_id }}
+          description: camera {{ $labels.camera_id }} dropped {{ $value | humanize }} frames per second over the last minute, publish path cannot keep pace with capture
