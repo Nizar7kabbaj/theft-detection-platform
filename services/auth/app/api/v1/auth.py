@@ -237,6 +237,21 @@ async def login(payload: LoginRequest, request: Request, response: Response) -> 
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=_INVALID_CREDENTIALS,
             )
+        if not user.is_active:
+            await _enqueue_login_failure(
+                db,
+                payload.username,
+                pb.AUTH_FAILURE_REASON_ACCOUNT_DISABLED,
+                False,
+                0,
+                ip,
+                user_agent,
+            )
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=_INVALID_CREDENTIALS,
+            )
         sessions = SessionRepository(db)
         login_session = await sessions.create(
             user_id=user.id,
@@ -337,6 +352,7 @@ async def refresh(request: Request, response: Response) -> TokenResponse:
         login_session = await sessions.get_by_id(stored.session_id)
         if login_session is None or login_session.revoked:
             raise _refresh_rejected(_CODE_SESSION_INVALID)
+        await sessions.touch(login_session.id)
         users = UserRepository(db)
         user = await users.get_by_id(login_session.user_id)
         if user is None:

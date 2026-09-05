@@ -20,11 +20,11 @@ export default async function DashboardLayout({ children }: Readonly<{ children:
   } catch (error) {
     if (isApiError(error) && error.status === 401) {
       const from = headerList.get("x-pathname")
-      const target =
-        from === null || from === "" || from === "/dashboard"
-          ? LOGIN_PATH
-          : `${LOGIN_PATH}?from=${encodeURIComponent(from)}`
-      redirect(target as Route)
+      const params = new URLSearchParams({ reason: "session_ended" })
+      if (from !== null && from !== "" && from !== "/dashboard") {
+        params.set("from", from)
+      }
+      redirect(`${LOGIN_PATH}?${params.toString()}` as Route)
     }
     throw error
   }

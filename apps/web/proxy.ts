@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+
 const CSP_HEADER = "content-security-policy"
 const CSP_REPORT_HEADER = "content-security-policy-report-only"
 const ACCESS_COOKIE_NAME = "__Host-access_token"
@@ -136,13 +137,18 @@ function rewriteCookieHeader(request: NextRequest, accessToken: string): string 
   pairs.push(`${ACCESS_COOKIE_NAME}=${accessToken}`)
   return pairs.join("; ")
 }
-function loginRedirect(request: NextRequest): NextResponse {
+function loginRedirect(request: NextRequest, reason: string | null): NextResponse {
   const { pathname } = request.nextUrl
   const target = new URL(LOGIN_PATH, request.nextUrl)
   if (pathname !== "/") {
     target.searchParams.set("from", `${pathname}${request.nextUrl.search}`)
   }
-  return NextResponse.redirect(target, 307)
+  if (reason !== null) {
+    target.searchParams.set("reason", reason)
+  }
+  const response = NextResponse.redirect(target, 307)
+  response.headers.set("cache-control", "no-store, must-revalidate")
+  return response
 }
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl
@@ -153,15 +159,17 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     renewed = await renewSession(request)
     if (!renewed.ok) {
       noteAuthRedirect(request, renewed.reason)
-      return loginRedirect(request)
+      return loginRedirect(request, "session_ended")
     }
   }
   if (!hasAccess && renewed === null && pathname !== LOGIN_PATH) {
     noteAuthRedirect(request, "no-access-cookie-no-refresh-cookie")
-    return loginRedirect(request)
+    return loginRedirect(request, null)
   }
   if (pathname === "/") {
-    return NextResponse.redirect(new URL("/dashboard", request.nextUrl), 307)
+    const rootRedirect = NextResponse.redirect(new URL("/dashboard", request.nextUrl), 307)
+    rootRedirect.headers.set("cache-control", "no-store, must-revalidate")
+    return rootRedirect
   }
   const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("base64")
   const dev = loosePolicyAllowed()
