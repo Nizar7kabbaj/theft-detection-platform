@@ -111,7 +111,7 @@ function ConsoleView({
   onSelect: (cameraId: string) => void
   initialFilter: FleetFilter
 }) {
-  const { bitmapRef, status, health, stats, pose } = useFrameBitmap(camera.camera_id)
+  const { bitmapRef, status, health, stats, pose, objects } = useFrameBitmap(camera.camera_id)
   const alertCount = useCameraAlertCount(camera.camera_id)
   const registered = cameraHealth(camera)
   const state = health === null ? registered.state : toHealthState(health)
@@ -182,6 +182,7 @@ function ConsoleView({
             bitmapRef={bitmapRef}
             cameraName={camera.name}
             health={health}
+            objects={objects}
             pose={pose}
             status={status}
             threshold={0.3}

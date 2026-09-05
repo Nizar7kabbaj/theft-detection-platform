@@ -1,7 +1,7 @@
 "use client"
 
 import { type RefObject, useEffect, useRef, useState } from "react"
-import type { PoseFigure } from "@/features/cameras/components/frame-canvas"
+import type { ObjectFigure, PoseFigure } from "@/features/cameras/components/frame-canvas"
 import {
   type DetectionFrame,
   type FrameHealth,
@@ -28,6 +28,7 @@ export type FrameBitmap = {
   health: FrameHealth | null
   stats: FrameStats
   pose: PoseFigure[] | null
+  objects: ObjectFigure[] | null
 }
 
 const IDLE_STATS: FrameStats = {
@@ -54,6 +55,20 @@ function toPose(detection: DetectionFrame): PoseFigure[] {
     })),
   }))
 }
+function toObjects(detection: DetectionFrame): ObjectFigure[] {
+  const width = detection.frame_width
+  const height = detection.frame_height
+  if (width <= 0 || height <= 0) {
+    return []
+  }
+  return (detection.objects ?? []).map((object) => ({
+    label: `${object.class_name} ${Math.round(object.confidence * 100)}%`,
+    x1: object.bbox.x1 / width,
+    y1: object.bbox.y1 / height,
+    x2: object.bbox.x2 / width,
+    y2: object.bbox.y2 / height,
+  }))
+}
 
 function leadState(detection: DetectionFrame): string | null {
   const lead = detection.persons[0]
@@ -66,6 +81,7 @@ export function useFrameBitmap(cameraId: string): FrameBitmap {
   const [health, setHealth] = useState<FrameHealth | null>(null)
   const [stats, setStats] = useState<FrameStats>(IDLE_STATS)
   const [pose, setPose] = useState<PoseFigure[] | null>(null)
+  const [objects, setObjects] = useState<ObjectFigure[] | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -126,6 +142,7 @@ export function useFrameBitmap(cameraId: string): FrameBitmap {
         personCount = detection.persons.length
         inferenceState = leadState(detection)
         setPose(toPose(detection))
+        setObjects(toObjects(detection))
       },
     })
 
@@ -137,6 +154,7 @@ export function useFrameBitmap(cameraId: string): FrameBitmap {
         personCount = null
         inferenceState = null
         setPose(null)
+        setObjects(null)
       }
       setStats({
         fps: measured,
@@ -157,8 +175,9 @@ export function useFrameBitmap(cameraId: string): FrameBitmap {
       setHealth(null)
       setStats(IDLE_STATS)
       setPose(null)
+      setObjects(null)
     }
   }, [cameraId])
 
-  return { bitmapRef, status, health, stats, pose }
+  return { bitmapRef, status, health, stats, pose, objects }
 }

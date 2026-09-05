@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
 import logging
@@ -24,6 +25,7 @@ from app.schemas.alert import (
     Decision,
     Severity,
 )
+from app.schemas.delivery import DeliveryState, DeliveryStatusView, DeliverySummary
 from app.services.alert_service import AlertClient
 from app.services.audit_service import AuditClient
 
@@ -113,6 +115,7 @@ def _to_response(doc: dict[str, Any]) -> AlertResponse:
             "object_name": object_name,
             "confidence": confidence,
             "snapshot_url": _snapshot_url(doc),
+            "dispatch_failed": bool(doc.get("dispatch_failed", False)),
             "alert_type": alert_type,
             "acknowledged": bool(doc.get("acknowledged", False)),
             "acknowledged_at": doc.get("acknowledged_at"),
@@ -120,6 +123,30 @@ def _to_response(doc: dict[str, Any]) -> AlertResponse:
             "decided_at": doc.get("decided_at"),
             "decided_by": doc.get("decided_by"),
         }
+    )
+
+
+_STATE_SEVERITY = {
+    DeliveryState.SENT: 0,
+    DeliveryState.PENDING: 1,
+    DeliveryState.SENDING: 1,
+    DeliveryState.BUFFERED: 2,
+    DeliveryState.FAILED: 3,
+    DeliveryState.DEAD: 4,
+    DeliveryState.UNKNOWN: 5,
+}
+
+
+def _summarise(view: DeliveryStatusView | None) -> DeliverySummary | None:
+    if view is None:
+        return None
+    if not view.known or not view.records:
+        return DeliverySummary(known=False, state=DeliveryState.UNKNOWN, attempts=0)
+    worst = max(view.records, key=lambda record: _STATE_SEVERITY.get(record.state, 5))
+    return DeliverySummary(
+        known=True,
+        state=worst.state,
+        attempts=max(record.attempts for record in view.records),
     )
 
 
@@ -148,6 +175,7 @@ def _to_detail(doc: dict[str, Any]) -> AlertDetail:
             "classifier_score": doc.get("classifier_score"),
             "classifier_state": doc.get("classifier_state"),
             "snapshot_url": _snapshot_url(doc),
+            "dispatch_failed": bool(doc.get("dispatch_failed", False)),
         }
     )
 
@@ -155,6 +183,8 @@ def _to_detail(doc: dict[str, Any]) -> AlertDetail:
 class AlertUseCase:
     LIST_PREFIX = "cache:alerts:list:"
     CAMERA_FACET_KEY = "cache:alerts:cameras"
+    DISPATCH_ATTEMPTS = 3
+    DISPATCH_BACKOFF_SECONDS = 0.5
     TTL = 30
     FACET_TTL = 300
 
@@ -177,6 +207,27 @@ class AlertUseCase:
         except Exception as exc:
             logger.warning("pubsub publish failed event=%s: %s", event, exc)
 
+    async def _dispatch(self, payload: AlertCreate) -> bool:
+        delay = self.DISPATCH_BACKOFF_SECONDS
+        for attempt in range(1, self.DISPATCH_ATTEMPTS + 1):
+            try:
+                await self._alert_client.send(payload)
+            except AlertUnavailableError as exc:
+                logger.warning(
+                    "alert dispatch attempt %d failed for %s: %s",
+                    attempt,
+                    payload.alert_id,
+                    exc,
+                )
+                if attempt == self.DISPATCH_ATTEMPTS:
+                    logger.error("alert dispatch gave up for %s", payload.alert_id)
+                    return False
+                await asyncio.sleep(delay)
+                delay *= 2
+            else:
+                return True
+        return False
+
     async def create(self, payload: AlertCreate) -> AlertResponse:
         doc = payload.model_dump(mode="json")
         doc["occurred_at"] = payload.occurred_at
@@ -184,10 +235,14 @@ class AlertUseCase:
         doc["acknowledged"] = False
         doc["decision"] = Decision.DECISION_UNSPECIFIED.value
         created = await self._repo.create(doc)
-        try:
-            await self._alert_client.send(payload)
-        except AlertUnavailableError as exc:
-            logger.warning("alert delivery unavailable for %s: %s", payload.alert_id, exc)
+        dispatched = await self._dispatch(payload)
+        if not dispatched:
+            updated = await self._repo.update(
+                str(created["_id"]),
+                {"dispatch_failed": True},
+            )
+            if updated is not None:
+                created = updated
         await invalidate_prefix(self._redis, self.LIST_PREFIX)
         await invalidate(self._redis, self.CAMERA_FACET_KEY)
         response = _to_response(created)
@@ -249,7 +304,17 @@ class AlertUseCase:
             return {"items": items, "next_cursor": next_cursor}
 
         cached = await get_or_set(self._redis, key, self.TTL, loader)
-        return AlertPage.model_validate(cached)
+        page = AlertPage.model_validate(cached)
+        await self._attach_delivery(page.items)
+        return page
+
+    async def _attach_delivery(self, items: list[AlertResponse]) -> None:
+        if not items:
+            return
+        wanted = [item.alert_id for item in items if item.alert_id]
+        views = await self._alert_client.delivery_status_batch(wanted)
+        for item in items:
+            item.delivery = _summarise(views.get(item.alert_id))
 
     async def camera_facet(self) -> list[str]:
         async def loader() -> list[str]:
@@ -262,7 +327,11 @@ class AlertUseCase:
         doc = await self._repo.get(alert_id)
         if doc is None:
             raise NotFoundError(f"alert {alert_id} not found")
-        return _to_detail(doc)
+        detail = _to_detail(doc)
+        source_ref = doc.get("alert_id")
+        if source_ref:
+            detail.delivery = await self._alert_client.delivery_status(str(source_ref))
+        return detail
 
     async def snapshot_path(self, alert_id: str) -> Path:
         doc = await self._repo.get(alert_id)

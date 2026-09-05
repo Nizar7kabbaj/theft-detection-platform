@@ -73,25 +73,29 @@ async def _send_detection(ws: WebSocket, body: bytes) -> None:
     await ws.send_text(json.dumps({"event": "detection", "data": data}))
 
 
-async def _read_detection(
-    stream: Redis, camera_id: str, last_entry: bytes
-) -> tuple[bytes, bytes | None]:
-    key = f"{settings.STREAM_DETECT_PREFIX}:{camera_id}"
-    try:
-        entries = await stream.xrevrange(key, count=1)
-    except RedisError:
-        return last_entry, None
+async def _dispatch_detection(ws: WebSocket, entries: list, last_entry: bytes) -> bytes:
     if not entries:
-        return last_entry, None
+        return last_entry
     entry_id, fields = entries[0]
     if entry_id == last_entry:
-        return last_entry, None
+        return last_entry
     body = fields.get(_BODY_FIELD)
-    return entry_id, body
+    if body is not None:
+        await _send_detection(ws, body)
+    return entry_id
+
+
+async def _read_latest(stream: Redis, frame_key: str, detect_key: str) -> tuple[list, list]:
+    async with stream.pipeline(transaction=False) as pipe:
+        pipe.xrevrange(frame_key, count=1)
+        pipe.xrevrange(detect_key, count=1)
+        frame_entries, detect_entries = await pipe.execute()
+    return frame_entries, detect_entries
 
 
 async def run_frame_pump(ws: WebSocket, stream: Redis, camera_id: str) -> None:
-    key = f"{settings.STREAM_FRAME_PREFIX}:{camera_id}"
+    frame_key = f"{settings.STREAM_FRAME_PREFIX}:{camera_id}"
+    detect_key = f"{settings.STREAM_DETECT_PREFIX}:{camera_id}"
     interval = settings.FRAME_STREAM_INTERVAL_SECONDS
     send_timeout = settings.FRAME_STREAM_SEND_TIMEOUT_SECONDS
     max_failures = settings.FRAME_STREAM_MAX_READ_FAILURES
@@ -101,7 +105,7 @@ async def run_frame_pump(ws: WebSocket, stream: Redis, camera_id: str) -> None:
     last_state: HealthState | None = None
     while ws.client_state == WebSocketState.CONNECTED:
         try:
-            entries = await stream.xrevrange(key, count=1)
+            entries, detect_entries = await _read_latest(stream, frame_key, detect_key)
         except RedisError as exc:
             failures += 1
             logger.warning("frame read failed camera=%s: %s", camera_id, exc)
@@ -134,7 +138,5 @@ async def run_frame_pump(ws: WebSocket, stream: Redis, camera_id: str) -> None:
         except TimeoutError:
             logger.info("frame send timed out camera=%s, dropping viewer", camera_id)
             return
-        last_detect_entry, body = await _read_detection(stream, camera_id, last_detect_entry)
-        if body is not None:
-            await _send_detection(ws, body)
+        last_detect_entry = await _dispatch_detection(ws, detect_entries, last_detect_entry)
         await asyncio.sleep(interval)

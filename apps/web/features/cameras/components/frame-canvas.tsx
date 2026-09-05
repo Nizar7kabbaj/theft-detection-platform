@@ -46,7 +46,13 @@ const LIMBS: readonly (readonly [number, number, string])[] = [
 
 export type PosePoint = { x: number; y: number; confidence: number }
 export type PoseFigure = { keypoints: PosePoint[] }
-
+export type ObjectFigure = {
+  label: string
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
 type Box = { x: number; y: number; width: number; height: number }
 
 function fitBox(
@@ -101,6 +107,30 @@ function drawPose(
     context.globalAlpha = 1
   }
 }
+function drawObjects(context: CanvasRenderingContext2D, figures: ObjectFigure[], box: Box): void {
+  const stroke = Math.max(2, box.width / 300)
+  const fontSize = Math.max(11, Math.round(box.width / 55))
+  for (const figure of figures) {
+    const x = box.x + figure.x1 * box.width
+    const y = box.y + figure.y1 * box.height
+    const width = (figure.x2 - figure.x1) * box.width
+    const height = (figure.y2 - figure.y1) * box.height
+    context.lineWidth = stroke
+    context.strokeStyle = "#49e59d"
+    context.strokeRect(x, y, width, height)
+    context.font = `${fontSize}px ui-monospace, monospace`
+    const text = figure.label
+    const padding = fontSize * 0.35
+    const textWidth = context.measureText(text).width
+    const labelHeight = fontSize + padding * 2
+    const labelY = y - labelHeight < box.y ? y : y - labelHeight
+    context.fillStyle = "rgba(0,0,0,.7)"
+    context.fillRect(x, labelY, textWidth + padding * 2, labelHeight)
+    context.fillStyle = "#49e59d"
+    context.textBaseline = "middle"
+    context.fillText(text, x + padding, labelY + labelHeight / 2)
+  }
+}
 
 export function FrameCanvas({
   bitmapRef,
@@ -108,6 +138,7 @@ export function FrameCanvas({
   health,
   cameraName,
   pose,
+  objects,
   threshold,
   height,
 }: {
@@ -116,15 +147,17 @@ export function FrameCanvas({
   health: FrameHealth | null
   cameraName: string
   pose: PoseFigure[] | null
+  objects: ObjectFigure[] | null
   threshold: number
   height?: string | undefined
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const surfaceRef = useRef<HTMLDivElement | null>(null)
   const poseRef = useRef<PoseFigure[] | null>(pose)
+  const objectsRef = useRef<ObjectFigure[] | null>(objects)
   const thresholdRef = useRef(threshold)
-
   poseRef.current = pose
+  objectsRef.current = objects
   thresholdRef.current = threshold
 
   useEffect(() => {
@@ -159,6 +192,10 @@ export function FrameCanvas({
       }
       const box = fitBox(bitmap.width, bitmap.height, rect.width, rect.height)
       context.drawImage(bitmap, box.x, box.y, box.width, box.height)
+      const shapes = objectsRef.current
+      if (shapes !== null && shapes.length > 0) {
+        drawObjects(context, shapes, box)
+      }
       const figures = poseRef.current
       if (figures !== null && figures.length > 0) {
         drawPose(context, figures, box, thresholdRef.current)

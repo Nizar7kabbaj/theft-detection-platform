@@ -48,6 +48,52 @@ message SendAlertReply {
   google.protobuf.Timestamp delivered_at = 2;
 }
 
+enum DeliveryState {
+  DELIVERY_STATE_UNSPECIFIED = 0;
+  DELIVERY_STATE_PENDING = 1;
+  DELIVERY_STATE_SENDING = 2;
+  DELIVERY_STATE_SENT = 3;
+  DELIVERY_STATE_FAILED = 4;
+  DELIVERY_STATE_DEAD = 5;
+  DELIVERY_STATE_BUFFERED = 6;
+}
+
+message DeliveryStatusRequest {
+  string alert_id = 1;
+}
+
+message DeliveryRecord {
+  string channel = 1;
+  string recipient = 2;
+  DeliveryState state = 3;
+  int32 attempts = 4;
+  int32 requeue_count = 5;
+  optional string last_error_class = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message DeliveryStatusReply {
+  bool known = 1;
+  repeated DeliveryRecord records = 2;
+}
+
+message DeliveryStatusBatchRequest {
+  repeated string alert_ids = 1;
+}
+
+message DeliveryStatusEntry {
+  string alert_id = 1;
+  bool known = 2;
+  repeated DeliveryRecord records = 3;
+}
+
+message DeliveryStatusBatchReply {
+  repeated DeliveryStatusEntry entries = 1;
+}
+
 service AlertService {
   rpc SendAlert(Alert) returns (SendAlertReply);
+  rpc GetDeliveryStatus(DeliveryStatusRequest) returns (DeliveryStatusReply);
+  rpc GetDeliveryStatusBatch(DeliveryStatusBatchRequest) returns (DeliveryStatusBatchReply);
 }

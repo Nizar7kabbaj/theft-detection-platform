@@ -4,6 +4,7 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 from app.schemas.common import MongoModel
+from app.schemas.delivery import DeliveryStatusView, DeliverySummary
 
 
 class Severity(str, Enum):
@@ -108,6 +109,8 @@ class AlertResponse(MongoModel):
     decision: Decision = Decision.DECISION_UNSPECIFIED
     decided_at: datetime | None = None
     decided_by: str | None = None
+    dispatch_failed: bool = False
+    delivery: DeliverySummary | None = None
 
 
 class AlertDetail(MongoModel):
@@ -133,6 +136,8 @@ class AlertDetail(MongoModel):
     classifier_score: float | None = None
     classifier_state: str | None = None
     snapshot_url: str | None = None
+    dispatch_failed: bool = False
+    delivery: DeliveryStatusView | None = None
 
 
 class AlertPage(BaseModel):

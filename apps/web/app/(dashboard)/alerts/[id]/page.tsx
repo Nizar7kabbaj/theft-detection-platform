@@ -10,6 +10,7 @@ import { fetchAlertDetail, fetchAlertPage } from "@/features/alerts/api/alerts-s
 import { AcknowledgeButton } from "@/features/alerts/components/acknowledge-button"
 import { AuditTrail } from "@/features/alerts/components/audit-trail"
 import { DecisionControls } from "@/features/alerts/components/decision-controls"
+import { DeliveryPanel } from "@/features/alerts/components/delivery-panel"
 import { DetailHeader } from "@/features/alerts/components/detail-header"
 import { DetailNav } from "@/features/alerts/components/detail-nav"
 import { EvidenceFrame } from "@/features/alerts/components/evidence-frame"
@@ -59,6 +60,7 @@ export default async function AlertDetailPage({
         <div className="flex flex-col gap-4">
           <EvidencePanel alertType={alert.alert_type} concealment={alert.concealment} />
           <VerdictPanel score={alert.classifier_score} state={alert.classifier_state} />
+          <DeliveryPanel delivery={alert.delivery} dispatchFailed={alert.dispatch_failed} />
           <AuditTrail alert={alert} />
         </div>
       </div>

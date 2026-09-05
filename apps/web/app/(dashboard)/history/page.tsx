@@ -118,10 +118,6 @@ export default async function HistoryPage({
 
         <div className="flex flex-col gap-4">
           <SeveritySpread tally={summary.severity} />
-          <AbsentPanel
-            title="delivery outcome"
-            reason="whether each alert reached telegram is held by the notification service and there is no read path to it yet"
-          />
         </div>
       </div>
     </section>

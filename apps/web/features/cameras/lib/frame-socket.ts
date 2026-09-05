@@ -20,11 +20,18 @@ export type DetectionPerson = {
   inference_state: string
 }
 
+export type DetectionObject = {
+  track_id: number
+  class_name: string
+  bbox: { x1: number; y1: number; x2: number; y2: number }
+  confidence: number
+}
 export type DetectionFrame = {
   frame_width: number
   frame_height: number
   detection_present: boolean
   persons: DetectionPerson[]
+  objects?: DetectionObject[]
 }
 
 export type FrameHandlers = {

@@ -423,6 +423,12 @@ export interface components {
             classifier_state?: string | null;
             /** Snapshot Url */
             snapshot_url?: string | null;
+            /**
+             * Dispatch Failed
+             * @default false
+             */
+            dispatch_failed: boolean;
+            delivery?: components["schemas"]["DeliveryStatusView"] | null;
         };
         /** AlertPage */
         AlertPage: {
@@ -472,6 +478,12 @@ export interface components {
             decided_at?: string | null;
             /** Decided By */
             decided_by?: string | null;
+            /**
+             * Dispatch Failed
+             * @default false
+             */
+            dispatch_failed: boolean;
+            delivery?: components["schemas"]["DeliverySummary"] | null;
         };
         /**
          * AlertSort
@@ -604,6 +616,50 @@ export interface components {
         /** DecisionUpdate */
         DecisionUpdate: {
             decision: components["schemas"]["Decision"];
+        };
+        /** DeliveryRecord */
+        DeliveryRecord: {
+            /** Channel */
+            channel: string;
+            /** Recipient */
+            recipient: string;
+            state: components["schemas"]["DeliveryState"];
+            /** Attempts */
+            attempts: number;
+            /** Requeue Count */
+            requeue_count: number;
+            /** Last Error Class */
+            last_error_class?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * DeliveryState
+         * @enum {string}
+         */
+        DeliveryState: "unknown" | "pending" | "sending" | "sent" | "failed" | "dead" | "buffered";
+        /** DeliveryStatusView */
+        DeliveryStatusView: {
+            /** Known */
+            known: boolean;
+            /** Records */
+            records: components["schemas"]["DeliveryRecord"][];
+        };
+        /** DeliverySummary */
+        DeliverySummary: {
+            /** Known */
+            known: boolean;
+            state: components["schemas"]["DeliveryState"];
+            /** Attempts */
+            attempts: number;
         };
         /** DetectionCreate */
         DetectionCreate: {

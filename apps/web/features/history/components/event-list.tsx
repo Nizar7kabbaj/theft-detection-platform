@@ -32,6 +32,33 @@ const OUTCOME: Record<Decision, string> = {
 }
 
 const PILL = "rounded-sm px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide"
+const DELIVERY_TONE: Record<string, string> = {
+  sent: "text-success",
+  buffered: "text-warning",
+  pending: "text-muted-foreground",
+  sending: "text-muted-foreground",
+  failed: "text-destructive",
+  dead: "text-destructive",
+  unknown: "text-muted-foreground/60",
+}
+
+function deliveryLabel(alert: Alert): string {
+  if (alert.dispatch_failed) {
+    return "not queued"
+  }
+  if (alert.delivery === null || alert.delivery === undefined) {
+    return "unknown"
+  }
+  return alert.delivery.known ? alert.delivery.state : "not seen"
+}
+
+function deliveryTone(alert: Alert): string {
+  if (alert.dispatch_failed) {
+    return "text-destructive"
+  }
+  const state = alert.delivery?.known === true ? alert.delivery.state : "unknown"
+  return DELIVERY_TONE[state] ?? "text-muted-foreground/60"
+}
 
 function stateOf(alert: Alert): string {
   if (alert.decision !== "DECISION_UNSPECIFIED") {
@@ -141,6 +168,11 @@ export function EventList({
                 </span>
                 <span className={`${PILL} shrink-0 bg-foreground/10 text-muted-foreground`}>
                   {stateOf(alert)}
+                </span>
+                <span
+                  className={`w-24 shrink-0 text-right font-mono text-[11px] tracking-wide ${deliveryTone(alert)}`}
+                >
+                  {deliveryLabel(alert)}
                 </span>
                 <span
                   className={`w-24 shrink-0 text-right font-mono text-[11px] uppercase tracking-wide ${OUTCOME[alert.decision]}`}

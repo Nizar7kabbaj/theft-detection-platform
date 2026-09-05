@@ -26,21 +26,35 @@ from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__
 from . import common_pb2 as common__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x61lert.proto\x12\x11theftdetection.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0c\x63ommon.proto\"\x85\x02\n\x0b\x43oncealment\x12\x17\n\x0fobject_track_id\x18\x01 \x01(\x05\x12\x14\n\x0cobject_class\x18\x02 \x01(\t\x12/\n\x0elast_seen_bbox\x18\x03 \x01(\x0b\x32\x17.theftdetection.v1.Bbox\x12\x17\n\x0flast_seen_frame\x18\x04 \x01(\x05\x12\x16\n\x0emissing_frames\x18\x05 \x01(\x05\x12\x13\n\x0bwrist_index\x18\x06 \x01(\x05\x12\x0f\n\x07wrist_x\x18\x07 \x01(\x02\x12\x0f\n\x07wrist_y\x18\x08 \x01(\x02\x12\x15\n\rgrab_distance\x18\t \x01(\x02\x12\x17\n\x0fperson_track_id\x18\n \x01(\x05\"\xdb\x04\n\x05\x41lert\x12\x10\n\x08\x61lert_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\x03\x12\x13\n\x0b\x66rame_index\x18\x03 \x01(\x05\x12/\n\x0boccurred_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x16\n\tcamera_id\x18\x05 \x01(\tH\x00\x88\x01\x01\x12)\n\x06person\x18\x06 \x01(\x0b\x32\x19.theftdetection.v1.Person\x12)\n\x06object\x18\x07 \x01(\x0b\x32\x19.theftdetection.v1.Object\x12-\n\x08severity\x18\x08 \x01(\x0e\x32\x1b.theftdetection.v1.Severity\x12\x30\n\nalert_type\x18\t \x01(\x0e\x32\x1c.theftdetection.v1.AlertType\x12\x1a\n\rsnapshot_path\x18\n \x01(\tH\x01\x88\x01\x01\x12\x13\n\x0b\x66rame_width\x18\x0b \x01(\x05\x12\x14\n\x0c\x66rame_height\x18\x0c \x01(\x05\x12\x38\n\x0b\x63oncealment\x18\r \x01(\x0b\x32\x1e.theftdetection.v1.ConcealmentH\x02\x88\x01\x01\x12\x1d\n\x10\x63lassifier_score\x18\x0e \x01(\x02H\x03\x88\x01\x01\x12\x1d\n\x10\x63lassifier_state\x18\x0f \x01(\tH\x04\x88\x01\x01\x42\x0c\n\n_camera_idB\x10\n\x0e_snapshot_pathB\x0e\n\x0c_concealmentB\x13\n\x11_classifier_scoreB\x13\n\x11_classifier_state\"m\n\x0eSendAlertReply\x12)\n\x06status\x18\x01 \x01(\x0e\x32\x19.theftdetection.v1.Status\x12\x30\n\x0c\x64\x65livered_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp*a\n\x06Status\x12\x16\n\x12STATUS_UNSPECIFIED\x10\x00\x12\x13\n\x0fSTATUS_ACCEPTED\x10\x01\x12\x17\n\x13STATUS_RATE_LIMITED\x10\x02\x12\x11\n\rSTATUS_FAILED\x10\x03\x32X\n\x0c\x41lertService\x12H\n\tSendAlert\x12\x18.theftdetection.v1.Alert\x1a!.theftdetection.v1.SendAlertReplyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x61lert.proto\x12\x11theftdetection.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0c\x63ommon.proto\"\x85\x02\n\x0b\x43oncealment\x12\x17\n\x0fobject_track_id\x18\x01 \x01(\x05\x12\x14\n\x0cobject_class\x18\x02 \x01(\t\x12/\n\x0elast_seen_bbox\x18\x03 \x01(\x0b\x32\x17.theftdetection.v1.Bbox\x12\x17\n\x0flast_seen_frame\x18\x04 \x01(\x05\x12\x16\n\x0emissing_frames\x18\x05 \x01(\x05\x12\x13\n\x0bwrist_index\x18\x06 \x01(\x05\x12\x0f\n\x07wrist_x\x18\x07 \x01(\x02\x12\x0f\n\x07wrist_y\x18\x08 \x01(\x02\x12\x15\n\rgrab_distance\x18\t \x01(\x02\x12\x17\n\x0fperson_track_id\x18\n \x01(\x05\"\xdb\x04\n\x05\x41lert\x12\x10\n\x08\x61lert_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\x03\x12\x13\n\x0b\x66rame_index\x18\x03 \x01(\x05\x12/\n\x0boccurred_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x16\n\tcamera_id\x18\x05 \x01(\tH\x00\x88\x01\x01\x12)\n\x06person\x18\x06 \x01(\x0b\x32\x19.theftdetection.v1.Person\x12)\n\x06object\x18\x07 \x01(\x0b\x32\x19.theftdetection.v1.Object\x12-\n\x08severity\x18\x08 \x01(\x0e\x32\x1b.theftdetection.v1.Severity\x12\x30\n\nalert_type\x18\t \x01(\x0e\x32\x1c.theftdetection.v1.AlertType\x12\x1a\n\rsnapshot_path\x18\n \x01(\tH\x01\x88\x01\x01\x12\x13\n\x0b\x66rame_width\x18\x0b \x01(\x05\x12\x14\n\x0c\x66rame_height\x18\x0c \x01(\x05\x12\x38\n\x0b\x63oncealment\x18\r \x01(\x0b\x32\x1e.theftdetection.v1.ConcealmentH\x02\x88\x01\x01\x12\x1d\n\x10\x63lassifier_score\x18\x0e \x01(\x02H\x03\x88\x01\x01\x12\x1d\n\x10\x63lassifier_state\x18\x0f \x01(\tH\x04\x88\x01\x01\x42\x0c\n\n_camera_idB\x10\n\x0e_snapshot_pathB\x0e\n\x0c_concealmentB\x13\n\x11_classifier_scoreB\x13\n\x11_classifier_state\"m\n\x0eSendAlertReply\x12)\n\x06status\x18\x01 \x01(\x0e\x32\x19.theftdetection.v1.Status\x12\x30\n\x0c\x64\x65livered_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\")\n\x15\x44\x65liveryStatusRequest\x12\x10\n\x08\x61lert_id\x18\x01 \x01(\t\"\xa2\x02\n\x0e\x44\x65liveryRecord\x12\x0f\n\x07\x63hannel\x18\x01 \x01(\t\x12\x11\n\trecipient\x18\x02 \x01(\t\x12/\n\x05state\x18\x03 \x01(\x0e\x32 .theftdetection.v1.DeliveryState\x12\x10\n\x08\x61ttempts\x18\x04 \x01(\x05\x12\x15\n\rrequeue_count\x18\x05 \x01(\x05\x12\x1d\n\x10last_error_class\x18\x06 \x01(\tH\x00\x88\x01\x01\x12.\n\ncreated_at\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12.\n\nupdated_at\x18\x08 \x01(\x0b\x32\x1a.google.protobuf.TimestampB\x13\n\x11_last_error_class\"X\n\x13\x44\x65liveryStatusReply\x12\r\n\x05known\x18\x01 \x01(\x08\x12\x32\n\x07records\x18\x02 \x03(\x0b\x32!.theftdetection.v1.DeliveryRecord\"/\n\x1a\x44\x65liveryStatusBatchRequest\x12\x11\n\talert_ids\x18\x01 \x03(\t\"j\n\x13\x44\x65liveryStatusEntry\x12\x10\n\x08\x61lert_id\x18\x01 \x01(\t\x12\r\n\x05known\x18\x02 \x01(\x08\x12\x32\n\x07records\x18\x03 \x03(\x0b\x32!.theftdetection.v1.DeliveryRecord\"S\n\x18\x44\x65liveryStatusBatchReply\x12\x37\n\x07\x65ntries\x18\x01 \x03(\x0b\x32&.theftdetection.v1.DeliveryStatusEntry*a\n\x06Status\x12\x16\n\x12STATUS_UNSPECIFIED\x10\x00\x12\x13\n\x0fSTATUS_ACCEPTED\x10\x01\x12\x17\n\x13STATUS_RATE_LIMITED\x10\x02\x12\x11\n\rSTATUS_FAILED\x10\x03*\xd1\x01\n\rDeliveryState\x12\x1e\n\x1a\x44\x45LIVERY_STATE_UNSPECIFIED\x10\x00\x12\x1a\n\x16\x44\x45LIVERY_STATE_PENDING\x10\x01\x12\x1a\n\x16\x44\x45LIVERY_STATE_SENDING\x10\x02\x12\x17\n\x13\x44\x45LIVERY_STATE_SENT\x10\x03\x12\x19\n\x15\x44\x45LIVERY_STATE_FAILED\x10\x04\x12\x17\n\x13\x44\x45LIVERY_STATE_DEAD\x10\x05\x12\x1b\n\x17\x44\x45LIVERY_STATE_BUFFERED\x10\x06\x32\xb5\x02\n\x0c\x41lertService\x12H\n\tSendAlert\x12\x18.theftdetection.v1.Alert\x1a!.theftdetection.v1.SendAlertReply\x12\x65\n\x11GetDeliveryStatus\x12(.theftdetection.v1.DeliveryStatusRequest\x1a&.theftdetection.v1.DeliveryStatusReply\x12t\n\x16GetDeliveryStatusBatch\x12-.theftdetection.v1.DeliveryStatusBatchRequest\x1a+.theftdetection.v1.DeliveryStatusBatchReplyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'alert_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_STATUS']._serialized_start=1062
-  _globals['_STATUS']._serialized_end=1159
+  _globals['_STATUS']._serialized_start=1730
+  _globals['_STATUS']._serialized_end=1827
+  _globals['_DELIVERYSTATE']._serialized_start=1830
+  _globals['_DELIVERYSTATE']._serialized_end=2039
   _globals['_CONCEALMENT']._serialized_start=82
   _globals['_CONCEALMENT']._serialized_end=343
   _globals['_ALERT']._serialized_start=346
   _globals['_ALERT']._serialized_end=949
   _globals['_SENDALERTREPLY']._serialized_start=951
   _globals['_SENDALERTREPLY']._serialized_end=1060
-  _globals['_ALERTSERVICE']._serialized_start=1161
-  _globals['_ALERTSERVICE']._serialized_end=1249
+  _globals['_DELIVERYSTATUSREQUEST']._serialized_start=1062
+  _globals['_DELIVERYSTATUSREQUEST']._serialized_end=1103
+  _globals['_DELIVERYRECORD']._serialized_start=1106
+  _globals['_DELIVERYRECORD']._serialized_end=1396
+  _globals['_DELIVERYSTATUSREPLY']._serialized_start=1398
+  _globals['_DELIVERYSTATUSREPLY']._serialized_end=1486
+  _globals['_DELIVERYSTATUSBATCHREQUEST']._serialized_start=1488
+  _globals['_DELIVERYSTATUSBATCHREQUEST']._serialized_end=1535
+  _globals['_DELIVERYSTATUSENTRY']._serialized_start=1537
+  _globals['_DELIVERYSTATUSENTRY']._serialized_end=1643
+  _globals['_DELIVERYSTATUSBATCHREPLY']._serialized_start=1645
+  _globals['_DELIVERYSTATUSBATCHREPLY']._serialized_end=1728
+  _globals['_ALERTSERVICE']._serialized_start=2042
+  _globals['_ALERTSERVICE']._serialized_end=2351
 # @@protoc_insertion_point(module_scope)

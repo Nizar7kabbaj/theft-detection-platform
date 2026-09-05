@@ -29,6 +29,7 @@ RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
 FROM base AS weights
 ADD --chmod=0644 https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n-pose.pt /app/yolov8n-pose.pt
 ADD --chmod=0644 https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt /app/yolov8n.pt
+ADD --chmod=0644 https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8s.pt /app/yolov8s.pt
 
 FROM base AS probe
 ARG GRPC_HEALTH_PROBE_VERSION
@@ -45,6 +46,7 @@ ENV PATH=/opt/venv/bin:$PATH
 COPY --from=builder --chown=ai:ai /opt/venv /opt/venv
 COPY --from=weights --chown=ai:ai /app/yolov8n-pose.pt /app/yolov8n-pose.pt
 COPY --from=weights --chown=ai:ai /app/yolov8n.pt /app/yolov8n.pt
+COPY --from=weights --chown=ai:ai /app/yolov8s.pt /app/yolov8s.pt
 COPY --from=probe /usr/local/bin/grpc_health_probe /usr/local/bin/grpc_health_probe
 COPY --chown=ai:ai app /app/app
 RUN mkdir -p /app/.ultralytics /app/.matplotlib /app/snapshots \
