@@ -79,6 +79,20 @@ class DetectionPublisher:
                     }
                     for person in detection.persons
                 ],
+                "objects": [
+                    {
+                        "track_id": obj.track_id,
+                        "class_name": obj.class_name,
+                        "bbox": {
+                            "x1": obj.bbox.x1,
+                            "y1": obj.bbox.y1,
+                            "x2": obj.bbox.x2,
+                            "y2": obj.bbox.y2,
+                        },
+                        "confidence": obj.confidence,
+                    }
+                    for obj in detection.objects
+                ],
             }
         )
         try:

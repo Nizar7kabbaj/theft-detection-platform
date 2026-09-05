@@ -60,6 +60,28 @@ class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
         doc = await self._col.find_one({"_id": self._oid(intent_id)})
         return self._to_model(doc) if doc else None
 
+    async def list_by_source_ref(
+        self,
+        source: DeliverySource,
+        source_ref: str,
+    ) -> list[DeliveryIntent]:
+        cursor = self._col.find({"source": source.value, "source_ref": source_ref}).sort(
+            "created_at", 1
+        )
+        return [self._to_model(doc) async for doc in cursor]
+
+    async def list_by_source_refs(
+        self,
+        source: DeliverySource,
+        source_refs: list[str],
+    ) -> list[DeliveryIntent]:
+        if not source_refs:
+            return []
+        cursor = self._col.find({"source": source.value, "source_ref": {"$in": source_refs}}).sort(
+            "created_at", 1
+        )
+        return [self._to_model(doc) async for doc in cursor]
+
     async def mark_sending(self, intent_id: str) -> DeliveryIntent | None:
         now = _utcnow()
         doc = await self._col.find_one_and_update(

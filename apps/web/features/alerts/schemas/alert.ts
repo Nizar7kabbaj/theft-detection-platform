@@ -36,6 +36,38 @@ const relativePath = z.string().check(
   }),
 )
 
+export const DELIVERY_STATE_VALUES = [
+  "unknown",
+  "pending",
+  "sending",
+  "sent",
+  "failed",
+  "dead",
+  "buffered",
+] as const
+
+export const deliveryRecordSchema = z.object({
+  channel: z.string().check(z.maxLength(64)),
+  recipient: z.string().check(z.maxLength(128)),
+  state: z.enum(DELIVERY_STATE_VALUES),
+  attempts: z.int(),
+  requeue_count: z.int(),
+  last_error_class: z.nullish(z.string().check(z.maxLength(256))),
+  created_at: z.iso.datetime({ offset: true }),
+  updated_at: z.iso.datetime({ offset: true }),
+})
+
+export const deliveryStatusSchema = z.object({
+  known: z.boolean(),
+  records: z.array(deliveryRecordSchema),
+})
+
+export const deliverySummarySchema = z.object({
+  known: z.boolean(),
+  state: z.enum(DELIVERY_STATE_VALUES),
+  attempts: z.int(),
+})
+
 export const alertResponseSchema = z.object({
   _id: z.string().check(z.minLength(1), z.maxLength(128)),
   alert_id: z.string().check(z.minLength(1), z.maxLength(128)),
@@ -53,8 +85,9 @@ export const alertResponseSchema = z.object({
   decision: decisionSchema,
   decided_at: z.nullish(z.iso.datetime({ offset: true })),
   decided_by: z.nullish(z.string().check(z.maxLength(128))),
+  dispatch_failed: z.boolean(),
+  delivery: z.nullish(deliverySummarySchema),
 })
-
 export type Alert = z.output<typeof alertResponseSchema>
 
 export const alertPageSchema = z.object({
@@ -133,6 +166,8 @@ export const alertDetailSchema = z.object({
   classifier_score: z.nullish(z.number()),
   classifier_state: z.nullish(z.string().check(z.maxLength(128))),
   snapshot_url: z.nullish(relativePath),
+  dispatch_failed: z.boolean(),
+  delivery: z.nullish(deliveryStatusSchema),
 })
 
 export type AlertDetail = z.output<typeof alertDetailSchema>

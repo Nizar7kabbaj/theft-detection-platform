@@ -15,13 +15,14 @@ class Settings(BaseSettings):
     GRPC_HOST: str = "0.0.0.0"
     GRPC_PORT: int = 50051
     YOLO_MODEL_NAME: str = "yolov8n-pose.pt"
-    YOLO_OBJECT_MODEL_NAME: str = "yolov8n.pt"
+    YOLO_OBJECT_MODEL_NAME: str = "yolov8s.pt"
     LSTM_MODEL_PATH: str = "/app/ai-model/models/shoplifting_classifier.pt"
     DEVICE: str = "cuda"
     LOG_LEVEL: str = "INFO"
     DEBUG: bool = False
     ANOMALY_THRESHOLD: float = 0.6
     YOLO_PERSON_CLASS: int = 0
+    PERSON_CONFIDENCE: float = 0.7
     YOLO_OBJECT_CLASSES: str = "39,67"
     OBJECT_CONFIDENCE: float = 0.35
     CONCEALMENT_GRAB_RATIO: float = 0.6

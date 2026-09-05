@@ -39,12 +39,34 @@ class AlertServiceStub(object):
                 request_serializer=alert__pb2.Alert.SerializeToString,
                 response_deserializer=alert__pb2.SendAlertReply.FromString,
                 _registered_method=True)
+        self.GetDeliveryStatus = channel.unary_unary(
+                '/theftdetection.v1.AlertService/GetDeliveryStatus',
+                request_serializer=alert__pb2.DeliveryStatusRequest.SerializeToString,
+                response_deserializer=alert__pb2.DeliveryStatusReply.FromString,
+                _registered_method=True)
+        self.GetDeliveryStatusBatch = channel.unary_unary(
+                '/theftdetection.v1.AlertService/GetDeliveryStatusBatch',
+                request_serializer=alert__pb2.DeliveryStatusBatchRequest.SerializeToString,
+                response_deserializer=alert__pb2.DeliveryStatusBatchReply.FromString,
+                _registered_method=True)
 
 
 class AlertServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def SendAlert(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetDeliveryStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetDeliveryStatusBatch(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -57,6 +79,16 @@ def add_AlertServiceServicer_to_server(servicer, server):
                     servicer.SendAlert,
                     request_deserializer=alert__pb2.Alert.FromString,
                     response_serializer=alert__pb2.SendAlertReply.SerializeToString,
+            ),
+            'GetDeliveryStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDeliveryStatus,
+                    request_deserializer=alert__pb2.DeliveryStatusRequest.FromString,
+                    response_serializer=alert__pb2.DeliveryStatusReply.SerializeToString,
+            ),
+            'GetDeliveryStatusBatch': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDeliveryStatusBatch,
+                    request_deserializer=alert__pb2.DeliveryStatusBatchRequest.FromString,
+                    response_serializer=alert__pb2.DeliveryStatusBatchReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -86,6 +118,60 @@ class AlertService(object):
             '/theftdetection.v1.AlertService/SendAlert',
             alert__pb2.Alert.SerializeToString,
             alert__pb2.SendAlertReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetDeliveryStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/theftdetection.v1.AlertService/GetDeliveryStatus',
+            alert__pb2.DeliveryStatusRequest.SerializeToString,
+            alert__pb2.DeliveryStatusReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetDeliveryStatusBatch(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/theftdetection.v1.AlertService/GetDeliveryStatusBatch',
+            alert__pb2.DeliveryStatusBatchRequest.SerializeToString,
+            alert__pb2.DeliveryStatusBatchReply.FromString,
             options,
             channel_credentials,
             insecure,

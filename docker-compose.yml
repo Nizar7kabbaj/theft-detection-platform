@@ -210,10 +210,16 @@ services:
       PROMETHEUS_EXPORTER_PORT: "9464"
       CAMERA_ID: "cam-a"
       DEVICE_PATH: "/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_3521BF9F-video-index0"
-      FRAME_WIDTH: "1920"
-      FRAME_HEIGHT: "1080"
+      FRAME_WIDTH: "1280"
+      FRAME_HEIGHT: "720"
       AI_HOST: "ai"
       AI_PORT: "50051"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; p='/app/run/camera_heartbeat'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 10 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 180s
     depends_on:
       ai:
         condition: service_healthy

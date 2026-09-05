@@ -60,6 +60,7 @@ async def _serve() -> None:
         device=settings.DEVICE,
         anomaly_threshold=settings.ANOMALY_THRESHOLD,
         person_class=settings.YOLO_PERSON_CLASS,
+        person_confidence=settings.PERSON_CONFIDENCE,
         object_classes=settings.object_class_ids,
         object_confidence=settings.OBJECT_CONFIDENCE,
         grab_ratio=settings.CONCEALMENT_GRAB_RATIO,
