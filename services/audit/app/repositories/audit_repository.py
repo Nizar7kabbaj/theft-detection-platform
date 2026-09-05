@@ -4,7 +4,8 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, func, select, text
+from google.protobuf.message import DecodeError
+from sqlalchemy import Select, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.chain import (
@@ -19,6 +20,7 @@ from app.core.chain import (
     leaf_matches,
 )
 from app.db.models.audit_event import AuditChainSegment, AuditCheckpoint, AuditEvent
+from app.server.grpc_gen import audit_pb2 as pb
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,28 @@ class TailState:
     prev_hash: bytes
     tree_size: int
     tail_sequence_number: int
+
+
+_SUBJECT_FIELDS = ("subject_id", "target_id", "actor_user_id", "requested_by")
+
+
+def extract_subjects(event_bytes: bytes) -> list[str]:
+    event = pb.AuditEvent()
+    try:
+        event.ParseFromString(event_bytes)
+    except DecodeError:
+        return []
+    found: list[str] = []
+    if event.actor:
+        found.append(event.actor)
+    kind = event.WhichOneof("payload")
+    if kind is not None:
+        payload = getattr(event, kind)
+        for field in _SUBJECT_FIELDS:
+            value = getattr(payload, field, "")
+            if value and value not in found:
+                found.append(value)
+    return found
 
 
 class AuditRepository:
@@ -156,11 +180,11 @@ class AuditRepository:
                 INSERT INTO audit_events (
                     event_id, schema_version, occurred_at, source_service, actor,
                     severity, trace_id, payload_kind, hash_algorithm,
-                    event_bytes, leaf_hash, prev_hash, chain_hash
+                    event_bytes, leaf_hash, prev_hash, chain_hash, subjects
                 ) VALUES (
                     :event_id, :schema_version, :occurred_at, :source_service, :actor,
                     :severity, :trace_id, :payload_kind, :hash_algorithm,
-                    :event_bytes, :leaf_hash, :prev_hash, :chain_hash
+                    :event_bytes, :leaf_hash, :prev_hash, :chain_hash, :subjects
                 )
                 RETURNING sequence_number, persisted_at
                 """
@@ -179,6 +203,7 @@ class AuditRepository:
                 "leaf_hash": leaf_hash,
                 "prev_hash": tail.prev_hash,
                 "chain_hash": chain_hash,
+                "subjects": extract_subjects(event_bytes),
             },
         )
         row = result.one()
@@ -384,3 +409,16 @@ class AuditRepository:
             .where(AuditEvent.sequence_number > sequence_number)
         )
         return int(result.scalar_one())
+
+    async def erase_subject_payloads(self, subject_id: str, reason: int) -> int:
+        await self._session.execute(text("SET LOCAL audit.maintenance = 'on'"))
+        result = await self._session.execute(
+            update(AuditEvent)
+            .where(
+                AuditEvent.subjects.any(subject_id),
+                AuditEvent.erased_at.is_(None),
+            )
+            .values(event_bytes=None, erased_at=func.now(), erasure_reason=reason)
+            .execution_options(synchronize_session=False)
+        )
+        return int(result.rowcount)

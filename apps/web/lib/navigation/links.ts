@@ -1,7 +1,14 @@
 import type { Route } from "next"
 import type { Permission } from "@/features/auth/schemas/identity"
 
-export type NavIcon = "dashboard" | "alerts" | "cameras" | "history" | "analytics" | "settings"
+export type NavIcon =
+  | "dashboard"
+  | "alerts"
+  | "cameras"
+  | "history"
+  | "analytics"
+  | "settings"
+  | "users"
 
 export type NavLink = {
   href: Route
@@ -64,6 +71,12 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         label: "settings",
         icon: "settings",
         permission: "settings:read",
+      },
+      {
+        href: "/users",
+        label: "users",
+        icon: "users",
+        permission: "user:read",
       },
     ],
   },

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    ARRAY,
     BigInteger,
     DateTime,
     Identity,
@@ -57,6 +58,9 @@ class AuditEvent(Base):
     erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     erasure_reason: Mapped[int] = mapped_column(
         SmallInteger, nullable=False, server_default=text("0")
+    )
+    subjects: Mapped[list[str]] = mapped_column(
+        ARRAY(String(64)), nullable=False, server_default=text("'{}'")
     )
 
     __table_args__ = (Index("ix_audit_events_occurred_seq", "occurred_at", "sequence_number"),)

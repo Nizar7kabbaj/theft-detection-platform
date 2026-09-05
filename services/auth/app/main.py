@@ -12,6 +12,7 @@ from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 from grpc_reflection.v1alpha import reflection
 
 from app.api.v1.auth import router as auth_router
+from app.api.v1.users import router as users_router
 from app.core.config import get_settings
 from app.core.database import dispose_engine
 from app.core.redis import close_redis
@@ -20,6 +21,7 @@ from app.server.interceptors import IdentityInterceptor
 from app.server.servicer import AuthServicer
 from app.services.audit_drain import run_drain
 from app.services.audit_service import close_audit_client, open_audit_client
+from app.services.session_sweep import run_session_sweep
 
 AUTH_SERVICE_FULL_NAME = "theftdetection.v1.AuthService"
 
@@ -56,6 +58,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(auth_router)
+    app.include_router(users_router)
     return app
 
 
@@ -138,6 +141,7 @@ async def _serve() -> None:
     grpc_task = asyncio.create_task(_run_grpc(stop_event))
     http_task = asyncio.create_task(_run_http(stop_event))
     drain_task = asyncio.create_task(run_drain(stop_event))
+    sweep_task = asyncio.create_task(run_session_sweep(stop_event))
     tasks = (grpc_task, http_task)
     try:
         done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -152,6 +156,7 @@ async def _serve() -> None:
     finally:
         stop_event.set()
         await drain_task
+        await sweep_task
         await close_redis()
         await dispose_engine()
         await close_audit_client()

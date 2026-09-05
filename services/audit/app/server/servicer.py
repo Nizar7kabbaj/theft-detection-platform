@@ -354,3 +354,28 @@ class AuditServicer(audit_pb2_grpc.AuditServiceServicer):
                 checkpoint_hash=row.checkpoint_hash,
             ),
         )
+
+    async def ErasePayloads(
+        self,
+        request: audit_pb2.ErasePayloadsRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> audit_pb2.ErasePayloadsReply:
+        if peer_service() != common_pb2.SOURCE_SERVICE_AUTH:
+            await context.abort(grpc.StatusCode.PERMISSION_DENIED, "erasure caller not permitted")
+        if not request.subject_id or not request.requested_by:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "subject and requester required")
+        if request.reason == audit_pb2.ERASURE_REASON_UNSPECIFIED:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "erasure reason required")
+        factory = get_sessionmaker()
+        try:
+            async with factory() as db:
+                erased = await AuditRepository(db).erase_subject_payloads(
+                    request.subject_id,
+                    int(request.reason),
+                )
+                await db.commit()
+        except SQLAlchemyError:
+            logger.warning("audit store unavailable during erasure")
+            await context.abort(grpc.StatusCode.UNAVAILABLE, "audit store unavailable")
+        logger.info("erased %d audit payloads on subject request", erased)
+        return audit_pb2.ErasePayloadsReply(records_erased=erased, completed=True)

@@ -100,6 +100,13 @@ enum LifecycleEventKind {
   LIFECYCLE_EVENT_KIND_CONFIG_RELOADED = 5;
   LIFECYCLE_EVENT_KIND_DEGRADED = 6;
 }
+enum ErasureReason {
+  ERASURE_REASON_UNSPECIFIED = 0;
+  ERASURE_REASON_SUBJECT_REQUEST = 1;
+  ERASURE_REASON_ACCOUNT_DELETED = 2;
+  ERASURE_REASON_RETENTION_EXPIRED = 3;
+  ERASURE_REASON_LEGAL_ORDER = 4;
+}
 enum ErasureScope {
   ERASURE_SCOPE_UNSPECIFIED = 0;
   ERASURE_SCOPE_ACCOUNT = 1;
@@ -349,9 +356,19 @@ message GetCheckpointReply {
   bool found = 1;
   Checkpoint checkpoint = 2;
 }
+message ErasePayloadsRequest {
+  string subject_id = 1;
+  string requested_by = 2;
+  ErasureReason reason = 3;
+}
+message ErasePayloadsReply {
+  uint32 records_erased = 1;
+  bool completed = 2;
+}
 service AuditService {
   rpc AppendEvent(AuditEvent) returns (AppendEventReply);
   rpc QueryEvents(QueryEventsRequest) returns (QueryEventsReply);
   rpc VerifyChain(VerifyChainRequest) returns (VerifyChainReply);
   rpc GetCheckpoint(GetCheckpointRequest) returns (GetCheckpointReply);
+  rpc ErasePayloads(ErasePayloadsRequest) returns (ErasePayloadsReply);
 }
