@@ -191,6 +191,91 @@ def admin_session_revoked(actor_user_id: str, session_id: str) -> PreparedEvent:
     return _freeze(event, occurred_at)
 
 
+def _admin_action(
+    *,
+    actor_user_id: str,
+    action: int,
+    target_kind: int,
+    target_id: str,
+    reason_code: int,
+    severity: int,
+) -> PreparedEvent:
+    event, occurred_at = _new_event(actor_user_id, severity)
+    payload = event.admin_action
+    payload.actor_user_id = actor_user_id
+    payload.action = action
+    payload.target_kind = target_kind
+    payload.target_id = target_id
+    payload.reason_code = reason_code
+    return _freeze(event, occurred_at)
+
+
+def admin_user_created(actor_user_id: str, target_user_id: str) -> PreparedEvent:
+    return _admin_action(
+        actor_user_id=actor_user_id,
+        action=pb.ADMIN_ACTION_KIND_CREATE,
+        target_kind=pb.ADMIN_TARGET_KIND_USER,
+        target_id=target_user_id,
+        reason_code=pb.ADMIN_REASON_CODE_ONBOARDING,
+        severity=common_pb2.SEVERITY_NOTICE,
+    )
+
+
+def admin_roles_granted(actor_user_id: str, target_user_id: str) -> PreparedEvent:
+    return _admin_action(
+        actor_user_id=actor_user_id,
+        action=pb.ADMIN_ACTION_KIND_GRANT_ROLE,
+        target_kind=pb.ADMIN_TARGET_KIND_ROLE_BINDING,
+        target_id=target_user_id,
+        reason_code=pb.ADMIN_REASON_CODE_ROUTINE_ADMINISTRATION,
+        severity=common_pb2.SEVERITY_NOTICE,
+    )
+
+
+def admin_roles_revoked(actor_user_id: str, target_user_id: str) -> PreparedEvent:
+    return _admin_action(
+        actor_user_id=actor_user_id,
+        action=pb.ADMIN_ACTION_KIND_REVOKE_ROLE,
+        target_kind=pb.ADMIN_TARGET_KIND_ROLE_BINDING,
+        target_id=target_user_id,
+        reason_code=pb.ADMIN_REASON_CODE_ROUTINE_ADMINISTRATION,
+        severity=common_pb2.SEVERITY_NOTICE,
+    )
+
+
+def admin_user_disabled(actor_user_id: str, target_user_id: str) -> PreparedEvent:
+    return _admin_action(
+        actor_user_id=actor_user_id,
+        action=pb.ADMIN_ACTION_KIND_DISABLE,
+        target_kind=pb.ADMIN_TARGET_KIND_USER,
+        target_id=target_user_id,
+        reason_code=pb.ADMIN_REASON_CODE_OFFBOARDING,
+        severity=common_pb2.SEVERITY_WARNING,
+    )
+
+
+def admin_user_enabled(actor_user_id: str, target_user_id: str) -> PreparedEvent:
+    return _admin_action(
+        actor_user_id=actor_user_id,
+        action=pb.ADMIN_ACTION_KIND_ENABLE,
+        target_kind=pb.ADMIN_TARGET_KIND_USER,
+        target_id=target_user_id,
+        reason_code=pb.ADMIN_REASON_CODE_ONBOARDING,
+        severity=common_pb2.SEVERITY_NOTICE,
+    )
+
+
+def admin_password_reset(actor_user_id: str, target_user_id: str) -> PreparedEvent:
+    return _admin_action(
+        actor_user_id=actor_user_id,
+        action=pb.ADMIN_ACTION_KIND_FORCE_PASSWORD_RESET,
+        target_kind=pb.ADMIN_TARGET_KIND_USER,
+        target_id=target_user_id,
+        reason_code=pb.ADMIN_REASON_CODE_SECURITY_INCIDENT,
+        severity=common_pb2.SEVERITY_WARNING,
+    )
+
+
 def open_audit_client() -> AuditServiceStub:
     global _channel, _stub
     if _stub is not None:
@@ -222,3 +307,44 @@ async def close_audit_client() -> None:
         _channel = None
     _stub = None
     logger.info("audit client closed")
+
+
+async def erase_subject(subject_id: str, requested_by: str, reason: int) -> tuple[int, bool]:
+    stub = open_audit_client()
+    request = pb.ErasePayloadsRequest(
+        subject_id=subject_id,
+        requested_by=requested_by,
+        reason=reason,
+    )
+    reply = await stub.ErasePayloads(
+        request,
+        timeout=get_settings().audit_append_timeout_seconds,
+    )
+    return int(reply.records_erased), bool(reply.completed)
+
+
+def data_subject_erasure(
+    actor_user_id: str,
+    subject_id: str,
+    records_erased: int,
+    completed: bool,
+) -> PreparedEvent | None:
+    try:
+        subject_hmac = pseudonymize(_SUBJECT_DOMAIN, subject_id)
+    except PseudonymKeyError:
+        logger.warning("erasure event not recorded, pseudonym key unavailable")
+        return None
+    event, occurred_at = _new_event(actor_user_id, common_pb2.SEVERITY_WARNING)
+    payload = event.data_subject_erasure
+    payload.data_subject_hmac = subject_hmac
+    payload.requested_by = actor_user_id
+    payload.scopes.extend(
+        [
+            pb.ERASURE_SCOPE_ACCOUNT,
+            pb.ERASURE_SCOPE_SESSIONS,
+            pb.ERASURE_SCOPE_AUDIT_PAYLOADS,
+        ]
+    )
+    payload.records_erased = records_erased
+    payload.completed = completed
+    return _freeze(event, occurred_at)

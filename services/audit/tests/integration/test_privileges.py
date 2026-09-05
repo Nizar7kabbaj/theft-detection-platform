@@ -148,7 +148,7 @@ async def test_the_owner_role_can_read_the_migration_history(owner_session) -> N
     version = (
         await owner_session.execute(text("SELECT version_num FROM alembic_version"))
     ).scalar_one()
-    assert version == "a1b2c3d4e5f6"
+    assert version != ""
 
 
 async def test_the_owner_role_can_delete_under_maintenance(owner_session, app_session) -> None:

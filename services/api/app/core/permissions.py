@@ -15,6 +15,8 @@ class Permission(StrEnum):
     STATS_READ = "stats:read"
     AUDIT_QUERY = "audit:query"
     SETTINGS_READ = "settings:read"
+    USER_READ = "user:read"
+    USER_WRITE = "user:write"
 
 
 ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {

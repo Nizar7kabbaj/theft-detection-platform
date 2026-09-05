@@ -1,5 +1,13 @@
 "use client"
-import { Clock, LayoutDashboard, Settings, ShieldAlert, TrendingUp, Video } from "lucide-react"
+import {
+  Clock,
+  LayoutDashboard,
+  Settings,
+  ShieldAlert,
+  TrendingUp,
+  UsersRound,
+  Video,
+} from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ComponentType } from "react"
@@ -13,6 +21,7 @@ const ICONS: Record<NavIcon, ComponentType<{ className?: string }>> = {
   history: Clock,
   analytics: TrendingUp,
   settings: Settings,
+  users: UsersRound,
 }
 const NAV_CLASS = "flex flex-1 flex-col gap-4 overflow-y-auto px-2 py-3"
 const SECTION_CLASS = "flex flex-col gap-0.5"
