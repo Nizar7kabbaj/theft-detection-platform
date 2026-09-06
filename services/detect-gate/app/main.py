@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 import signal
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -62,10 +63,12 @@ async def _frame_loop(
     pool: ThreadPoolExecutor,
     camera_id: str,
     heartbeat_path: Path,
+    heartbeat_interval: float,
     stop_event: asyncio.Event,
 ) -> None:
     loop = asyncio.get_running_loop()
     frame_index = 0
+    last_heartbeat = 0.0
     log = logging.getLogger("app.gate")
     while not stop_event.is_set():
         _touch(heartbeat_path)
@@ -75,6 +78,10 @@ async def _frame_loop(
         result = await loop.run_in_executor(pool, detector.detect, frame)
         counters.frames_processed_total += 1
         frame_index += 1
+        now = time.monotonic()
+        if now - last_heartbeat >= heartbeat_interval:
+            client.heartbeat(frame_index)
+            last_heartbeat = now
         if result.person_seen:
             counters.person_detections_total += 1
         edge = machine.observe(result.person_seen)
@@ -83,9 +90,13 @@ async def _frame_loop(
             client.submit(edge, result.top_confidence, frame_index)
             log.info("person entered camera=%s frame=%d", camera_id, frame_index)
         elif edge is PresenceEdge.LEFT:
-            counters.exits_total += 1
-            client.submit(edge, result.top_confidence, frame_index)
-            log.info("person left camera=%s frame=%d", camera_id, frame_index)
+            if machine.cold_start_absent:
+                client.submit(edge, result.top_confidence, frame_index)
+                log.info("room empty at start camera=%s frame=%d", camera_id, frame_index)
+            else:
+                counters.exits_total += 1
+                client.submit(edge, result.top_confidence, frame_index)
+                log.info("person left camera=%s frame=%d", camera_id, frame_index)
 
 
 async def _serve() -> None:
@@ -150,6 +161,7 @@ async def _serve() -> None:
             pool,
             settings.CAMERA_ID,
             settings.HEARTBEAT_PATH,
+            settings.HEARTBEAT_INTERVAL_SECONDS,
             stop_event,
         )
     )

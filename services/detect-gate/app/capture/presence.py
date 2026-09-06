@@ -20,10 +20,15 @@ class PresenceStateMachine:
         self._exit_debounce_frames = exit_debounce_frames
         self._state = PresenceState.UNKNOWN
         self._empty_streak = 0
+        self._cold_start_absent = False
 
     @property
     def state(self) -> PresenceState:
         return self._state
+
+    @property
+    def cold_start_absent(self) -> bool:
+        return self._cold_start_absent
 
     def observe(self, person_seen: bool) -> PresenceEdge:
         if person_seen:
@@ -44,4 +49,6 @@ class PresenceStateMachine:
             and self._empty_streak >= self._exit_debounce_frames
         ):
             self._state = PresenceState.ABSENT
+            self._cold_start_absent = True
+            return PresenceEdge.LEFT
         return PresenceEdge.NONE

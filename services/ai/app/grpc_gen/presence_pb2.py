@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0epresence.proto\x12\x11theftdetection.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf9\x01\n\rPresenceEvent\x12\x10\n\x08\x65vent_id\x18\x01 \x01(\t\x12\x32\n\x04kind\x18\x02 \x01(\x0e\x32$.theftdetection.v1.PresenceEventKind\x12/\n\x0boccurred_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tcamera_id\x18\x04 \x01(\t\x12\x12\n\nsession_id\x18\x05 \x01(\x03\x12\x10\n\x08track_id\x18\x06 \x01(\x05\x12\x1c\n\x14\x64\x65tection_confidence\x18\x07 \x01(\x02\x12\x1a\n\x12source_frame_index\x18\x08 \x01(\x05\"M\n\x0bPresenceAck\x12\x10\n\x08\x65vent_id\x18\x01 \x01(\t\x12,\n\x06status\x18\x02 \x01(\x0e\x32\x1c.theftdetection.v1.AckStatus*\x85\x01\n\x11PresenceEventKind\x12#\n\x1fPRESENCE_EVENT_KIND_UNSPECIFIED\x10\x00\x12&\n\"PRESENCE_EVENT_KIND_PERSON_ENTERED\x10\x01\x12#\n\x1fPRESENCE_EVENT_KIND_PERSON_LEFT\x10\x02*\x80\x01\n\tAckStatus\x12\x1a\n\x16\x41\x43K_STATUS_UNSPECIFIED\x10\x00\x12\x17\n\x13\x41\x43K_STATUS_ACCEPTED\x10\x01\x12 \n\x1c\x41\x43K_STATUS_DROPPED_DUPLICATE\x10\x02\x12\x1c\n\x18\x41\x43K_STATUS_DROPPED_STALE\x10\x03\x32i\n\x0fPresenceService\x12V\n\x0eStreamPresence\x12 .theftdetection.v1.PresenceEvent\x1a\x1e.theftdetection.v1.PresenceAck(\x01\x30\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0epresence.proto\x12\x11theftdetection.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf9\x01\n\rPresenceEvent\x12\x10\n\x08\x65vent_id\x18\x01 \x01(\t\x12\x32\n\x04kind\x18\x02 \x01(\x0e\x32$.theftdetection.v1.PresenceEventKind\x12/\n\x0boccurred_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tcamera_id\x18\x04 \x01(\t\x12\x12\n\nsession_id\x18\x05 \x01(\x03\x12\x10\n\x08track_id\x18\x06 \x01(\x05\x12\x1c\n\x14\x64\x65tection_confidence\x18\x07 \x01(\x02\x12\x1a\n\x12source_frame_index\x18\x08 \x01(\x05\"M\n\x0bPresenceAck\x12\x10\n\x08\x65vent_id\x18\x01 \x01(\t\x12,\n\x06status\x18\x02 \x01(\x0e\x32\x1c.theftdetection.v1.AckStatus*\xa8\x01\n\x11PresenceEventKind\x12#\n\x1fPRESENCE_EVENT_KIND_UNSPECIFIED\x10\x00\x12&\n\"PRESENCE_EVENT_KIND_PERSON_ENTERED\x10\x01\x12#\n\x1fPRESENCE_EVENT_KIND_PERSON_LEFT\x10\x02\x12!\n\x1dPRESENCE_EVENT_KIND_HEARTBEAT\x10\x03*\x80\x01\n\tAckStatus\x12\x1a\n\x16\x41\x43K_STATUS_UNSPECIFIED\x10\x00\x12\x17\n\x13\x41\x43K_STATUS_ACCEPTED\x10\x01\x12 \n\x1c\x41\x43K_STATUS_DROPPED_DUPLICATE\x10\x02\x12\x1c\n\x18\x41\x43K_STATUS_DROPPED_STALE\x10\x03\x32i\n\x0fPresenceService\x12V\n\x0eStreamPresence\x12 .theftdetection.v1.PresenceEvent\x1a\x1e.theftdetection.v1.PresenceAck(\x01\x30\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,13 +33,13 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'presence_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_PRESENCEEVENTKIND']._serialized_start=402
-  _globals['_PRESENCEEVENTKIND']._serialized_end=535
-  _globals['_ACKSTATUS']._serialized_start=538
-  _globals['_ACKSTATUS']._serialized_end=666
+  _globals['_PRESENCEEVENTKIND']._serialized_end=570
+  _globals['_ACKSTATUS']._serialized_start=573
+  _globals['_ACKSTATUS']._serialized_end=701
   _globals['_PRESENCEEVENT']._serialized_start=71
   _globals['_PRESENCEEVENT']._serialized_end=320
   _globals['_PRESENCEACK']._serialized_start=322
   _globals['_PRESENCEACK']._serialized_end=399
-  _globals['_PRESENCESERVICE']._serialized_start=668
-  _globals['_PRESENCESERVICE']._serialized_end=773
+  _globals['_PRESENCESERVICE']._serialized_start=703
+  _globals['_PRESENCESERVICE']._serialized_end=808
 # @@protoc_insertion_point(module_scope)
