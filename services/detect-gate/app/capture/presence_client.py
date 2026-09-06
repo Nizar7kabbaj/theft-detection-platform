@@ -42,6 +42,7 @@ class PresenceClient:
         self._stub: presence_pb2_grpc.PresenceServiceStub | None = None
         self._running = False
         self._event_seq = 0
+        self._heartbeats_dropped = 0
         self._events_sent = 0
         self._acks_received = 0
         self._stream_failures = 0
@@ -54,14 +55,16 @@ class PresenceClient:
             "stream_failures_total": self._stream_failures,
         }
 
-    def submit(self, edge: PresenceEdge, confidence: float, frame_index: int) -> None:
-        kind = _EDGE_TO_KIND.get(edge)
-        if kind is None:
-            return
+    def _build(
+        self,
+        kind: int,
+        confidence: float,
+        frame_index: int,
+    ) -> presence_pb2.PresenceEvent:
         self._event_seq += 1
         ts = Timestamp()
         ts.GetCurrentTime()
-        event = presence_pb2.PresenceEvent(
+        return presence_pb2.PresenceEvent(
             event_id=f"{self._camera_id}-{self._session_id}-{self._event_seq}",
             kind=kind,
             occurred_at=ts,
@@ -70,12 +73,26 @@ class PresenceClient:
             detection_confidence=confidence,
             source_frame_index=frame_index,
         )
+
+    def submit(self, edge: PresenceEdge, confidence: float, frame_index: int) -> None:
+        kind = _EDGE_TO_KIND.get(edge)
+        if kind is None:
+            return
+        event = self._build(kind, confidence, frame_index)
         try:
             self._queue.put_nowait(event)
         except asyncio.QueueFull:
             _ = self._queue.get_nowait()
             self._queue.put_nowait(event)
             logger.warning("presence queue full, dropped oldest event")
+
+    def heartbeat(self, frame_index: int) -> None:
+        event = self._build(presence_pb2.PRESENCE_EVENT_KIND_HEARTBEAT, 0.0, frame_index)
+        try:
+            self._queue.put_nowait(event)
+        except asyncio.QueueFull:
+            self._heartbeats_dropped += 1
+            logger.debug("presence queue full, heartbeat dropped")
 
     async def _outbound(self):
         while self._running:

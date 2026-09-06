@@ -36,9 +36,10 @@ class ForwardBuffer:
         now = time.monotonic()
         with self._lock:
             while self._frames:
-                frame = self._frames.popleft()
-                age = now - frame.captured_at_monotonic
-                if age <= self._max_age_seconds:
+                frame = self._frames.pop()
+                self._dropped_stale_total += len(self._frames)
+                self._frames.clear()
+                if now - frame.captured_at_monotonic <= self._max_age_seconds:
                     return frame
                 self._dropped_stale_total += 1
             return None

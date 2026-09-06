@@ -13,6 +13,7 @@ from app.alert_client import AlertClient
 from app.grpc_gen import alert_pb2, common_pb2, inference_pb2, inference_pb2_grpc
 from app.inference import DetectionResult, Detector
 from app.observability import get_frames_counter, get_inference_histogram
+from app.presence_servicer import PresenceServicer
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -27,10 +28,14 @@ class InferenceServicer(inference_pb2_grpc.InferenceServiceServicer):
         detector: Detector,
         executor: ThreadPoolExecutor,
         alert_client: AlertClient | None = None,
+        presence: PresenceServicer | None = None,
+        gating_enabled: bool = False,
     ) -> None:
         self._detector = detector
         self._executor = executor
         self._alert_client = alert_client
+        self._presence = presence
+        self._gating_enabled = gating_enabled
         self._frames_counter = get_frames_counter()
         self._inference_histogram = get_inference_histogram()
 
@@ -138,8 +143,13 @@ class InferenceServicer(inference_pb2_grpc.InferenceServiceServicer):
             span.set_attribute("camera_id", frame.camera_id)
             span.set_attribute("frame_index", frame.frame_index)
             span.set_attribute("payload_bytes", len(frame.payload))
+            run_pose = True
+            if self._gating_enabled and self._presence is not None:
+                run_pose = not self._presence.is_absent(frame.camera_id)
+            span.set_attribute("run_pose", run_pose)
             loop = asyncio.get_running_loop()
             started = time.perf_counter()
+            captured_at = frame.timestamp.ToMicroseconds() / 1_000_000.0
             result = await loop.run_in_executor(
                 self._executor,
                 self._detector.analyze_frame,
@@ -147,6 +157,8 @@ class InferenceServicer(inference_pb2_grpc.InferenceServiceServicer):
                 frame.session_id,
                 frame.frame_index,
                 frame.camera_id,
+                run_pose,
+                captured_at,
             )
             elapsed_ms = (time.perf_counter() - started) * 1000
             self._frames_counter.add(1, {"camera_id": frame.camera_id})

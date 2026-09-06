@@ -33,6 +33,8 @@ class CaptureLoop:
         self._paused = threading.Event()
         self._frame_index = 0
         self._last_grab_monotonic = 0.0
+        self._last_heartbeat_monotonic = 0.0
+        self._next_deadline = 0.0
         self._lock = threading.Lock()
 
     def start(self) -> None:
@@ -66,21 +68,22 @@ class CaptureLoop:
 
     def _run(self) -> None:
         while self._running.is_set():
-            started = time.monotonic()
             if self._paused.is_set():
                 time.sleep(self._frame_interval)
+                self._next_deadline = 0.0
                 continue
             frame = self._device.read()
             if frame is None:
                 logger.warning("grab failed camera=%s, reopening", self._camera_id)
                 self._device.reopen_with_backoff()
                 self._frame_index = 0
+                self._next_deadline = 0.0
                 continue
             record = self._build_record(frame)
             if record is not None:
                 self._buffer.push(record)
                 self._publisher.push(record)
-            self._pace(started)
+            self._pace()
 
     def _build_record(self, frame) -> CapturedFrame | None:
         payload = frame.tobytes()
@@ -103,13 +106,26 @@ class CaptureLoop:
         return record
 
     def _touch_heartbeat(self) -> None:
+        now = time.monotonic()
+        if now - self._last_heartbeat_monotonic < 1.0:
+            return
+        self._last_heartbeat_monotonic = now
         try:
             self._heartbeat_path.touch()
         except OSError:
             logger.warning("heartbeat write failed path=%s", self._heartbeat_path)
 
-    def _pace(self, started: float) -> None:
-        elapsed = time.monotonic() - started
-        remaining = self._frame_interval - elapsed
+    def _pace(self) -> None:
+        device_fps = self._device.actual_fps
+        if device_fps > 0 and self._frame_interval <= 1.0 / device_fps:
+            self._next_deadline = 0.0
+            return
+        now = time.monotonic()
+        if self._next_deadline <= 0.0:
+            self._next_deadline = now
+        self._next_deadline += self._frame_interval
+        remaining = self._next_deadline - now
         if remaining > 0:
             time.sleep(remaining)
+        else:
+            self._next_deadline = now

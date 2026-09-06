@@ -64,9 +64,9 @@ async def _serve() -> None:
         object_classes=settings.object_class_ids,
         object_confidence=settings.OBJECT_CONFIDENCE,
         grab_ratio=settings.CONCEALMENT_GRAB_RATIO,
-        missing_frames=settings.CONCEALMENT_MISSING_FRAMES,
+        missing_seconds=settings.CONCEALMENT_MISSING_SECONDS,
         keypoint_confidence=settings.CONCEALMENT_KEYPOINT_CONFIDENCE,
-        expiry_frames=settings.CONCEALMENT_EXPIRY_FRAMES,
+        expiry_seconds=settings.CONCEALMENT_EXPIRY_SECONDS,
         snapshot_dir=settings.SNAPSHOT_DIR,
     )
     alert_client = AlertClient(
@@ -94,13 +94,28 @@ async def _serve() -> None:
     health_servicer.set(INFERENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
     health_servicer.set(PRESENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
     health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
-    inference_pb2_grpc.add_InferenceServiceServicer_to_server(
-        InferenceServicer(detector=detector, executor=executor, alert_client=alert_client),
-        server,
+    presence_servicer = PresenceServicer(
+        lease_seconds=settings.PRESENCE_LEASE_SECONDS,
+        absent_holdoff_seconds=settings.PRESENCE_ABSENT_HOLDOFF_SECONDS,
     )
-    presence_servicer = PresenceServicer()
     presence_pb2_grpc.add_PresenceServiceServicer_to_server(presence_servicer, server)
     register_presence_gauge(presence_servicer)
+    inference_pb2_grpc.add_InferenceServiceServicer_to_server(
+        InferenceServicer(
+            detector=detector,
+            executor=executor,
+            alert_client=alert_client,
+            presence=presence_servicer,
+            gating_enabled=settings.PRESENCE_GATING_ENABLED,
+        ),
+        server,
+    )
+    log.info(
+        "presence gating enabled=%s lease=%.1fs holdoff=%.1fs",
+        settings.PRESENCE_GATING_ENABLED,
+        settings.PRESENCE_LEASE_SECONDS,
+        settings.PRESENCE_ABSENT_HOLDOFF_SECONDS,
+    )
     bind_address = f"{settings.GRPC_HOST}:{settings.GRPC_PORT}"
     server.add_secure_port(bind_address, _server_credentials())
     log.info("loading detector")

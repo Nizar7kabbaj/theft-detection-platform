@@ -42,9 +42,8 @@ class Bbox(BaseModel):
 
 class Keypoint(BaseModel):
     model_config = ConfigDict(extra="ignore")
-
-    x: float
-    y: float
+    x: float = 0.0
+    y: float = 0.0
     confidence: float = Field(ge=0.0, le=1.0)
 
 

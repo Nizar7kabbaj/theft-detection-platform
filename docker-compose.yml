@@ -241,7 +241,7 @@ services:
       OTEL_SERVICE_NAME: "theft-detect-gate"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-detect-gate"
       PROMETHEUS_EXPORTER_PORT: "9464"
-      CAMERA_ID: "cam-01"
+      CAMERA_ID: "cam-a"
       SESSION_ID: "1"
       AI_HOST: "ai"
       AI_PORT: "50051"
@@ -252,6 +252,8 @@ services:
       - ./config/pki/ca/ca.crt:/run/secrets/gate_tls_ca:ro
     depends_on:
       ai:
+        condition: service_healthy
+      camera:
         condition: service_healthy
     deploy:
       resources:

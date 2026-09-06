@@ -30,13 +30,14 @@ class ConcealmentVerdict:
 class _ObjectState:
     class_name: str
     bbox: tuple[float, float, float, float]
+    last_seen_at: float
     last_seen_frame: int
     held_by_track: int
     held_wrist_index: int
     held_wrist_x: float
     held_wrist_y: float
     held_distance: float
-    held_frame: int
+    held_at: float
     fired: bool
 
 
@@ -62,27 +63,28 @@ class ConcealmentTracker:
     def __init__(
         self,
         grab_ratio: float,
-        missing_frames: int,
+        missing_seconds: float,
         keypoint_confidence: float,
-        expiry_frames: int,
+        expiry_seconds: float,
     ) -> None:
         self._grab_ratio = grab_ratio
-        self._missing_frames = missing_frames
+        self._missing_seconds = missing_seconds
         self._keypoint_confidence = keypoint_confidence
-        self._expiry_frames = expiry_frames
+        self._expiry_seconds = expiry_seconds
         self._objects: dict[tuple[str, int], _ObjectState] = {}
-        self._persons: dict[tuple[str, int], int] = {}
-        self._last_fired: dict[str, int] = {}
+        self._persons: dict[tuple[str, int], float] = {}
+        self._last_fired: dict[str, float] = {}
 
     def observe(
         self,
         camera_id: str,
         frame_index: int,
+        captured_at: float,
         persons: list[tuple[int, list[tuple[float, float, float]]]],
         objects: list[tuple[int, str, tuple[float, float, float, float]]],
     ) -> list[ConcealmentVerdict]:
         for track_id, _keypoints in persons:
-            self._persons[(camera_id, track_id)] = frame_index
+            self._persons[(camera_id, track_id)] = captured_at
         visible = {track_id for track_id, _name, _bbox in objects}
         for track_id, class_name, bbox in objects:
             key = (camera_id, track_id)
@@ -91,29 +93,31 @@ class ConcealmentTracker:
                 state = _ObjectState(
                     class_name=class_name,
                     bbox=bbox,
+                    last_seen_at=captured_at,
                     last_seen_frame=frame_index,
                     held_by_track=0,
                     held_wrist_index=-1,
                     held_wrist_x=0.0,
                     held_wrist_y=0.0,
                     held_distance=0.0,
-                    held_frame=-1,
+                    held_at=-1.0,
                     fired=False,
                 )
                 self._objects[key] = state
             state.class_name = class_name
             state.bbox = bbox
+            state.last_seen_at = captured_at
             state.last_seen_frame = frame_index
             state.fired = False
-            self._update_hold(state, bbox, persons, frame_index)
-        return self._collect(camera_id, frame_index, visible)
+            self._update_hold(state, bbox, persons, captured_at)
+        return self._collect(camera_id, frame_index, captured_at, visible)
 
     def _update_hold(
         self,
         state: _ObjectState,
         bbox: tuple[float, float, float, float],
         persons: list[tuple[int, list[tuple[float, float, float]]]],
-        frame_index: int,
+        captured_at: float,
     ) -> None:
         object_x, object_y = _centre(bbox)
         best_distance = None
@@ -137,41 +141,42 @@ class ConcealmentTracker:
                     state.held_wrist_x = wrist_x
                     state.held_wrist_y = wrist_y
                     state.held_distance = distance
-                    state.held_frame = frame_index
+                    state.held_at = captured_at
 
     def _hold_is_recent(self, state: _ObjectState) -> bool:
-        if state.held_wrist_index < 0 or state.held_frame < 0:
+        if state.held_wrist_index < 0 or state.held_at < 0:
             return False
-        return state.last_seen_frame - state.held_frame <= self._missing_frames
+        return state.last_seen_at - state.held_at <= self._missing_seconds
 
     def _holder_was_present(self, camera_id: str, state: _ObjectState) -> bool:
         seen = self._persons.get((camera_id, state.held_by_track))
         if seen is None:
             return False
-        return state.last_seen_frame - seen <= self._missing_frames
+        return state.last_seen_at - seen <= self._missing_seconds
 
     def _collect(
         self,
         camera_id: str,
         frame_index: int,
+        captured_at: float,
         visible: set[int],
     ) -> list[ConcealmentVerdict]:
         verdicts: list[ConcealmentVerdict] = []
         expired: list[tuple[str, int]] = []
         last_fired = self._last_fired.get(camera_id)
-        muted = last_fired is not None and frame_index - last_fired < self._expiry_frames
+        muted = last_fired is not None and captured_at - last_fired < self._expiry_seconds
         for key, state in self._objects.items():
             if key[0] != camera_id:
                 continue
             if key[1] in visible:
                 continue
-            missing = frame_index - state.last_seen_frame
-            if missing > self._expiry_frames:
+            missing = captured_at - state.last_seen_at
+            if missing > self._expiry_seconds:
                 expired.append(key)
                 continue
             if state.fired:
                 continue
-            if missing < self._missing_frames:
+            if missing < self._missing_seconds:
                 continue
             if not self._hold_is_recent(state):
                 continue
@@ -180,7 +185,7 @@ class ConcealmentTracker:
             state.fired = True
             if muted:
                 continue
-            self._last_fired[camera_id] = frame_index
+            self._last_fired[camera_id] = captured_at
             muted = True
             verdicts.append(
                 ConcealmentVerdict(
@@ -188,7 +193,7 @@ class ConcealmentTracker:
                     object_class=state.class_name,
                     last_seen_bbox=state.bbox,
                     last_seen_frame=state.last_seen_frame,
-                    missing_frames=missing,
+                    missing_frames=frame_index - state.last_seen_frame,
                     person_track_id=state.held_by_track,
                     wrist_index=state.held_wrist_index,
                     wrist_x=state.held_wrist_x,
@@ -201,7 +206,7 @@ class ConcealmentTracker:
         stale = [
             key
             for key, seen in self._persons.items()
-            if key[0] == camera_id and frame_index - seen > self._expiry_frames
+            if key[0] == camera_id and captured_at - seen > self._expiry_seconds
         ]
         for key in stale:
             del self._persons[key]

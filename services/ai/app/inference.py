@@ -63,6 +63,8 @@ class Detector(Protocol):
         session_id: int,
         frame_index: int,
         camera_id: str,
+        run_pose: bool,
+        captured_at: float,
     ) -> DetectionResult | None: ...
     def close(self) -> None: ...
 
@@ -80,9 +82,9 @@ class LSTMDetector:
         object_classes: list[int],
         object_confidence: float,
         grab_ratio: float,
-        missing_frames: int,
+        missing_seconds: float,
         keypoint_confidence: float,
-        expiry_frames: int,
+        expiry_seconds: float,
         snapshot_dir: str,
     ) -> None:
         self._yolo_model_name = yolo_model_name
@@ -97,9 +99,9 @@ class LSTMDetector:
         self._snapshot_dir = Path(snapshot_dir)
         self._concealment = ConcealmentTracker(
             grab_ratio=grab_ratio,
-            missing_frames=missing_frames,
+            missing_seconds=missing_seconds,
             keypoint_confidence=keypoint_confidence,
-            expiry_frames=expiry_frames,
+            expiry_seconds=expiry_seconds,
         )
         self._yolo: YOLO | None = None
         self._objects: YOLO | None = None
@@ -137,6 +139,8 @@ class LSTMDetector:
         session_id: int,
         frame_index: int,
         camera_id: str,
+        run_pose: bool = True,
+        captured_at: float = 0.0,
     ) -> DetectionResult | None:
         with self._analyze_lock:
             if self._yolo is None or self._objects is None or self._predictor is None:
@@ -146,11 +150,12 @@ class LSTMDetector:
             if frame is None:
                 return None
             height, width = frame.shape[:2]
-            persons = self._track_persons(frame, camera_id, frame_index)
+            persons = self._track_persons(frame, camera_id, frame_index) if run_pose else []
             objects = self._track_objects(frame)
             concealments = self._concealment.observe(
                 camera_id=camera_id,
                 frame_index=frame_index,
+                captured_at=captured_at,
                 persons=[(person.track_id, person.keypoints) for person in persons],
                 objects=[(obj.track_id, obj.class_name, obj.bbox) for obj in objects],
             )

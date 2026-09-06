@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     FRAME_HEIGHT: int = 1080
     IDLE_FPS: Annotated[int, Field(ge=1, le=60)] = 15
     ACTIVE_FPS: Annotated[int, Field(ge=1, le=60)] = 30
-    DWELL_SECONDS: Annotated[float, Field(gt=0)] = 3.0
+    DWELL_SECONDS: Annotated[float, Field(gt=0)] = 6.0
     AI_HOST: str = "ai"
     AI_PORT: int = 50051
     BUFFER_MAX_DEPTH: Annotated[int, Field(ge=1)] = 30
