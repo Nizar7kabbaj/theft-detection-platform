@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card"
 import { parseAlertFilters } from "@/features/alerts/api/alert-keys"
 import { AlertStream } from "@/features/alerts/components/alert-stream"
-import { todayUtc } from "@/features/analytics/api/date-range"
+import { today } from "@/features/analytics/api/date-range"
 import { statsQueryKey } from "@/features/analytics/api/stats-key"
 import { fetchStats } from "@/features/analytics/api/stats-server"
 import { fetchStatsTimeseries } from "@/features/analytics/api/timeseries-server"
@@ -45,9 +45,9 @@ async function StatsPanel() {
 }
 
 async function HourlyAlertPanel() {
-  const today = todayUtc()
+  const day = today()
   try {
-    const series = await fetchStatsTimeseries("hour", { start: today, end: today })
+    const series = await fetchStatsTimeseries("hour", { start: day, end: day })
     return <AlertVolumeChartLazy buckets={series.alerts} unit={series.unit} />
   } catch {
     return <p className="text-muted-foreground text-sm">hourly volume is unavailable</p>

@@ -246,6 +246,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get System Stats */
+        get: operations["get_system_stats_api_v1_stats_system_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/system/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get System History */
+        get: operations["get_system_history_api_v1_stats_system_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stats/edge": {
         parameters: {
             query?: never;
@@ -794,6 +828,17 @@ export interface components {
                 [key: string]: string[];
             };
         };
+        /** ServiceMemory */
+        ServiceMemory: {
+            /** Camera */
+            camera: number | null;
+            /** Gate */
+            gate: number | null;
+            /** Inference */
+            inference: number | null;
+            /** Notification */
+            notification: number | null;
+        };
         /**
          * Severity
          * @enum {string}
@@ -833,6 +878,37 @@ export interface components {
             alerts: components["schemas"]["AlertBucket"][];
             /** Decisions */
             decisions: components["schemas"]["DecisionBucket"][];
+        };
+        /** SystemHistoryResponse */
+        SystemHistoryResponse: {
+            /** Cpu */
+            cpu: number[];
+            /** Gpu */
+            gpu: number[];
+            /** Memory */
+            memory: number[];
+            /** Network */
+            network: number[];
+            /** Cpu Temperature */
+            cpu_temperature: number[];
+            /** Gpu Temperature */
+            gpu_temperature: number[];
+        };
+        /** SystemStatsResponse */
+        SystemStatsResponse: {
+            /** Cpu Percent */
+            cpu_percent: number | null;
+            /** Memory Percent */
+            memory_percent: number | null;
+            /** Network Bytes Per Second */
+            network_bytes_per_second: number | null;
+            /** Gpu Percent */
+            gpu_percent: number | null;
+            /** Gpu Temperature C */
+            gpu_temperature_c: number | null;
+            /** Cpu Temperature C */
+            cpu_temperature_c: number | null;
+            service_memory_bytes: components["schemas"]["ServiceMemory"];
         };
         /** TopObject */
         TopObject: {
@@ -1421,6 +1497,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_system_stats_api_v1_stats_system_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemStatsResponse"];
+                };
+            };
+        };
+    };
+    get_system_history_api_v1_stats_system_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemHistoryResponse"];
                 };
             };
         };

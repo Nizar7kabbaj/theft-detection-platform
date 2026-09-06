@@ -751,19 +751,22 @@ services:
     profiles: ["observability"]
     image: prom/node-exporter:v1.8.2
     container_name: theft-node-exporter
-    networks:
-      - observability
+    network_mode: host
     command:
       - "--path.procfs=/host/proc"
       - "--path.rootfs=/rootfs"
       - "--path.sysfs=/host/sys"
+      - "--path.udev.data=/host/run/udev/data"
+      - "--web.listen-address=172.21.0.1:9100"
       - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+      - "--collector.netdev.device-exclude=^(veth|br-|docker|lo|virbr).*$$"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
+      - /run/udev/data:/host/run/udev/data:ro
       - /:/rootfs:ro,rslave
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9100/metrics"]
+      test: ["CMD", "wget", "--spider", "-q", "http://172.21.0.1:9100/metrics"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -1077,6 +1080,10 @@ networks:
     internal: true
   observability:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24
+          gateway: 172.21.0.1
 
 volumes:
   mongo_data:

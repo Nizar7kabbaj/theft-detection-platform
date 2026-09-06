@@ -2,10 +2,10 @@
 
 import { Popover } from "@base-ui/react/popover"
 import { Activity } from "lucide-react"
-import { SystemPanel } from "@/components/layout/system-panel"
+import { preloadSystemPanel, SystemPanelLazy } from "@/components/layout/system-panel-lazy"
 import { useIsOffline } from "@/lib/network/use-connectivity"
 import { cn } from "@/lib/utils"
-import { useStreamStatus } from "@/lib/websocket/use-stream"
+import { useStreamPresence, useStreamStatus } from "@/lib/websocket/use-stream"
 
 type Tone = "ok" | "warn" | "idle"
 
@@ -28,6 +28,7 @@ const POPUP_CLASS =
 
 export function SystemStatus() {
   const offline = useIsOffline()
+  useStreamPresence("alerts")
   const status = useStreamStatus("alerts")
 
   let tone: Tone = "idle"
@@ -52,6 +53,8 @@ export function SystemStatus() {
       <Popover.Trigger
         className={cn(TRIGGER_CLASS, PILL[tone])}
         aria-label={`system status, ${label}`}
+        onPointerEnter={preloadSystemPanel}
+        onFocus={preloadSystemPanel}
       >
         <Activity aria-hidden="true" className="size-3.5 shrink-0" />
         <span aria-hidden="true" className="relative flex size-1.5 shrink-0">
@@ -71,7 +74,7 @@ export function SystemStatus() {
       <Popover.Portal>
         <Popover.Positioner side="bottom" align="end" sideOffset={8}>
           <Popover.Popup className={POPUP_CLASS}>
-            <SystemPanel />
+            <SystemPanelLazy />
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>

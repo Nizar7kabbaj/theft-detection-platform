@@ -7,7 +7,7 @@ from redis.asyncio import Redis
 
 from app.core.cache import get_or_set, make_list_key
 from app.core.errors import ValidationError
-from app.repositories.stats_repository import StatsRepository
+from app.repositories.stats_repository import STORE_ZONE, StatsRepository, store_day_start
 from app.schemas.stats import (
     AlertBucket,
     BucketUnit,
@@ -18,7 +18,6 @@ from app.schemas.stats import (
 
 _HIGH = ["SEVERITY_WARNING", "SEVERITY_CRITICAL"]
 _MEDIUM = ["SEVERITY_NOTICE"]
-
 _SEVERITY_FIELDS = {
     "SEVERITY_CRITICAL": "critical",
     "SEVERITY_WARNING": "warning",
@@ -26,18 +25,16 @@ _SEVERITY_FIELDS = {
     "SEVERITY_INFO": "info",
     "SEVERITY_UNSPECIFIED": "unspecified",
 }
-
 _DECISION_FIELDS = {
     "DECISION_CONFIRMED": "confirmed",
     "DECISION_DISMISSED": "dismissed",
     "DECISION_UNSURE": "unsure",
 }
-
 _STEP = {BucketUnit.HOUR: timedelta(hours=1), BucketUnit.DAY: timedelta(days=1)}
 
 
 def _truncate(moment: datetime, unit: BucketUnit) -> datetime:
-    floored = moment.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+    floored = moment.astimezone(STORE_ZONE).replace(minute=0, second=0, microsecond=0)
     if unit is BucketUnit.DAY:
         return floored.replace(hour=0)
     return floored
@@ -55,6 +52,7 @@ class StatsUseCase:
 
     async def overview(self) -> StatsResponse:
         async def loader() -> dict:
+            day_start = store_day_start()
             (
                 total_alerts,
                 total_detections,
@@ -68,8 +66,8 @@ class StatsUseCase:
                 self._repo.count_detections(),
                 self._repo.count_cameras(),
                 self._repo.count_alerts_today(),
-                self._repo.count_by_severity(_HIGH),
-                self._repo.count_by_severity(_MEDIUM),
+                self._repo.count_by_severity(_HIGH, since=day_start),
+                self._repo.count_by_severity(_MEDIUM, since=day_start),
                 self._repo.top_objects(),
             )
             return StatsResponse(
@@ -142,7 +140,7 @@ class StatsUseCase:
             field = _SEVERITY_FIELDS.get(row["severity"])
             if field is None:
                 continue
-            slot = counts.setdefault(row["bucket"].astimezone(UTC), {})
+            slot = counts.setdefault(row["bucket"].astimezone(STORE_ZONE), {})
             slot[field] = slot.get(field, 0) + row["count"]
         buckets: list[AlertBucket] = []
         for moment in self._walk(begin, stop, unit):
@@ -163,7 +161,7 @@ class StatsUseCase:
             field = _DECISION_FIELDS.get(row["decision"])
             if field is None:
                 continue
-            slot = counts.setdefault(row["bucket"].astimezone(UTC), {})
+            slot = counts.setdefault(row["bucket"].astimezone(STORE_ZONE), {})
             slot[field] = slot.get(field, 0) + row["count"]
         buckets: list[DecisionBucket] = []
         for moment in self._walk(begin, stop, unit):

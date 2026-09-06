@@ -1,27 +1,29 @@
 "use client"
 import { useEffect, useState } from "react"
+import { STORE_TIME_ZONE } from "@/lib/time/zone"
 
 const PLACEHOLDER = "--:--:--"
 
-function utcTime(now: Date): string {
-  const hours = String(now.getUTCHours()).padStart(2, "0")
-  const minutes = String(now.getUTCMinutes()).padStart(2, "0")
-  const seconds = String(now.getUTCSeconds()).padStart(2, "0")
-  return `${hours}:${minutes}:${seconds}`
+function storeTime(now: Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: STORE_TIME_ZONE,
+  }).format(now)
 }
 
 export function StoreClock() {
   const [time, setTime] = useState<string>(PLACEHOLDER)
-
   useEffect(() => {
-    setTime(utcTime(new Date()))
+    setTime(storeTime(new Date()))
     const id = window.setInterval(() => {
-      setTime(utcTime(new Date()))
+      setTime(storeTime(new Date()))
     }, 1000)
     return () => {
       window.clearInterval(id)
     }
   }, [])
-
   return <span className="font-mono text-foreground text-lg leading-none tabular-nums">{time}</span>
 }

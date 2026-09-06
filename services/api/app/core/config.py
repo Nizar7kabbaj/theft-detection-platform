@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     STREAM_DETECT_PREFIX: str = "detect"
     STREAM_STATS_CAMERA_PREFIX: str = "stats:camera"
     STREAM_STATS_NODE_KEY: str = "stats:node"
+    STORE_TIMEZONE: str = "Africa/Casablanca"
+    PROMETHEUS_URL: str = "http://prometheus:9090"
+    PROMETHEUS_TIMEOUT_SECONDS: float = 3.0
+    SYSTEM_STATS_TTL_SECONDS: int = 10
+    SYSTEM_HISTORY_TTL_SECONDS: int = 15
+    SYSTEM_HISTORY_WINDOW_SECONDS: int = 900
+    SYSTEM_HISTORY_STEP_SECONDS: int = 30
     HEALTH_ONLINE_MAX_AGE_SECONDS: float = 5.0
     HEALTH_DEGRADED_MAX_AGE_SECONDS: float = 15.0
     HEALTH_RECONCILE_INTERVAL_SECONDS: float = 3.0
