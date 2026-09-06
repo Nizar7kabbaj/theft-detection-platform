@@ -88,7 +88,7 @@ export default async function DashboardPage({
           <Card>
             <CardHeader>
               <CardTitle>alerts today by hour</CardTitle>
-              <CardDescription>buckets are UTC, so a day edge sits at 01:00 local</CardDescription>
+              <CardDescription>hourly buckets in store time</CardDescription>
             </CardHeader>
             <CardContent>
               <Suspense fallback={<div className={SKELETON_CLASS} />}>
