@@ -1,4 +1,5 @@
 import type { AlertDetail, Decision } from "@/features/alerts/schemas/alert"
+import { STORE_TIME_ZONE } from "@/lib/time/zone"
 
 const ID_FULL_LENGTH = 32
 const ID_HEAD_LENGTH = 5
@@ -56,7 +57,7 @@ export function formatTimestamp(value: string): string {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    timeZone: "UTC",
+    timeZone: STORE_TIME_ZONE,
   })
 }
 
@@ -65,7 +66,7 @@ export function clockTime(value: string): string {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    timeZone: "UTC",
+    timeZone: STORE_TIME_ZONE,
   })
 }
 

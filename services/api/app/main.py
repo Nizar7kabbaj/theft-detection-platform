@@ -32,6 +32,7 @@ from app.services.broadcast_service import BroadcastService
 from app.services.camera_reconcile import run_reconcile
 from app.services.frame_stream import ViewerLimit
 from app.services.revocation_service import RevocationService
+from app.services.system_stats import open_prometheus_client
 
 logger = logging.getLogger(__name__)
 _GRPC_CHANNEL_OPTIONS = [
@@ -55,6 +56,7 @@ async def lifespan(app: FastAPI):
     await app.state.broadcaster.start()
     app.state.stream_redis = await open_stream_redis()
     app.state.frame_viewers = ViewerLimit(settings.FRAME_STREAM_MAX_VIEWERS)
+    app.state.prometheus = open_prometheus_client()
     app.state.reconcile_stop = asyncio.Event()
     app.state.reconcile_task = asyncio.create_task(
         run_reconcile(
@@ -119,6 +121,7 @@ async def lifespan(app: FastAPI):
     await close_redis(app.state.revocation_redis)
     await close_redis(app.state.stream_redis)
     await close_redis(app.state.redis)
+    await app.state.prometheus.aclose()
     await close_mongodb_connection()
     logger.info("backend stopped")
 

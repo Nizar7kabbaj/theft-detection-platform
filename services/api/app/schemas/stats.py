@@ -57,3 +57,29 @@ class EdgeStatsResponse(BaseModel):
     gpu_name: str | None
     reporting_cameras: int
     total_cameras: int
+
+
+class ServiceMemory(BaseModel):
+    camera: int | None
+    gate: int | None
+    inference: int | None
+    notification: int | None
+
+
+class SystemStatsResponse(BaseModel):
+    cpu_percent: float | None
+    memory_percent: float | None
+    network_bytes_per_second: float | None
+    gpu_percent: float | None
+    gpu_temperature_c: int | None
+    cpu_temperature_c: int | None
+    service_memory_bytes: ServiceMemory
+
+
+class SystemHistoryResponse(BaseModel):
+    cpu: list[float]
+    gpu: list[float]
+    memory: list[float]
+    network: list[float]
+    cpu_temperature: list[float]
+    gpu_temperature: list[float]

@@ -16,6 +16,7 @@ import type {
   BucketUnit,
   DecisionBucket,
 } from "@/features/analytics/schemas/timeseries"
+import { STORE_TIME_LABEL, STORE_TIME_ZONE } from "@/lib/time/zone"
 
 const ALERT_CONFIG = {
   info: { label: "info", color: "var(--chart-3)" },
@@ -42,7 +43,7 @@ const AXIS_PROPS = {
 
 function tickLabel(bucket: string, unit: BucketUnit): string {
   return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "UTC",
+    timeZone: STORE_TIME_ZONE,
     ...(unit === "hour"
       ? { hour: "2-digit", minute: "2-digit", hour12: false }
       : { day: "2-digit", month: "short" }),
@@ -51,13 +52,13 @@ function tickLabel(bucket: string, unit: BucketUnit): string {
 
 function fullLabel(bucket: string, unit: BucketUnit): string {
   const stamp = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "UTC",
+    timeZone: STORE_TIME_ZONE,
     day: "2-digit",
     month: "short",
     year: "numeric",
     ...(unit === "hour" ? { hour: "2-digit", minute: "2-digit", hour12: false } : {}),
   }).format(new Date(bucket))
-  return `${stamp} UTC`
+  return `${stamp} ${STORE_TIME_LABEL}`
 }
 
 function useBucketLink(): (bucket: string) => void {

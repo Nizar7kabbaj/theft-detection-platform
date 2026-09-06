@@ -1,3 +1,4 @@
+import httpx
 from fastapi import Depends, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from redis.asyncio import Redis
@@ -23,6 +24,10 @@ def get_db() -> AsyncIOMotorDatabase:
 
 def get_stream_redis(request: Request) -> Redis:
     return request.app.state.stream_redis
+
+
+def get_prometheus(request: Request) -> httpx.AsyncClient:
+    return request.app.state.prometheus
 
 
 def get_camera_repo(

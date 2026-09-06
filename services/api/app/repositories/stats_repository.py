@@ -1,9 +1,17 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.core.config import settings
+
 BUCKET_UNITS = {"hour": "hour", "day": "day"}
+STORE_ZONE = ZoneInfo(settings.STORE_TIMEZONE)
+
+
+def store_day_start() -> datetime:
+    return datetime.now(STORE_ZONE).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 class StatsRepository:
@@ -20,11 +28,13 @@ class StatsRepository:
         return await self._db.cameras.count_documents({})
 
     async def count_alerts_today(self) -> int:
-        start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        return await self._db.alerts.count_documents({"created_at": {"$gte": start}})
+        return await self._db.alerts.count_documents({"created_at": {"$gte": store_day_start()}})
 
-    async def count_by_severity(self, severities: list[str]) -> int:
-        return await self._db.alerts.count_documents({"severity": {"$in": severities}})
+    async def count_by_severity(self, severities: list[str], since: datetime | None = None) -> int:
+        query: dict[str, Any] = {"severity": {"$in": severities}}
+        if since is not None:
+            query["created_at"] = {"$gte": since}
+        return await self._db.alerts.count_documents(query)
 
     async def top_objects(self, limit: int = 5) -> list[dict[str, Any]]:
         pipeline = [
@@ -53,7 +63,7 @@ class StatsRepository:
                             "$dateTrunc": {
                                 "date": "$created_at",
                                 "unit": BUCKET_UNITS[unit],
-                                "timezone": "UTC",
+                                "timezone": settings.STORE_TIMEZONE,
                             }
                         },
                         "severity": "$severity",
@@ -93,7 +103,7 @@ class StatsRepository:
                             "$dateTrunc": {
                                 "date": "$decided_at",
                                 "unit": BUCKET_UNITS[unit],
-                                "timezone": "UTC",
+                                "timezone": settings.STORE_TIMEZONE,
                             }
                         },
                         "decision": "$decision",

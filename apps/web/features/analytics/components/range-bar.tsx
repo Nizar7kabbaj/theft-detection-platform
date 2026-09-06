@@ -7,7 +7,7 @@ import {
   type DateRange,
   PRESET_DAYS,
   presetRange,
-  todayUtc,
+  today,
 } from "@/features/analytics/api/date-range"
 import {
   decodeSelection,
@@ -29,8 +29,8 @@ export function RangeBar({ range, unit }: { range: DateRange; unit: BucketUnit }
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const today = todayUtc()
-  const isToday = range.start === today && range.end === today
+  const currentDay = today()
+  const isToday = range.start === currentDay && range.end === currentDay
 
   const write = useCallback(
     (entries: Record<string, string | null>) => {
@@ -67,7 +67,7 @@ export function RangeBar({ range, unit }: { range: DateRange; unit: BucketUnit }
             autoComplete="off"
             className={FIELD}
             id="range-start"
-            max={range.end ?? today}
+            max={range.end ?? currentDay}
             name="start"
             onChange={(event) => write({ start: event.target.value })}
             type="date"
@@ -82,7 +82,7 @@ export function RangeBar({ range, unit }: { range: DateRange; unit: BucketUnit }
             autoComplete="off"
             className={FIELD}
             id="range-end"
-            max={today}
+            max={currentDay}
             min={range.start ?? undefined}
             name="end"
             onChange={(event) => write({ end: event.target.value })}
@@ -97,7 +97,7 @@ export function RangeBar({ range, unit }: { range: DateRange; unit: BucketUnit }
           <button
             aria-pressed={isToday}
             className={`${CHIP} ${isToday ? CHIP_ON : CHIP_OFF}`}
-            onClick={() => write({ start: today, end: today })}
+            onClick={() => write({ start: currentDay, end: currentDay })}
             type="button"
           >
             today

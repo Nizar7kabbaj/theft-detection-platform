@@ -1,3 +1,5 @@
+import { STORE_TIME_ZONE } from "@/lib/time/zone"
+
 const MINUTE = 60
 const HOUR = 3600
 const DAY = 86400
@@ -36,7 +38,7 @@ export function shortDate(value: string): string {
     day: "2-digit",
     month: "short",
     year: "numeric",
-    timeZone: "UTC",
+    timeZone: STORE_TIME_ZONE,
   }).format(new Date(parsed))
 }
 
