@@ -166,6 +166,7 @@ export const alertDetailSchema = z.object({
   classifier_score: z.nullish(z.number()),
   classifier_state: z.nullish(z.string().check(z.maxLength(128))),
   snapshot_url: z.nullish(relativePath),
+  clip_url: z.nullish(relativePath),
   dispatch_failed: z.boolean(),
   delivery: z.nullish(deliveryStatusSchema),
 })

@@ -7,7 +7,7 @@ from app.shared.schemas.alert import AlertMessage, AlertType, Severity
 from app.shared.schemas.alertmanager import AlertmanagerWebhook
 from app.shared.schemas.delivery import DeliverySource
 
-Rendered = tuple[str, str | None]
+Rendered = tuple[str, str | None, str | None]
 
 
 def _readable_alert_type(value: AlertType) -> str:
@@ -35,12 +35,12 @@ def _render_alert(payload: dict[str, Any]) -> Rendered:
         f"camera: <code>{camera_id}</code>\n"
         f"time: {occurred_at}"
     )
-    return text, alert.snapshot_path or None
+    return text, alert.snapshot_path or None, alert.clip_path or None
 
 
 def _render_alertmanager(payload: dict[str, Any]) -> Rendered:
     webhook = AlertmanagerWebhook.model_validate(payload)
-    return webhook.to_telegram_html(), None
+    return webhook.to_telegram_html(), None, None
 
 
 _RENDERERS: dict[DeliverySource, Callable[[dict[str, Any]], Rendered]] = {

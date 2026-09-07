@@ -178,6 +178,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/alerts/{alert_id}/clip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Alert Clip */
+        get: operations["get_alert_clip_api_v1_alerts__alert_id__clip_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/alerts/{alert_id}/acknowledge": {
         parameters: {
             query?: never;
@@ -395,6 +412,8 @@ export interface components {
             severity: components["schemas"]["Severity"];
             /** Snapshot Path */
             snapshot_path?: string | null;
+            /** Clip Path */
+            clip_path?: string | null;
             /** @default ALERT_TYPE_OBJECT_PROXIMITY */
             alert_type: components["schemas"]["AlertType"];
             /** Frame Width */
@@ -457,6 +476,8 @@ export interface components {
             classifier_state?: string | null;
             /** Snapshot Url */
             snapshot_url?: string | null;
+            /** Clip Url */
+            clip_url?: string | null;
             /**
              * Dispatch Failed
              * @default false
@@ -1354,6 +1375,35 @@ export interface operations {
         };
     };
     get_alert_snapshot_api_v1_alerts__alert_id__snapshot_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_alert_clip_api_v1_alerts__alert_id__clip_get: {
         parameters: {
             query?: never;
             header?: never;

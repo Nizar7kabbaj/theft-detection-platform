@@ -75,3 +75,4 @@ class AlertMessage(BaseModel):
     severity: Severity = Severity.SEVERITY_UNSPECIFIED
     alert_type: AlertType = AlertType.ALERT_TYPE_UNSPECIFIED
     snapshot_path: str | None = None
+    clip_path: str | None = None

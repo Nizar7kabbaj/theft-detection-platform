@@ -13,7 +13,12 @@ from redis.asyncio import Redis
 
 from app.core.cache import get_or_set, invalidate, invalidate_prefix, make_list_key
 from app.core.config import settings
-from app.core.errors import AlertUnavailableError, NotFoundError, ValidationError
+from app.core.errors import (
+    AlertRejectedError,
+    AlertUnavailableError,
+    NotFoundError,
+    ValidationError,
+)
 from app.repositories.alert_repository import SORT_CREATED, SORT_DECIDED, AlertRepository
 from app.schemas.alert import (
     AlertCreate,
@@ -83,6 +88,15 @@ def _snapshot_url(doc: dict[str, Any]) -> str | None:
     if _resolve_snapshot(settings.SNAPSHOTS_DIR, stored) is None:
         return None
     return f"/api/v1/alerts/{doc['_id']}/snapshot"
+
+
+def _clip_url(doc: dict[str, Any]) -> str | None:
+    stored = doc.get("clip_path")
+    if not stored:
+        return None
+    if _resolve_snapshot(settings.SNAPSHOTS_DIR, stored) is None:
+        return None
+    return f"/api/v1/alerts/{doc['_id']}/clip"
 
 
 def _resolve_snapshot(root_dir: str, stored: str) -> Path | None:
@@ -175,6 +189,7 @@ def _to_detail(doc: dict[str, Any]) -> AlertDetail:
             "classifier_score": doc.get("classifier_score"),
             "classifier_state": doc.get("classifier_state"),
             "snapshot_url": _snapshot_url(doc),
+            "clip_url": _clip_url(doc),
             "dispatch_failed": bool(doc.get("dispatch_failed", False)),
         }
     )
@@ -212,6 +227,9 @@ class AlertUseCase:
         for attempt in range(1, self.DISPATCH_ATTEMPTS + 1):
             try:
                 await self._alert_client.send(payload)
+            except AlertRejectedError as exc:
+                logger.error("alert dispatch refused for %s: %s", payload.alert_id, exc)
+                return False
             except AlertUnavailableError as exc:
                 logger.warning(
                     "alert dispatch attempt %d failed for %s: %s",
@@ -343,6 +361,18 @@ class AlertUseCase:
         resolved = await anyio.to_thread.run_sync(_resolve_snapshot, settings.SNAPSHOTS_DIR, stored)
         if resolved is None:
             raise NotFoundError(f"alert {alert_id} has no snapshot")
+        return resolved
+
+    async def clip_path(self, alert_id: str) -> Path:
+        doc = await self._repo.get(alert_id)
+        if doc is None:
+            raise NotFoundError(f"alert {alert_id} not found")
+        stored = doc.get("clip_path")
+        if not stored:
+            raise NotFoundError(f"alert {alert_id} has no clip")
+        resolved = await anyio.to_thread.run_sync(_resolve_snapshot, settings.SNAPSHOTS_DIR, stored)
+        if resolved is None:
+            raise NotFoundError(f"alert {alert_id} has no clip")
         return resolved
 
     async def acknowledge(self, alert_id: str, actor_id: str) -> AlertResponse:

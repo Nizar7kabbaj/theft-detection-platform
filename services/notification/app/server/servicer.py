@@ -84,7 +84,7 @@ class AlertServicer(alert_pb2_grpc.AlertServiceServicer):
             raw = MessageToDict(
                 request,
                 preserving_proto_field_name=True,
-                always_print_fields_with_no_presence=False,
+                always_print_fields_with_no_presence=True,
             )
             try:
                 payload = AlertMessage.model_validate(raw)

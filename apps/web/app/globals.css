@@ -154,3 +154,33 @@
     @apply font-sans;
   }
 }
+
+@keyframes clip-ring {
+  0% {
+    width: 30px;
+    height: 30px;
+    opacity: 1;
+  }
+  100% {
+    width: 300px;
+    height: 300px;
+    opacity: 0;
+  }
+}
+
+.clip-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  border: 6px solid #00ffcb;
+  box-shadow: 0 0 60px rgba(0, 255, 203, 0.64);
+  animation: clip-ring 1.5s infinite;
+  pointer-events: none;
+}
+
+.group:hover .clip-ring,
+.group:focus-within .clip-ring {
+  display: none;
+}

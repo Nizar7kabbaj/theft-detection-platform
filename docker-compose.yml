@@ -558,6 +558,7 @@ services:
       - ./config/pki/notification/tls.crt:/run/secrets/notification_tls_cert:ro
       - ./config/pki/notification/tls.key:/run/secrets/notification_tls_key:ro
       - ./config/pki/ca/ca.crt:/run/secrets/notification_tls_ca:ro
+      - ai_snapshots:/app/snapshots:ro
     depends_on:
       redis-broker:
         condition: service_healthy

@@ -103,13 +103,37 @@ def send_message(text: str) -> bool:
     return True
 
 
+def _resolve_media(stored: str) -> Path | None:
+    if not stored:
+        return None
+    root = Path(settings.SNAPSHOTS_DIR).resolve()
+    candidate = (root / Path(stored).name).resolve()
+    if candidate.parent != root or not candidate.is_file():
+        return None
+    return candidate
+
+
+def clip_missing(stored: str) -> bool:
+    return _resolve_media(stored) is None
+
+
+def prefer_annotated(stored: str) -> str:
+    if not stored:
+        return stored
+    name = Path(stored)
+    candidate = f"{name.stem}{settings.ANNOTATED_SNAPSHOT_SUFFIX}{name.suffix}"
+    if _resolve_media(candidate) is None:
+        return stored
+    return candidate
+
+
 def send_photo(image_path: str, caption: str = "") -> bool:
     if not is_configured():
         logger.warning("telegram not configured, skipping photo")
         telegram_messages_total.add(1, {"method": "photo", "result": "unconfigured"})
         return False
-    path = Path(image_path) if image_path else None
-    if path is None or not path.is_file():
+    path = _resolve_media(image_path)
+    if path is None:
         logger.warning("snapshot file not found, skipping photo path=%s", image_path)
         telegram_messages_total.add(1, {"method": "photo", "result": "snapshot_missing"})
         return False
@@ -139,6 +163,64 @@ def send_photo(image_path: str, caption: str = "") -> bool:
         return False
     logger.info("telegram photo sent file=%s", path.name)
     telegram_messages_total.add(1, {"method": "photo", "result": "sent"})
+    return True
+
+
+def send_media_group(
+    image_path: str,
+    clip_path: str,
+    caption: str = "",
+    width: int = 0,
+    height: int = 0,
+) -> bool:
+    if not is_configured():
+        logger.warning("telegram not configured, skipping media group")
+        telegram_messages_total.add(1, {"method": "media_group", "result": "unconfigured"})
+        return False
+    photo = _resolve_media(image_path)
+    clip = _resolve_media(clip_path)
+    if photo is None or clip is None:
+        return False
+    if len(caption) > settings.TELEGRAM_CAPTION_MAX_CHARS:
+        caption = caption[: settings.TELEGRAM_CAPTION_MAX_CHARS - 3] + "..."
+    url = TELEGRAM_API_URL.format(token=_token(), method="sendPhoto")
+    try:
+        with photo.open("rb") as img:
+            response = requests.post(
+                url,
+                data={
+                    "chat_id": settings.TELEGRAM_CHAT_ID,
+                    "caption": caption,
+                    "parse_mode": "HTML",
+                },
+                files={"photo": (photo.name, img, "image/jpeg")},
+                timeout=settings.TELEGRAM_PHOTO_TIMEOUT_SEC,
+            )
+        response.raise_for_status()
+        url = TELEGRAM_API_URL.format(token=_token(), method="sendVideo")
+        data = {"chat_id": settings.TELEGRAM_CHAT_ID, "supports_streaming": True}
+        if width and height:
+            data["width"] = width
+            data["height"] = height
+        with clip.open("rb") as vid:
+            response = requests.post(
+                url,
+                data=data,
+                files={"video": (clip.name, vid, "video/mp4")},
+                timeout=settings.TELEGRAM_CLIP_TIMEOUT_SEC,
+            )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        failure = _classify(exc)
+        logger.error("telegram media group send failed: %s", failure)
+        telegram_messages_total.add(1, {"method": "media_group", "result": _result_label(failure)})
+        raise failure from None
+    except OSError as exc:
+        logger.error("media file read failed: %s", exc)
+        telegram_messages_total.add(1, {"method": "media_group", "result": "failed"})
+        return False
+    logger.info("telegram media group sent file=%s clip=%s", photo.name, clip.name)
+    telegram_messages_total.add(1, {"method": "media_group", "result": "sent"})
     return True
 
 

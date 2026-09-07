@@ -35,6 +35,7 @@ class PresenceStateMachine:
             self._empty_streak = 0
             if self._state is not PresenceState.PRESENT:
                 self._state = PresenceState.PRESENT
+                self._cold_start_absent = False
                 return PresenceEdge.ENTERED
             return PresenceEdge.NONE
         self._empty_streak += 1

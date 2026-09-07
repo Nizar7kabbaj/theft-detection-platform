@@ -26,11 +26,15 @@ class PersonDetector:
         device: str,
         person_class: int,
         confidence: float,
+        imgsz: int,
+        half: bool,
     ) -> None:
         self._model_name = model_name
         self._device = device
         self._person_class = person_class
         self._confidence = confidence
+        self._imgsz = imgsz
+        self._half = half and device == "cuda"
         self._yolo: YOLO | None = None
 
     @property
@@ -50,6 +54,8 @@ class PersonDetector:
             frame,
             classes=[self._person_class],
             conf=self._confidence,
+            imgsz=self._imgsz,
+            half=self._half,
             verbose=False,
         )
         if not results:

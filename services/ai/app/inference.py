@@ -9,6 +9,9 @@ from typing import Protocol
 import cv2
 import numpy as np
 
+from app.annotator import draw_annotated
+from app.clip_buffer import ClipBuffer
+from app.clip_writer import write_clip
 from app.concealment import ConcealmentTracker, ConcealmentVerdict
 from app.core.config import settings
 from app.tracker_store import TrackerStore
@@ -51,6 +54,7 @@ class DetectionResult:
     objects: list[TrackedObjectResult]
     concealments: list[ConcealmentVerdict]
     snapshots: dict[int, str]
+    clips: dict[int, str]
     frame_width: int
     frame_height: int
 
@@ -86,6 +90,9 @@ class LSTMDetector:
         keypoint_confidence: float,
         expiry_seconds: float,
         snapshot_dir: str,
+        clip_seconds: float,
+        clip_max_frames: int,
+        clip_enabled: bool,
     ) -> None:
         self._yolo_model_name = yolo_model_name
         self._object_model_name = object_model_name
@@ -97,6 +104,9 @@ class LSTMDetector:
         self._object_classes = object_classes
         self._object_confidence = object_confidence
         self._snapshot_dir = Path(snapshot_dir)
+        self._clip_seconds = clip_seconds
+        self._clip_enabled = clip_enabled
+        self._clips = ClipBuffer(max_frames=clip_max_frames)
         self._concealment = ConcealmentTracker(
             grab_ratio=grab_ratio,
             missing_seconds=missing_seconds,
@@ -133,6 +143,58 @@ class LSTMDetector:
             return None
         return str(path)
 
+    def write_annotated_async(
+        self,
+        frame: np.ndarray,
+        alert_id: str,
+        person: TrackedPersonResult | None,
+        object_bbox: tuple[float, float, float, float] | None,
+        wrist_index: int,
+        caption: str,
+    ) -> None:
+        if not settings.ANNOTATED_SNAPSHOT_ENABLED:
+            return
+        path = self._snapshot_dir / f"{alert_id}{settings.ANNOTATED_SNAPSHOT_SUFFIX}.jpg"
+        thread = threading.Thread(
+            target=draw_annotated,
+            args=(
+                frame.copy(),
+                path,
+                caption,
+                person.bbox if person is not None else None,
+                person.keypoints if person is not None else [],
+                object_bbox,
+                wrist_index,
+            ),
+            daemon=True,
+        )
+        thread.start()
+
+    def write_clip_async(
+        self,
+        camera_id: str,
+        alert_id: str,
+        width: int,
+        height: int,
+    ) -> str | None:
+        if not self._clip_enabled:
+            return None
+        frames = self._clips.snapshot(camera_id)
+        if not frames:
+            return None
+        cutoff = frames[-1][0] - self._clip_seconds
+        window = [item for item in frames if item[0] >= cutoff]
+        if not window:
+            return None
+        path = self._snapshot_dir / f"{alert_id}.mp4"
+        thread = threading.Thread(
+            target=write_clip,
+            args=(window, path, width, height),
+            daemon=True,
+        )
+        thread.start()
+        return str(path)
+
     def analyze_frame(
         self,
         image_bytes: bytes,
@@ -150,6 +212,7 @@ class LSTMDetector:
             if frame is None:
                 return None
             height, width = frame.shape[:2]
+            self._clips.append(camera_id, captured_at, image_bytes)
             persons = self._track_persons(frame, camera_id, frame_index) if run_pose else []
             objects = self._track_objects(frame)
             concealments = self._concealment.observe(
@@ -160,11 +223,27 @@ class LSTMDetector:
                 objects=[(obj.track_id, obj.class_name, obj.bbox) for obj in objects],
             )
             snapshots: dict[int, str] = {}
+            clips: dict[int, str] = {}
             for verdict in concealments:
                 alert_id = f"{camera_id}-{session_id}-{frame_index}-{verdict.object_track_id}"
                 written = self.write_snapshot(frame, alert_id)
                 if written is not None:
                     snapshots[verdict.object_track_id] = written
+                clip = self.write_clip_async(camera_id, alert_id, width, height)
+                if clip is not None:
+                    clips[verdict.object_track_id] = clip
+                actor = next(
+                    (item for item in persons if item.track_id == verdict.person_track_id),
+                    None,
+                )
+                self.write_annotated_async(
+                    frame,
+                    alert_id,
+                    actor,
+                    verdict.last_seen_bbox,
+                    verdict.wrist_index,
+                    f"Alert on {camera_id}",
+                )
             if not persons and not objects and not concealments:
                 return None
             lead = persons[0] if persons else None
@@ -180,6 +259,7 @@ class LSTMDetector:
                 objects=objects,
                 concealments=concealments,
                 snapshots=snapshots,
+                clips=clips,
                 frame_width=width,
                 frame_height=height,
             )

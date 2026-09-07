@@ -124,6 +124,8 @@ async def _serve() -> None:
         device=settings.MODEL_DEVICE,
         person_class=settings.PERSON_CLASS_ID,
         confidence=settings.DETECTION_CONFIDENCE,
+        imgsz=settings.GATE_IMGSZ,
+        half=settings.GATE_HALF,
     )
     detector.load()
     log.info("detector loaded device=%s", detector.device)

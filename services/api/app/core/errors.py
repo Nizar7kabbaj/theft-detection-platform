@@ -25,5 +25,9 @@ class AlertUnavailableError(AppError):
     """upstream alert service unreachable or timed out."""
 
 
+class AlertRejectedError(AppError):
+    """alert service accepted the call but refused the alert."""
+
+
 class AuthUnavailableError(AppError):
     """auth service unreachable or timed out during token verification."""
