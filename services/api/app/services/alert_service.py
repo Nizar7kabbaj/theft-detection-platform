@@ -7,7 +7,7 @@ import grpc
 from google.protobuf.timestamp_pb2 import Timestamp
 from opentelemetry import trace
 
-from app.core.errors import AlertUnavailableError
+from app.core.errors import AlertRejectedError, AlertUnavailableError
 from app.grpc_gen import alert_pb2 as pb
 from app.grpc_gen import common_pb2
 from app.grpc_gen.alert_pb2_grpc import AlertServiceStub
@@ -77,6 +77,8 @@ def _to_proto(payload: AlertCreate) -> pb.Alert:
         msg.object.CopyFrom(obj)
     if payload.snapshot_path is not None:
         msg.snapshot_path = payload.snapshot_path
+    if payload.clip_path is not None:
+        msg.clip_path = payload.clip_path
     return msg
 
 
@@ -131,7 +133,18 @@ class AlertClient:
                     )
                     raise AlertUnavailableError("alert service unavailable") from exc
                 raise
-            span.set_attribute("alert.status", pb.Status.Name(response.status))
+            status_name = pb.Status.Name(response.status)
+            span.set_attribute("alert.status", status_name)
+            if response.status == pb.STATUS_RATE_LIMITED:
+                logger.warning("alert %s rate limited by notification", payload.alert_id)
+                raise AlertUnavailableError("alert service rate limited")
+            if response.status != pb.STATUS_ACCEPTED:
+                logger.error(
+                    "alert %s refused by notification status=%s",
+                    payload.alert_id,
+                    status_name,
+                )
+                raise AlertRejectedError(f"alert refused: {status_name}")
 
     async def delivery_status(self, alert_id: str) -> DeliveryStatusView | None:
         with tracer.start_as_current_span("alert.delivery_status") as span:

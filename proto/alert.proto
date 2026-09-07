@@ -34,6 +34,7 @@ message Alert {
   optional Concealment concealment = 13;
   optional float classifier_score = 14;
   optional string classifier_state = 15;
+  optional string clip_path = 16;
 }
 
 enum Status {

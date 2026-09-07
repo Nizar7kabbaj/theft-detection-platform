@@ -30,8 +30,12 @@ class Settings(BaseSettings):
     TELEGRAM_CHAT_ID: str | None = None
     TELEGRAM_REQUEST_TIMEOUT_SEC: int = 5
     TELEGRAM_PHOTO_TIMEOUT_SEC: int = 15
+    TELEGRAM_CLIP_TIMEOUT_SEC: int = 60
     TELEGRAM_CAPTION_MAX_CHARS: int = 1024
-    SNAPSHOTS_DIR: str = "/app/ai-model/outputs/snapshots"
+    SNAPSHOTS_DIR: str = "/app/snapshots"
+    ANNOTATED_SNAPSHOT_SUFFIX: str = "-annotated"
+    CLIP_WAIT_SEC: float = 5.0
+    CLIP_POLL_INTERVAL_SEC: float = 0.25
     CELERY_TASK_MAX_RETRIES: int = 3
     CELERY_TASK_RETRY_DELAY_SEC: int = 10
     RECONCILER_ENABLED: bool = True

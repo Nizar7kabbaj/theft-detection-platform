@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     PERSON_CLASS_ID: Annotated[int, Field(ge=0)] = 0
     DETECTION_CONFIDENCE: Annotated[float, Field(gt=0, le=1)] = 0.5
     EXIT_DEBOUNCE_FRAMES: Annotated[int, Field(ge=1)] = 30
+    GATE_IMGSZ: Annotated[int, Field(ge=320, le=1920)] = 1280
+    GATE_HALF: bool = True
     HEARTBEAT_INTERVAL_SECONDS: Annotated[float, Field(gt=0)] = 2.0
     AI_HOST: str = "ai"
     AI_PORT: int = 50051

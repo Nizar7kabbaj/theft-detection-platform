@@ -110,6 +110,23 @@ async def get_alert_snapshot(
     )
 
 
+@router.get(
+    "/{alert_id}/clip",
+    response_class=FileResponse,
+    dependencies=[Depends(require_permission(Permission.ALERT_READ))],
+)
+async def get_alert_clip(
+    alert_id: str,
+    usecase: AlertUseCase = Depends(get_alert_usecase),
+) -> FileResponse:
+    path = await usecase.clip_path(alert_id)
+    return FileResponse(
+        path,
+        media_type="video/mp4",
+        headers={"Cache-Control": "private, max-age=300"},
+    )
+
+
 @router.patch(
     "/{alert_id}/acknowledge",
     response_model=AlertResponse,

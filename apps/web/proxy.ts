@@ -21,6 +21,7 @@ function directives(nonce: string, dev: boolean): string {
     `style-src-elem ${styleElem}`,
     "style-src-attr 'none'",
     "img-src 'self' data: blob:",
+    "media-src 'self'",
     "font-src 'self'",
     `connect-src ${connect}`,
     "form-action 'self'",

@@ -1,5 +1,7 @@
 "use client"
+import { Video } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { ClipDialog } from "@/features/alerts/components/clip-dialog"
 import { useAlertDetail } from "@/features/alerts/hooks/use-alert-detail"
 import { objectLabel } from "@/features/alerts/lib/format"
 import type { AlertDetail } from "@/features/alerts/schemas/alert"
@@ -43,6 +45,8 @@ export function EvidenceFrame({ alert }: { alert: AlertDetail }) {
   const [box, setBox] = useState<Rect | null>(null)
   const [failed, setFailed] = useState(false)
   const [skeleton, setSkeleton] = useState(true)
+  const [clipOpen, setClipOpen] = useState(false)
+  const [watched, setWatched] = useState(true)
 
   const measure = useCallback(() => {
     const shell = shellRef.current
@@ -158,6 +162,14 @@ export function EvidenceFrame({ alert }: { alert: AlertDetail }) {
   }, [box, data, skeleton])
 
   const source = data.snapshot_url
+  const clip = data.clip_url
+  const clipKey = `alert-clip-watched:${data._id}`
+
+  const [prefetch, setPrefetch] = useState(false)
+
+  useEffect(() => {
+    setWatched(window.localStorage.getItem(clipKey) === "1")
+  }, [clipKey])
   const total = data.person?.keypoints?.length ?? 0
   const drawn =
     data.person?.keypoints?.filter((point) => point.confidence >= MIN_KEYPOINT_CONFIDENCE).length ??
@@ -212,6 +224,33 @@ export function EvidenceFrame({ alert }: { alert: AlertDetail }) {
           className="pointer-events-none absolute inset-0 size-full"
           ref={canvasRef}
         />
+        {clip === null || clip === undefined ? null : (
+          <div className="group absolute right-4 bottom-4">
+            {watched ? null : <span aria-hidden="true" className="clip-ring" />}
+            <button
+              aria-label="watch the recorded clip"
+              className="relative inline-flex h-14 items-center gap-2 rounded-full bg-gradient-to-r from-[#81e6d9] to-[#4fd1c5] px-4 font-medium text-[#313133] text-base shadow-[0_0_24px_rgba(79,209,197,0.64)] transition-transform duration-300 hover:-translate-y-1.5 hover:scale-105 [&_svg]:size-6"
+              onFocus={() => setPrefetch(true)}
+              onMouseEnter={() => setPrefetch(true)}
+              onClick={() => {
+                setClipOpen(true)
+                setWatched(true)
+                window.localStorage.setItem(clipKey, "1")
+              }}
+              type="button"
+            >
+              <Video aria-hidden="true" className="shrink-0" />
+              <span className="flex max-w-0 items-center overflow-hidden whitespace-nowrap opacity-0 transition-[max-width,opacity] duration-200 ease-out group-hover:max-w-40 group-hover:opacity-100 group-focus-visible:max-w-40 group-focus-visible:opacity-100">
+                watch clip
+              </span>
+            </button>
+            {prefetch ? (
+              <video className="hidden" muted preload="auto" src={clip}>
+                <track kind="captions" />
+              </video>
+            ) : null}
+          </div>
+        )}
       </div>
       <p className="text-muted-foreground text-xs text-pretty">
         boxes identify person {data.person?.track_id ?? "unknown"} and {objectLabel(data)}.{" "}
@@ -222,6 +261,14 @@ export function EvidenceFrame({ alert }: { alert: AlertDetail }) {
           ? ""
           : `, the red joint is wrist index ${wristIndex}`}
       </p>
+      {clip === null || clip === undefined ? null : (
+        <ClipDialog
+          cameraId={data.camera_id}
+          onOpenChange={setClipOpen}
+          open={clipOpen}
+          source={clip}
+        />
+      )}
     </div>
   )
 }

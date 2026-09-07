@@ -31,7 +31,10 @@ from app.shared.telegram_service import (
     TelegramPermanentError,
     TelegramTransientError,
     TelegramUnreachableError,
+    clip_missing,
+    prefer_annotated,
     probe,
+    send_media_group,
     send_message,
     send_photo,
 )
@@ -41,10 +44,43 @@ logger = logging.getLogger(__name__)
 tracer = trace.get_tracer("notification.worker")
 
 
-def _dispatch(text: str, photo_path: str | None) -> bool:
+def _dispatch(text: str, photo_path: str | None, clip_path: str | None) -> bool:
+    if photo_path:
+        photo_path = prefer_annotated(photo_path)
+    if photo_path and clip_path and send_media_group(photo_path, clip_path, text):
+        return True
     if photo_path and send_photo(photo_path, text):
         return True
     return send_message(text)
+
+
+async def _await_clip(clip_path: str) -> bool:
+    deadline = asyncio.get_running_loop().time() + settings.CLIP_WAIT_SEC
+    while clip_missing(clip_path):
+        if asyncio.get_running_loop().time() >= deadline:
+            return False
+        await asyncio.sleep(settings.CLIP_POLL_INTERVAL_SEC)
+    return True
+
+
+async def _require_clip(
+    intent_id: str,
+    clip_path: str | None,
+    final_attempt: bool,
+    intent_repo: DeliveryIntentRepository,
+) -> None:
+    if not clip_path or not clip_missing(clip_path):
+        return
+    if await _await_clip(clip_path):
+        logger.info("intent %s clip ready after wait", intent_id)
+        return
+    if final_attempt:
+        logger.warning("intent %s sending without clip", intent_id)
+        return
+    error = "clip not written yet"
+    await intent_repo.mark_failed(intent_id, error)
+    logger.info("intent %s waiting on clip, will retry", intent_id)
+    raise TelegramTransientError(error)
 
 
 async def _deliver(intent_id: str, final_attempt: bool) -> dict[str, Any]:
@@ -86,7 +122,7 @@ async def _deliver(intent_id: str, final_attempt: bool) -> dict[str, Any]:
             logger.info("intent %s claimed elsewhere, skipping", intent_id)
             return {"intent_id": intent_id, "delivered": False, "reason": "not_claimed"}
         try:
-            text, photo_path = render(intent.source, intent.payload)
+            text, photo_path, clip_path = render(intent.source, intent.payload)
         except (ValidationError, ValueError) as exc:
             error = f"render failed: {exc}"
             await intent_repo.mark_dead(intent.id, error)
@@ -106,7 +142,8 @@ async def _deliver(intent_id: str, final_attempt: bool) -> dict[str, Any]:
             logger.error("intent %s dead, %s", intent_id, error)
             return {"intent_id": intent_id, "delivered": False, "reason": "render"}
         try:
-            sent = await asyncio.to_thread(_dispatch, text, photo_path)
+            await _require_clip(intent_id, clip_path, final_attempt, intent_repo)
+            sent = await asyncio.to_thread(_dispatch, text, photo_path, clip_path)
         except TelegramUnreachableError as exc:
             error = str(exc)
             gate.gate_set(error)

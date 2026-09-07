@@ -68,6 +68,9 @@ async def _serve() -> None:
         keypoint_confidence=settings.CONCEALMENT_KEYPOINT_CONFIDENCE,
         expiry_seconds=settings.CONCEALMENT_EXPIRY_SECONDS,
         snapshot_dir=settings.SNAPSHOT_DIR,
+        clip_seconds=settings.CLIP_SECONDS,
+        clip_max_frames=settings.CLIP_MAX_FRAMES,
+        clip_enabled=settings.CLIP_ENABLED,
     )
     alert_client = AlertClient(
         api_base_url=settings.API_BASE_URL,

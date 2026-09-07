@@ -123,6 +123,9 @@ class InferenceServicer(inference_pb2_grpc.InferenceServiceServicer):
             snapshot = result.snapshots.get(verdict.object_track_id)
             if snapshot is not None:
                 payload["snapshot_path"] = snapshot
+            clip = result.clips.get(verdict.object_track_id)
+            if clip is not None:
+                payload["clip_path"] = clip
             sent = await loop.run_in_executor(
                 self._executor,
                 self._alert_client.send,

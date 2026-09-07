@@ -80,6 +80,7 @@ class AlertCreate(BaseModel):
     object: Object | None = None
     severity: Severity
     snapshot_path: str | None = None
+    clip_path: str | None = None
     alert_type: AlertType = AlertType.ALERT_TYPE_OBJECT_PROXIMITY
     frame_width: int | None = None
     frame_height: int | None = None
@@ -136,6 +137,7 @@ class AlertDetail(MongoModel):
     classifier_score: float | None = None
     classifier_state: str | None = None
     snapshot_url: str | None = None
+    clip_url: str | None = None
     dispatch_failed: bool = False
     delivery: DeliveryStatusView | None = None
 

@@ -56,6 +56,16 @@ class Settings(BaseSettings):
     CSRF_HEADER_NAME: str = "X-CSRF-Token"
     ALERT_TIMEOUT_SECONDS: float = 5.0
     SNAPSHOT_DIR: str = "/app/snapshots"
+    CLIP_SECONDS: float = 6.0
+    CLIP_MAX_FRAMES: int = 200
+    CLIP_ENABLED: bool = True
+    CLIP_WIDTH: int = 640
+    CLIP_PRESET: str = "veryfast"
+    CLIP_CRF: int = 28
+    CLIP_MAX_BITRATE_KBPS: int = 900
+    ANNOTATED_SNAPSHOT_ENABLED: bool = True
+    ANNOTATED_SNAPSHOT_QUALITY: int = 80
+    ANNOTATED_SNAPSHOT_SUFFIX: str = "-annotated"
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @computed_field
