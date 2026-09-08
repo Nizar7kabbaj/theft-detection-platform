@@ -1,9 +1,11 @@
 import type { Metadata } from "next"
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { PageHeader } from "@/components/layout/page-header"
 import { AbsentPanel } from "@/features/alerts/components/absent-panel"
 import { fetchIdentity } from "@/features/auth/api/identity-server"
 import type { Identity } from "@/features/auth/schemas/identity"
+import { POLICY_SECTION_COOKIE_NAME, parseStoredSection } from "@/features/policy/api/policy-cookie"
 import { fetchPolicy, fetchPolicyHistory } from "@/features/policy/api/policy-server"
 import { PolicyConsole } from "@/features/policy/components/policy-console"
 import { PolicyHistory } from "@/features/policy/components/policy-history"
@@ -37,7 +39,12 @@ export default async function SettingsPage() {
       </section>
     )
   }
-  const [policy, revisions] = await Promise.all([fetchPolicy(), fetchPolicyHistory()])
+  const [policy, revisions, jar] = await Promise.all([
+    fetchPolicy(),
+    fetchPolicyHistory(),
+    cookies(),
+  ])
+  const section = parseStoredSection(jar.get(POLICY_SECTION_COOKIE_NAME)?.value)
   return (
     <section className="flex flex-1 flex-col gap-5">
       <PageHeader title="detection policy" description={DESCRIPTION} />
@@ -53,6 +60,7 @@ export default async function SettingsPage() {
         saved={policy.policy}
         canWrite={permissions.has("settings:write")}
         history={<PolicyHistory revisions={revisions} />}
+        initialSection={section}
       />
     </section>
   )

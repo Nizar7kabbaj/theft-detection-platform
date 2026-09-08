@@ -19,6 +19,7 @@ import {
   DECISION_VALUES,
   SORT_VALUES,
 } from "@/features/alerts/api/alert-keys"
+import { civilToday, type RangePreset, serializeRange } from "@/features/alerts/lib/range"
 import type { Decision } from "@/features/alerts/schemas/alert"
 import { writeCookie } from "@/lib/cookies/write"
 
@@ -39,6 +40,13 @@ const SEVERITY_SEGMENTS = [
   { value: "SEVERITY_INFO", label: "info" },
 ] as const satisfies readonly { value: AlertSeverity | ""; label: string }[]
 
+const RANGE_SEGMENTS = [
+  { value: "", label: "any time" },
+  { value: "today", label: "today" },
+  { value: "7d", label: "7 days" },
+  { value: "30d", label: "30 days" },
+  { value: "90d", label: "90 days" },
+] as const satisfies readonly { value: RangePreset | ""; label: string }[]
 const STATE_SEGMENTS = [
   { value: "", label: "all" },
   { value: "false", label: "open" },
@@ -105,6 +113,10 @@ export function AlertFilterControls({
   const router = useRouter()
   const pathname = usePathname()
   const active = activeFilterCount(filters)
+  const custom =
+    filters.range !== null && typeof filters.range !== "string"
+      ? filters.range
+      : { from: "", to: "" }
 
   const apply = useCallback(
     (name: string, value: string) => {
@@ -124,10 +136,26 @@ export function AlertFilterControls({
     },
     [filters, pathname, router],
   )
+  const applyCustom = useCallback(
+    (from: string, to: string) => {
+      if (from === "" || to === "" || from > to) {
+        apply("range", "")
+        return
+      }
+      apply("range", serializeRange({ from, to }))
+    },
+    [apply],
+  )
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+        <Segmented
+          current={typeof filters.range === "string" ? filters.range : ""}
+          legend="when"
+          onSelect={(value) => apply("range", value)}
+          segments={RANGE_SEGMENTS}
+        />
         <Segmented
           current={filters.severity ?? ""}
           legend="severity"
@@ -207,6 +235,34 @@ export function AlertFilterControls({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <label className="sr-only" htmlFor="range-from">
+            from date
+          </label>
+          <input
+            className={SELECT_CLASS}
+            id="range-from"
+            max={custom.to === "" ? civilToday() : custom.to}
+            name="range-from"
+            onChange={(event) => applyCustom(event.target.value, custom.to)}
+            type="date"
+            value={custom.from}
+          />
+          <span className="text-muted-foreground text-sm">to</span>
+          <label className="sr-only" htmlFor="range-to">
+            to date
+          </label>
+          <input
+            className={SELECT_CLASS}
+            id="range-to"
+            max={civilToday()}
+            min={custom.from === "" ? undefined : custom.from}
+            name="range-to"
+            onChange={(event) => applyCustom(custom.from, event.target.value)}
+            type="date"
+            value={custom.to}
+          />
+        </div>
         <div className="relative">
           <Search
             aria-hidden="true"

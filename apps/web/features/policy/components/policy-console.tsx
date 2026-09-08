@@ -6,6 +6,11 @@ import { type ReactNode, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { savePolicy } from "@/features/policy/api/policy-client"
+import {
+  POLICY_SECTION_COOKIE_MAX_AGE,
+  POLICY_SECTION_COOKIE_NAME,
+  type SectionId,
+} from "@/features/policy/api/policy-cookie"
 import { PolicySlider } from "@/features/policy/components/policy-slider"
 import {
   CLASSIFIER_FIELDS,
@@ -18,9 +23,8 @@ import {
   writeField,
 } from "@/features/policy/schemas/policy"
 import { ApiError } from "@/lib/api/errors"
+import { writeCookie } from "@/lib/cookies/write"
 import { cn } from "@/lib/utils"
-
-type SectionId = "concealment" | "classifier" | "history"
 
 const SECTIONS: readonly { id: SectionId; label: string; icon: LucideIcon }[] = [
   { id: "concealment", label: "taking an item", icon: Hand },
@@ -49,19 +53,26 @@ export function PolicyConsole({
   saved,
   canWrite,
   history,
+  initialSection,
 }: {
   version: number
   saved: PolicyPayload
   canWrite: boolean
   history: ReactNode
+  initialSection: SectionId
 }) {
   const router = useRouter()
   const [draft, setDraft] = useState<PolicyPayload>(saved)
-  const [section, setSection] = useState<SectionId>("concealment")
+  const [section, setSection] = useState<SectionId>(initialSection)
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
 
   const pending = countChanges(draft, saved)
+
+  function selectSection(next: SectionId) {
+    setSection(next)
+    writeCookie(POLICY_SECTION_COOKIE_NAME, next, POLICY_SECTION_COOKIE_MAX_AGE)
+  }
 
   function change(field: PolicyField, value: number) {
     setFailure(null)
@@ -90,12 +101,12 @@ export function PolicyConsole({
         <span className="mb-2 text-foreground text-lg">{title}</span>
         {fields.map((field) => (
           <PolicySlider
-            key={field.path}
-            field={field}
-            value={readField(draft, field)}
-            saved={readField(saved, field)}
             canWrite={canWrite}
+            field={field}
+            key={field.path}
             onChange={(value) => change(field, value)}
+            saved={readField(saved, field)}
+            value={readField(draft, field)}
           />
         ))}
       </Card>
@@ -110,15 +121,15 @@ export function PolicyConsole({
         </span>
         {SECTIONS.map((entry) => (
           <button
-            key={entry.id}
-            type="button"
-            onClick={() => setSection(entry.id)}
             className={cn(
               "flex min-h-10 items-center gap-2.5 rounded-sm px-2.5 text-left text-sm outline-none transition-[background-color,color,scale] duration-150 focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
               section === entry.id
                 ? "bg-muted text-foreground"
                 : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
             )}
+            key={entry.id}
+            onClick={() => selectSection(entry.id)}
+            type="button"
           >
             <entry.icon className="size-4 shrink-0" />
             <span className="flex-1">{entry.label}</span>
@@ -129,7 +140,6 @@ export function PolicyConsole({
           {canWrite ? "changes reach the detector on save" : "read only, changing needs admin"}
         </span>
       </Card>
-
       <div className="flex flex-col gap-4">
         {section === "concealment"
           ? panel(
@@ -153,29 +163,29 @@ export function PolicyConsole({
             </span>
             <div className="flex gap-2">
               <Button
-                variant="outline"
-                size="sm"
+                disabled={saving || isDefault(draft)}
                 onClick={() => {
                   setDraft(DEFAULT_POLICY)
                   setFailure(null)
                 }}
-                disabled={saving || isDefault(draft)}
+                size="sm"
+                variant="outline"
               >
                 <RotateCcw data-icon="inline-start" />
                 back to defaults
               </Button>
               <Button
-                variant="ghost"
-                size="sm"
+                disabled={pending === 0 || saving}
                 onClick={() => {
                   setDraft(saved)
                   setFailure(null)
                 }}
-                disabled={pending === 0 || saving}
+                size="sm"
+                variant="ghost"
               >
                 discard
               </Button>
-              <Button variant="default" size="sm" onClick={save} disabled={pending === 0 || saving}>
+              <Button disabled={pending === 0 || saving} onClick={save} size="sm" variant="default">
                 {saving ? "saving" : "save and push to edge"}
               </Button>
             </div>

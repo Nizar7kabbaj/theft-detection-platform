@@ -26,6 +26,36 @@ class AlertRepository(BaseRepository[dict[str, Any]]):
         end: datetime | None = None,
     ) -> list[dict[str, Any]]:
         field = SORT_DECIDED if sort == SORT_DECIDED else SORT_CREATED
+        query = self._build_query(
+            field=field,
+            severity=severity,
+            acknowledged=acknowledged,
+            decision=decision,
+            camera_id=camera_id,
+            start=start,
+            end=end,
+        )
+        if after is not None:
+            boundary, id_ = after
+            page_clause = [
+                {field: {"$lt": boundary}},
+                {field: boundary, "_id": {"$lt": self._oid(id_)}},
+            ]
+            existing = query.pop("$and", [])
+            query["$and"] = [*existing, {"$or": page_clause}]
+        cursor = self._col.find(query).sort([(field, -1), ("_id", -1)]).limit(limit)
+        return await cursor.to_list(length=limit)
+
+    def _build_query(
+        self,
+        field: str,
+        severity: str | None,
+        acknowledged: bool | None,
+        decision: str | None,
+        camera_id: str | None,
+        start: datetime | None,
+        end: datetime | None,
+    ) -> dict[str, Any]:
         query: dict[str, Any] = {}
         if severity:
             query["severity"] = severity
@@ -44,16 +74,29 @@ class AlertRepository(BaseRepository[dict[str, Any]]):
             field_clause["$lte"] = end
         if field_clause:
             query[field] = field_clause
-        if after is not None:
-            boundary, id_ = after
-            page_clause = [
-                {field: {"$lt": boundary}},
-                {field: boundary, "_id": {"$lt": self._oid(id_)}},
-            ]
-            existing = query.pop("$and", [])
-            query["$and"] = [*existing, {"$or": page_clause}]
-        cursor = self._col.find(query).sort([(field, -1), ("_id", -1)]).limit(limit)
-        return await cursor.to_list(length=limit)
+        return query
+
+    async def count(
+        self,
+        severity: str | None = None,
+        acknowledged: bool | None = None,
+        decision: str | None = None,
+        camera_id: str | None = None,
+        sort: str = SORT_CREATED,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> int:
+        field = SORT_DECIDED if sort == SORT_DECIDED else SORT_CREATED
+        query = self._build_query(
+            field=field,
+            severity=severity,
+            acknowledged=acknowledged,
+            decision=decision,
+            camera_id=camera_id,
+            start=start,
+            end=end,
+        )
+        return await self._col.count_documents(query)
 
     async def distinct_cameras(self) -> list[str]:
         values = await self._col.distinct("camera_id")

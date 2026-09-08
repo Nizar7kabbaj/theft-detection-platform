@@ -94,14 +94,17 @@ export function isNetworkError(error: unknown): error is NetworkError {
 }
 
 export function isRefreshable(error: unknown): boolean {
-  return isApiError(error) && error.status === 401 && error.code === AUTH_CODE.tokenExpired
+  if (!isApiError(error) || error.status !== 401) {
+    return false
+  }
+  return error.code === AUTH_CODE.tokenExpired || error.code === AUTH_CODE.sessionInvalid
 }
 
 export function needsLogin(error: unknown): boolean {
   if (!isApiError(error) || error.status !== 401) {
     return false
   }
-  return error.code !== AUTH_CODE.tokenExpired
+  return !isRefreshable(error)
 }
 
 export function isCsrfFailure(error: unknown): boolean {

@@ -153,7 +153,7 @@ function ConsoleView({
         />
         <Reading
           label="alerts"
-          note="stored for this camera"
+          note="alerts today"
           value={alertCount === null ? "--" : String(alertCount)}
         />
       </div>

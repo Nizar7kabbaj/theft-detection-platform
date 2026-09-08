@@ -145,3 +145,7 @@ class AlertDetail(MongoModel):
 class AlertPage(BaseModel):
     items: list[AlertResponse]
     next_cursor: str | None = None
+
+
+class AlertCount(BaseModel):
+    total: int

@@ -1,8 +1,9 @@
-import { type AlertFilters, alertListPath } from "@/features/alerts/api/alert-keys"
+import { type AlertFilters, alertCountPath, alertListPath } from "@/features/alerts/api/alert-keys"
 import {
   type Alert,
   type AlertDetail,
   type AlertPage,
+  alertCountSchema,
   alertDetailSchema,
   alertPageSchema,
   alertResponseSchema,
@@ -21,6 +22,18 @@ export function fetchAlertPageClient(
     return apiRequest(path, { schema: alertPageSchema })
   }
   return apiRequest(path, { schema: alertPageSchema, signal })
+}
+
+export async function fetchAlertCountClient(
+  filters: AlertFilters,
+  signal?: AbortSignal,
+): Promise<number> {
+  const path = alertCountPath(filters)
+  const result =
+    signal === undefined
+      ? await apiRequest(path, { schema: alertCountSchema })
+      : await apiRequest(path, { schema: alertCountSchema, signal })
+  return result.total
 }
 
 export function acknowledgeAlert(id: string): Promise<Alert> {

@@ -7,6 +7,7 @@ from app.core.authz import Permission, require_permission
 from app.core.idempotency import IdempotencyState, idempotency
 from app.dependencies import get_alert_usecase
 from app.schemas.alert import (
+    AlertCount,
     AlertCreate,
     AlertDetail,
     AlertPage,
@@ -65,6 +66,32 @@ async def list_alerts(
         sort=sort,
         limit=limit,
         cursor=cursor,
+        start=start,
+        end=end,
+    )
+
+
+@router.get(
+    "/count",
+    response_model=AlertCount,
+    dependencies=[Depends(require_permission(Permission.ALERT_READ))],
+)
+async def count_alerts(
+    severity: Severity | None = Query(default=None),
+    acknowledged: bool | None = Query(default=None),
+    decision: Decision | None = Query(default=None),
+    camera_id: str | None = Query(default=None, max_length=64),
+    sort: AlertSort = Query(default=AlertSort.CREATED_AT),
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
+    usecase: AlertUseCase = Depends(get_alert_usecase),
+) -> AlertCount:
+    return await usecase.count(
+        severity=severity,
+        acknowledged=acknowledged,
+        decision=decision,
+        camera_id=camera_id,
+        sort=sort,
         start=start,
         end=end,
     )

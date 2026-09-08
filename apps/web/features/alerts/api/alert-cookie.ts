@@ -4,7 +4,7 @@ export const ALERT_FILTERS_COOKIE_NAME = "alert_filters"
 export const ALERT_FILTERS_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
 
 const MAX_COOKIE_LENGTH = 512
-const FILTER_KEYS = ["severity", "acknowledged", "camera", "decision", "sort"] as const
+const FILTER_KEYS = ["severity", "acknowledged", "camera", "decision", "sort", "range"] as const
 
 export function hasFilterParams(params: Record<string, string | string[] | undefined>): boolean {
   return FILTER_KEYS.some((key) => params[key] !== undefined)

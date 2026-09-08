@@ -97,6 +97,12 @@ export const alertPageSchema = z.object({
 
 export type AlertPage = z.output<typeof alertPageSchema>
 
+export const alertCountSchema = z.object({
+  total: z.number().check(z.int(), z.nonnegative()),
+})
+
+export type AlertCount = z.output<typeof alertCountSchema>
+
 const bboxSchema = z.object({
   x1: z.number(),
   y1: z.number(),

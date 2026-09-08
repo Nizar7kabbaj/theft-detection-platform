@@ -21,6 +21,7 @@ from app.core.errors import (
 )
 from app.repositories.alert_repository import SORT_CREATED, SORT_DECIDED, AlertRepository
 from app.schemas.alert import (
+    AlertCount,
     AlertCreate,
     AlertDetail,
     AlertPage,
@@ -325,6 +326,47 @@ class AlertUseCase:
         page = AlertPage.model_validate(cached)
         await self._attach_delivery(page.items)
         return page
+
+    async def count(
+        self,
+        severity: Severity | None = None,
+        acknowledged: bool | None = None,
+        decision: Decision | None = None,
+        camera_id: str | None = None,
+        sort: AlertSort = AlertSort.CREATED_AT,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> AlertCount:
+        order = SORT_DECIDED if sort is AlertSort.DECIDED_AT else SORT_CREATED
+        window_start = _as_utc(start)
+        window_end = _as_utc(end)
+        if window_start is not None and window_end is not None and window_start > window_end:
+            raise ValidationError("start must not be later than end")
+        params = {
+            "severity": severity.value if severity else None,
+            "acknowledged": acknowledged,
+            "decision": decision.value if decision else None,
+            "camera_id": camera_id,
+            "sort": order,
+            "start": window_start.isoformat() if window_start else None,
+            "end": window_end.isoformat() if window_end else None,
+        }
+        key = make_list_key("alerts:count", params)
+
+        async def loader() -> dict[str, Any]:
+            total = await self._repo.count(
+                severity=severity.value if severity else None,
+                acknowledged=acknowledged,
+                decision=decision.value if decision else None,
+                camera_id=camera_id,
+                sort=order,
+                start=window_start,
+                end=window_end,
+            )
+            return {"total": total}
+
+        cached = await get_or_set(self._redis, key, self.TTL, loader)
+        return AlertCount.model_validate(cached)
 
     async def _attach_delivery(self, items: list[AlertResponse]) -> None:
         if not items:
