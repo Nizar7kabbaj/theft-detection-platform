@@ -28,6 +28,8 @@ EXPOSE 3000
 CMD ["pnpm", "exec", "next", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
 
 FROM base AS builder
+ARG STORE_TIME_ZONE
+ENV NEXT_PUBLIC_STORE_TIME_ZONE=${STORE_TIME_ZONE}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN --mount=type=cache,target=/app/.next/cache \

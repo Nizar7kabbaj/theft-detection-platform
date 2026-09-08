@@ -25,6 +25,7 @@ services:
       OTEL_SERVICE_NAME: "theft-backend"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0"
       PROMETHEUS_EXPORTER_PORT: "9464"
+      STORE_TIMEZONE: ${STORE_TIME_ZONE:-Africa/Casablanca}
     depends_on:
       mongo:
         condition: service_healthy
@@ -92,6 +93,8 @@ services:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
+      args:
+        STORE_TIME_ZONE: ${STORE_TIME_ZONE:-Africa/Casablanca}
     container_name: theft-web
     restart: unless-stopped
     networks:
