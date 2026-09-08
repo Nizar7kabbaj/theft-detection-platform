@@ -8,6 +8,7 @@ from app.core.redis import get_redis
 from app.repositories.alert_repository import AlertRepository
 from app.repositories.camera_repository import CameraRepository
 from app.repositories.detection_repository import DetectionRepository
+from app.repositories.policy_repository import PolicyRepository
 from app.repositories.stats_repository import StatsRepository
 from app.services.alert_service import AlertClient
 from app.services.audit_service import AuditClient
@@ -15,6 +16,7 @@ from app.services.inference_service import InferenceClient
 from app.usecases.alert_usecase import AlertUseCase
 from app.usecases.camera_usecase import CameraUseCase
 from app.usecases.detection_usecase import DetectionUseCase
+from app.usecases.policy_usecase import PolicyUseCase
 from app.usecases.stats_usecase import StatsUseCase
 
 
@@ -66,6 +68,20 @@ def get_inference_client(request: Request) -> InferenceClient:
 
 def get_alert_client(request: Request) -> AlertClient:
     return AlertClient(request.app.state.alert_stub)
+
+
+def get_policy_repo(
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> PolicyRepository:
+    return PolicyRepository(db.detection_policy)
+
+
+def get_policy_usecase(
+    repo: PolicyRepository = Depends(get_policy_repo),
+    stream: Redis = Depends(get_stream_redis),
+    audit_client: AuditClient = Depends(get_audit_client),
+) -> PolicyUseCase:
+    return PolicyUseCase(repo, stream, audit_client)
 
 
 def get_camera_usecase(

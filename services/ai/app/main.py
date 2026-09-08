@@ -15,6 +15,7 @@ from app.grpc_gen import inference_pb2_grpc, presence_pb2_grpc
 from app.inference import LSTMDetector
 from app.node_stats import NodeStatsPublisher
 from app.observability import register_presence_gauge, setup_observability
+from app.policy_watcher import PolicyWatcher
 from app.presence_servicer import PresenceServicer
 from app.server.interceptors import IdentityInterceptor
 from app.servicer import InferenceServicer
@@ -45,6 +46,14 @@ class AsyncHealthServicer(health.HealthServicer):
     async def _async_watch(self, request, context):
         for response in super().Watch(request, context):
             yield response
+
+
+def _set_health(
+    health_servicer: health.HealthServicer,
+    state: health_pb2.HealthCheckResponse.ServingStatus.ValueType,
+) -> None:
+    for name in (INFERENCE_SERVICE_FULL_NAME, PRESENCE_SERVICE_FULL_NAME, ""):
+        health_servicer.set(name, state)
 
 
 async def _serve() -> None:
@@ -91,12 +100,18 @@ async def _serve() -> None:
         ttl_seconds=settings.NODE_STATS_TTL_SECONDS,
         device_index=settings.NODE_STATS_DEVICE_INDEX,
     )
+    policy_watcher = PolicyWatcher(
+        redis_url=settings.REDIS_URL,
+        connection_kwargs=settings.redis_tls_options,
+        detector=detector,
+        executor=executor,
+        device=settings.DEVICE,
+    )
+
     server = grpc.aio.server(interceptors=[IdentityInterceptor()])
     health_servicer = AsyncHealthServicer()
     health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
-    health_servicer.set(INFERENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
-    health_servicer.set(PRESENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
-    health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
+    _set_health(health_servicer, health_pb2.HealthCheckResponse.NOT_SERVING)
     presence_servicer = PresenceServicer(
         lease_seconds=settings.PRESENCE_LEASE_SECONDS,
         absent_holdoff_seconds=settings.PRESENCE_ABSENT_HOLDOFF_SECONDS,
@@ -124,11 +139,11 @@ async def _serve() -> None:
     log.info("loading detector")
     await asyncio.get_running_loop().run_in_executor(executor, detector.load)
     log.info("detector ready")
+    await policy_watcher.prime()
     await server.start()
     node_stats_task = asyncio.create_task(node_stats.run())
-    health_servicer.set(INFERENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.SERVING)
-    health_servicer.set(PRESENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.SERVING)
-    health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
+    policy_task = asyncio.create_task(policy_watcher.run())
+    _set_health(health_servicer, health_pb2.HealthCheckResponse.SERVING)
     log.info("grpc server listening on %s", bind_address)
     stop_event = asyncio.Event()
 
@@ -140,13 +155,15 @@ async def _serve() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _on_signal, sig.name)
     await stop_event.wait()
-    health_servicer.set(INFERENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
-    health_servicer.set(PRESENCE_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
-    health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
+    _set_health(health_servicer, health_pb2.HealthCheckResponse.NOT_SERVING)
     await node_stats.stop()
     node_stats_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await node_stats_task
+    await policy_watcher.stop()
+    policy_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await policy_task
     await server.stop(grace=5)
     executor.shutdown(wait=True)
     detector.close()

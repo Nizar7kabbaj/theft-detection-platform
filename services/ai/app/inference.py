@@ -70,6 +70,8 @@ class Detector(Protocol):
         run_pose: bool,
         captured_at: float,
     ) -> DetectionResult | None: ...
+    def apply_policy(self, policy: dict[str, dict[str, float]]) -> None: ...
+
     def close(self) -> None: ...
 
 
@@ -135,6 +137,20 @@ class LSTMDetector:
             device=self._device,
             store=self._store,
         )
+
+    def apply_policy(self, policy: dict[str, dict[str, float]]) -> None:
+        concealment = policy["concealment"]
+        classifier = policy["classifier"]
+        with self._analyze_lock:
+            self._anomaly_threshold = classifier["anomaly_threshold"]
+            self._person_confidence = classifier["person_confidence"]
+            self._object_confidence = classifier["object_confidence"]
+            self._concealment.retune(
+                grab_ratio=concealment["grab_ratio"],
+                missing_seconds=concealment["missing_seconds"],
+                keypoint_confidence=concealment["keypoint_confidence"],
+                expiry_seconds=concealment["expiry_seconds"],
+            )
 
     def write_snapshot(self, frame: np.ndarray, alert_id: str) -> str | None:
         self._snapshot_dir.mkdir(parents=True, exist_ok=True)
