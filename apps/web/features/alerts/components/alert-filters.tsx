@@ -3,7 +3,7 @@
 import { Search } from "lucide-react"
 import type { Route } from "next"
 import { usePathname, useRouter } from "next/navigation"
-import { useCallback } from "react"
+import { useCallback, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   ALERT_FILTERS_COOKIE_MAX_AGE,
@@ -113,10 +113,17 @@ export function AlertFilterControls({
   const router = useRouter()
   const pathname = usePathname()
   const active = activeFilterCount(filters)
-  const custom =
+  const incoming =
     filters.range !== null && typeof filters.range !== "string"
       ? filters.range
       : { from: "", to: "" }
+  const marker = filters.range === null ? "" : serializeRange(filters.range)
+  const [custom, setCustom] = useState(incoming)
+  const [seen, setSeen] = useState(marker)
+  if (marker !== seen) {
+    setSeen(marker)
+    setCustom(incoming)
+  }
 
   const apply = useCallback(
     (name: string, value: string) => {
@@ -138,11 +145,15 @@ export function AlertFilterControls({
   )
   const applyCustom = useCallback(
     (from: string, to: string) => {
+      setCustom({ from, to })
       if (from === "" || to === "" || from > to) {
+        setSeen("")
         apply("range", "")
         return
       }
-      apply("range", serializeRange({ from, to }))
+      const value = serializeRange({ from, to })
+      setSeen(value)
+      apply("range", value)
     },
     [apply],
   )
