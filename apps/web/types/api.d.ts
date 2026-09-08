@@ -331,6 +331,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/policy/detection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Policy */
+        get: operations["read_policy_api_v1_policy_detection_get"];
+        /** Update Policy */
+        put: operations["update_policy_api_v1_policy_detection_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policy/detection/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Policy History */
+        get: operations["read_policy_history_api_v1_policy_detection_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/permissions/roles": {
         parameters: {
             query?: never;
@@ -626,6 +661,24 @@ export interface components {
              */
             created_at: string;
         };
+        /** ClassifierPolicy */
+        ClassifierPolicy: {
+            /**
+             * Anomaly Threshold
+             * @default 0.6
+             */
+            anomaly_threshold: number;
+            /**
+             * Person Confidence
+             * @default 0.7
+             */
+            person_confidence: number;
+            /**
+             * Object Confidence
+             * @default 0.35
+             */
+            object_confidence: number;
+        };
         /** Concealment */
         Concealment: {
             /** Object Track Id */
@@ -646,6 +699,29 @@ export interface components {
             wrist_y: number;
             /** Grab Distance */
             grab_distance: number;
+        };
+        /** ConcealmentPolicy */
+        ConcealmentPolicy: {
+            /**
+             * Grab Ratio
+             * @default 0.6
+             */
+            grab_ratio: number;
+            /**
+             * Missing Seconds
+             * @default 1
+             */
+            missing_seconds: number;
+            /**
+             * Keypoint Confidence
+             * @default 0.5
+             */
+            keypoint_confidence: number;
+            /**
+             * Expiry Seconds
+             * @default 10
+             */
+            expiry_seconds: number;
         };
         /**
          * Decision
@@ -828,7 +904,7 @@ export interface components {
          * Permission
          * @enum {string}
          */
-        Permission: "camera:read" | "camera:write" | "detection:read" | "detection:write" | "detection:infer" | "alert:read" | "alert:write" | "alert:acknowledge" | "stats:read" | "audit:query" | "settings:read" | "user:read" | "user:write";
+        Permission: "camera:read" | "camera:write" | "detection:read" | "detection:write" | "detection:infer" | "alert:read" | "alert:write" | "alert:acknowledge" | "stats:read" | "audit:query" | "settings:read" | "settings:write" | "user:read" | "user:write";
         /** Person */
         Person: {
             /**
@@ -839,6 +915,63 @@ export interface components {
             bbox?: components["schemas"]["Bbox"] | null;
             /** Keypoints */
             keypoints?: components["schemas"]["app__schemas__alert__Keypoint"][];
+        };
+        /** PolicyChange */
+        PolicyChange: {
+            /** Field Name */
+            field_name: string;
+            /** Previous */
+            previous: number;
+            /** Current */
+            current: number;
+        };
+        /** PolicyPayload */
+        PolicyPayload: {
+            concealment?: components["schemas"]["ConcealmentPolicy"];
+            classifier?: components["schemas"]["ClassifierPolicy"];
+        };
+        /** PolicyResponse */
+        PolicyResponse: {
+            /** Version */
+            version: number;
+            policy: components["schemas"]["PolicyPayload"];
+            /** Changed By */
+            changed_by: string;
+            /**
+             * Changed At
+             * Format: date-time
+             */
+            changed_at: string;
+            runtime?: components["schemas"]["PolicyRuntime"];
+        };
+        /** PolicyRevision */
+        PolicyRevision: {
+            /** Version */
+            version: number;
+            /** Changed By */
+            changed_by: string;
+            /**
+             * Changed At
+             * Format: date-time
+             */
+            changed_at: string;
+            /** Changes */
+            changes: components["schemas"]["PolicyChange"][];
+        };
+        /** PolicyRuntime */
+        PolicyRuntime: {
+            /** Version */
+            version?: number | null;
+            /** Applied At */
+            applied_at?: string | null;
+            /** Device */
+            device?: string | null;
+        };
+        /** PolicyUpdate */
+        PolicyUpdate: {
+            /** Expected Version */
+            expected_version: number;
+            policy: components["schemas"]["PolicyPayload"];
         };
         /** RolePermissionMap */
         RolePermissionMap: {
@@ -1627,6 +1760,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IdentityResponse"];
+                };
+            };
+        };
+    };
+    read_policy_api_v1_policy_detection_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyResponse"];
+                };
+            };
+        };
+    };
+    update_policy_api_v1_policy_detection_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_policy_history_api_v1_policy_detection_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRevision"][];
                 };
             };
         };

@@ -75,6 +75,18 @@ class ConcealmentTracker:
         self._persons: dict[tuple[str, int], float] = {}
         self._last_fired: dict[str, float] = {}
 
+    def retune(
+        self,
+        grab_ratio: float,
+        missing_seconds: float,
+        keypoint_confidence: float,
+        expiry_seconds: float,
+    ) -> None:
+        self._grab_ratio = grab_ratio
+        self._missing_seconds = missing_seconds
+        self._keypoint_confidence = keypoint_confidence
+        self._expiry_seconds = expiry_seconds
+
     def observe(
         self,
         camera_id: str,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
 from dataclasses import dataclass
@@ -43,6 +44,10 @@ def _current_trace_id() -> str:
 
 def _roles_to_enum(roles: frozenset[str]) -> list[int]:
     return [_ROLE_BY_NAME[name] for name in roles if name in _ROLE_BY_NAME]
+
+
+def _value_hash(value: str) -> bytes:
+    return hashlib.sha256(value.encode("utf-8")).digest()
 
 
 def _freeze(event: pb.AuditEvent, occurred_at: datetime) -> PreparedEvent:
@@ -95,6 +100,25 @@ def alert_acknowledged(alert_id: str, actor_user_id: str) -> PreparedEvent:
     return _freeze(event, occurred_at)
 
 
+def config_changed(
+    actor_user_id: str,
+    resource_id: str,
+    field_path: str,
+    before_value: str,
+    after_value: str,
+) -> PreparedEvent:
+    occurred_at = datetime.now(UTC)
+    event = _new_event(actor_user_id, common_pb2.SEVERITY_NOTICE, occurred_at)
+    changed = event.config_changed
+    changed.actor_user_id = actor_user_id
+    changed.resource_kind = pb.CONFIG_RESOURCE_KIND_DETECTION_THRESHOLD
+    changed.resource_id = resource_id
+    changed.field_path = field_path
+    changed.before_value_hash = _value_hash(before_value)
+    changed.after_value_hash = _value_hash(after_value)
+    return _freeze(event, occurred_at)
+
+
 def events_shed(dropped: int) -> PreparedEvent:
     occurred_at = datetime.now(UTC)
     event = _new_event("", common_pb2.SEVERITY_ERROR, occurred_at)
@@ -137,6 +161,23 @@ class AuditClient:
         prepared = alert_acknowledged(
             alert_id=alert_id,
             actor_user_id=actor_user_id,
+        )
+        await self._enqueue(prepared)
+
+    async def emit_config_changed(
+        self,
+        actor_user_id: str,
+        resource_id: str,
+        field_path: str,
+        before_value: str,
+        after_value: str,
+    ) -> None:
+        prepared = config_changed(
+            actor_user_id=actor_user_id,
+            resource_id=resource_id,
+            field_path=field_path,
+            before_value=before_value,
+            after_value=after_value,
         )
         await self._enqueue(prepared)
 
