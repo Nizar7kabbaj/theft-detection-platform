@@ -4,7 +4,7 @@ groups:
     rules:
       - alert: CameraFramesDropped
         expr: |
-          rate(theft_camera_frames_dropped_overflow[1m]) > 0
+          rate(theft_camera_frames_dropped_overflow_total[1m]) > 0
         for: 2m
         labels:
           severity: warning
