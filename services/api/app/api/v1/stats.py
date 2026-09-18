@@ -18,6 +18,7 @@ from app.schemas.stats import (
     BucketUnit,
     EdgeStatsResponse,
     ServiceMemory,
+    StatsBreakdownResponse,
     StatsResponse,
     StatsTimeseriesResponse,
     SystemHistoryResponse,
@@ -58,6 +59,20 @@ async def get_stats_timeseries(
     usecase: StatsUseCase = Depends(get_stats_usecase),
 ) -> StatsTimeseriesResponse:
     return await usecase.timeseries(start=start, end=end, unit=unit)
+
+
+@router.get(
+    "/breakdown",
+    response_model=StatsBreakdownResponse,
+    dependencies=[Depends(require_permission(Permission.STATS_READ))],
+)
+async def get_stats_breakdown(
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
+    unit: BucketUnit = Query(default=BucketUnit.HOUR),
+    usecase: StatsUseCase = Depends(get_stats_usecase),
+) -> StatsBreakdownResponse:
+    return await usecase.breakdown(start=start, end=end, unit=unit)
 
 
 @router.get(

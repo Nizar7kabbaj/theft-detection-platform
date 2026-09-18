@@ -1,6 +1,14 @@
+import { Card } from "@/components/ui/card"
+import { DurationDonutLazy } from "@/features/analytics/components/analytics-charts-lazy"
+import { LaneList } from "@/features/analytics/components/lane-list"
 import { RankedList, type RankedRow } from "@/features/analytics/components/ranked-list"
+import { DURATION_BUCKETS, formatDuration } from "@/features/analytics/lib/duration-buckets"
 import type { CameraTally, DurationSpread, TypeTally } from "@/features/analytics/schemas/breakdown"
 import type { AlertBucket } from "@/features/analytics/schemas/timeseries"
+
+const EYEBROW = "font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground"
+const DURATION_CHIP =
+  "inline-flex h-7 items-center gap-2 rounded-sm border border-border px-2.5 font-mono text-[10px] uppercase tracking-wide"
 
 const TYPE_LABEL: Record<string, string> = {
   ALERT_TYPE_CONCEALMENT: "concealment",
@@ -8,13 +16,6 @@ const TYPE_LABEL: Record<string, string> = {
   ALERT_TYPE_OBJECT_PROXIMITY: "object proximity",
   ALERT_TYPE_UNSPECIFIED: "unspecified",
 }
-
-const DURATION_ROWS: readonly (readonly [keyof DurationSpread, string])[] = [
-  ["under_60", "under 1m"],
-  ["under_300", "1 to 5m"],
-  ["under_900", "5 to 15m"],
-  ["over_900", "over 15m"],
-]
 
 const SEVERITY_ROWS: readonly (readonly [
   Exclude<keyof AlertBucket, "bucket" | "total">,
@@ -30,6 +31,23 @@ const SEVERITY_ROWS: readonly (readonly [
 
 function sum(values: readonly number[]): number {
   return values.reduce((total, value) => total + value, 0)
+}
+
+function cameraNote(
+  cameraId: string,
+  names: ReadonlyMap<string, string>,
+  offline: ReadonlySet<string>,
+): string {
+  const parts: string[] = []
+  if (names.has(cameraId)) {
+    parts.push(cameraId)
+  } else {
+    parts.push("not registered")
+  }
+  if (offline.has(cameraId)) {
+    parts.push("offline")
+  }
+  return parts.join(" · ")
 }
 
 export function SeverityPanel({ alerts }: { alerts: readonly AlertBucket[] }) {
@@ -53,24 +71,57 @@ export function SeverityPanel({ alerts }: { alerts: readonly AlertBucket[] }) {
   )
 }
 
-export function DurationPanel({ duration }: { duration: DurationSpread }) {
-  const rows: RankedRow[] = DURATION_ROWS.map(([field, label]) => ({
-    key: field,
-    label,
-    count: duration[field],
-    tone: "info",
-    muted: false,
-    note: null,
-  }))
+export function DurationPanel({
+  decided,
+  duration,
+  median,
+}: {
+  decided: number
+  duration: DurationSpread
+  median: number | null
+}) {
   return (
-    <RankedList
-      empty="no alert in this window was decided"
-      eyebrow="review duration"
-      rows={rows.some((row) => row.count > 0) ? rows : []}
-      showShare={false}
-      title="time to decision"
-      total={sum(rows.map((row) => row.count))}
-    />
+    <Card className="gap-5 p-5">
+      <div className="flex flex-col gap-1">
+        <p className={EYEBROW}>review duration</p>
+        <div className="flex items-center gap-2">
+          <h2 className="font-medium text-base text-foreground">time to decision</h2>
+          {median === null ? null : (
+            <span className="rounded-sm border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground uppercase tracking-wide tabular-nums">
+              median {formatDuration(median)}
+            </span>
+          )}
+        </div>
+      </div>
+      {decided === 0 ? (
+        <p className="py-10 text-center text-muted-foreground text-xs">
+          no alert in this window was decided
+        </p>
+      ) : (
+        <>
+          <DurationDonutLazy duration={duration} />
+          <ul className="flex flex-wrap gap-2">
+            {DURATION_BUCKETS.map((bucket) => (
+              <li
+                className={
+                  duration[bucket.field] > 0
+                    ? `${DURATION_CHIP} bg-accent text-foreground`
+                    : `${DURATION_CHIP} text-muted-foreground opacity-50`
+                }
+                key={bucket.field}
+              >
+                <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${bucket.dot}`} />
+                {bucket.label}
+                <span className="text-foreground tabular-nums">{duration[bucket.field]}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p className="text-[11px] text-muted-foreground">
+        {decided} decided in this window, time counted from raise to decision
+      </p>
+    </Card>
   )
 }
 
@@ -87,11 +138,10 @@ export function BehaviourPanel({ types }: { types: readonly TypeTally[] }) {
       note: null,
     }))
   return (
-    <RankedList
+    <LaneList
       empty="no alert in this window carries a behaviour class"
       eyebrow="behaviour ranking"
       rows={rows}
-      showShare={true}
       title="what triggered the alert"
       total={total}
     />
@@ -116,14 +166,13 @@ export function CameraPanel({
       count: entry.count,
       tone: "info",
       muted: offline.has(entry.camera_id),
-      note: offline.has(entry.camera_id) ? "offline" : null,
+      note: cameraNote(entry.camera_id, names, offline),
     }))
   return (
-    <RankedList
+    <LaneList
       empty="no camera raised an alert in this window"
       eyebrow="camera workload"
       rows={rows}
-      showShare={true}
       title="where review work starts"
       total={total}
     />

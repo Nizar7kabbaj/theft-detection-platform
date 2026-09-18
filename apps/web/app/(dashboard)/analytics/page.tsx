@@ -128,7 +128,7 @@ export default async function AnalyticsPage({
   const range = parseDateRange(params)
   const [series, breakdown, cameras] = await Promise.all([
     fetchStatsTimeseries(unit, range),
-    fetchStatsBreakdown(range),
+    fetchStatsBreakdown(range, unit),
     fleet(identity.permissions.includes("camera:read")),
   ])
 
@@ -196,7 +196,11 @@ export default async function AnalyticsPage({
             title="review duration"
           />
         ) : (
-          <DurationPanel duration={breakdown.duration} />
+          <DurationPanel
+            decided={breakdown.decided}
+            duration={breakdown.duration}
+            median={breakdown.median_decision_seconds ?? null}
+          />
         )}
       </div>
 
@@ -225,7 +229,9 @@ export default async function AnalyticsPage({
 
       <div className="flex items-center justify-between border-border/60 border-t pt-4">
         <p className={FOOT}>source: alert archive</p>
-        <p className={FOOT}>{series.unit} buckets, times in UTC</p>
+        <p className={FOOT}>
+          {series.unit} buckets, times in {STORE_TIME_LABEL} ({STORE_TIME_ZONE})
+        </p>
       </div>
     </section>
   )

@@ -127,6 +127,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/alerts/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Count Alerts */
+        get: operations["count_alerts_api_v1_alerts_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/alerts/cameras": {
         parameters: {
             query?: never;
@@ -255,6 +272,23 @@ export interface paths {
         };
         /** Get Stats Timeseries */
         get: operations["get_stats_timeseries_api_v1_stats_timeseries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/breakdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Stats Breakdown */
+        get: operations["get_stats_breakdown_api_v1_stats_breakdown_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -421,6 +455,11 @@ export interface components {
             info: number;
             /** Unspecified */
             unspecified: number;
+            /** Total */
+            total: number;
+        };
+        /** AlertCount */
+        AlertCount: {
             /** Total */
             total: number;
         };
@@ -661,6 +700,13 @@ export interface components {
              */
             created_at: string;
         };
+        /** CameraTally */
+        CameraTally: {
+            /** Camera Id */
+            camera_id: string;
+            /** Count */
+            count: number;
+        };
         /** ClassifierPolicy */
         ClassifierPolicy: {
             /**
@@ -858,6 +904,17 @@ export interface components {
              */
             created_at: string;
         };
+        /** DurationSpread */
+        DurationSpread: {
+            /** Under 60 */
+            under_60: number;
+            /** Under 300 */
+            under_300: number;
+            /** Under 900 */
+            under_900: number;
+            /** Over 900 */
+            over_900: number;
+        };
         /** EdgeStatsResponse */
         EdgeStatsResponse: {
             /** Average Fps */
@@ -998,6 +1055,30 @@ export interface components {
          * @enum {string}
          */
         Severity: "SEVERITY_UNSPECIFIED" | "SEVERITY_INFO" | "SEVERITY_NOTICE" | "SEVERITY_WARNING" | "SEVERITY_CRITICAL";
+        /** StatsBreakdownResponse */
+        StatsBreakdownResponse: {
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Raised */
+            raised: number;
+            /** Decided */
+            decided: number;
+            /** Median Decision Seconds */
+            median_decision_seconds: number | null;
+            duration: components["schemas"]["DurationSpread"];
+            /** Alert Types */
+            alert_types: components["schemas"]["TypeTally"][];
+            /** Cameras */
+            cameras: components["schemas"]["CameraTally"][];
+        };
         /** StatsResponse */
         StatsResponse: {
             /** Total Alerts */
@@ -1068,6 +1149,13 @@ export interface components {
         TopObject: {
             /** Object */
             object: string | null;
+            /** Count */
+            count: number;
+        };
+        /** TypeTally */
+        TypeTally: {
+            /** Alert Type */
+            alert_type: string;
             /** Count */
             count: number;
         };
@@ -1456,6 +1544,43 @@ export interface operations {
             };
         };
     };
+    count_alerts_api_v1_alerts_count_get: {
+        parameters: {
+            query?: {
+                severity?: components["schemas"]["Severity"] | null;
+                acknowledged?: boolean | null;
+                decision?: components["schemas"]["Decision"] | null;
+                camera_id?: string | null;
+                sort?: components["schemas"]["AlertSort"];
+                start?: string | null;
+                end?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertCount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_alert_cameras_api_v1_alerts_cameras_get: {
         parameters: {
             query?: never;
@@ -1671,6 +1796,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatsTimeseriesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_stats_breakdown_api_v1_stats_breakdown_get: {
+        parameters: {
+            query?: {
+                start?: string | null;
+                end?: string | null;
+                unit?: components["schemas"]["BucketUnit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsBreakdownResponse"];
                 };
             };
             /** @description Validation Error */

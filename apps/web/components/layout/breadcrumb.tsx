@@ -9,7 +9,22 @@ const SEGMENT_LABEL: Record<string, string> = {
   analytics: "analytics",
   settings: "settings",
 }
+const CHILD_LABEL: Record<string, string> = {
+  alerts: "detail",
+}
 const CRUMB_LIST_CLASS = "flex min-w-0 items-center gap-1.5 text-sm"
+
+function labelFor(segments: readonly string[], index: number): string {
+  const segment = segments[index] ?? ""
+  const known = SEGMENT_LABEL[segment]
+  if (known !== undefined) {
+    return known
+  }
+  const parent = index > 0 ? segments[index - 1] : undefined
+  const child = parent === undefined ? undefined : CHILD_LABEL[parent]
+  return child ?? segment
+}
+
 export function Breadcrumb() {
   const pathname = usePathname()
   const segments = pathname.split("/").filter((segment) => segment.length > 0)
@@ -21,7 +36,6 @@ export function Breadcrumb() {
       <ol className={CRUMB_LIST_CLASS}>
         {segments.map((segment, index) => {
           const last = index === segments.length - 1
-          const label = SEGMENT_LABEL[segment] ?? segment
           return (
             <li key={segment} className="flex min-w-0 items-center gap-1.5">
               {index === 0 ? null : (
@@ -35,7 +49,7 @@ export function Breadcrumb() {
                   last ? "truncate font-medium text-foreground" : "truncate text-muted-foreground"
                 }
               >
-                {label}
+                {labelFor(segments, index)}
               </span>
             </li>
           )

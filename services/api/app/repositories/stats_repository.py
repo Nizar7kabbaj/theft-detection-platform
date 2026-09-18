@@ -8,10 +8,22 @@ from app.core.config import settings
 
 BUCKET_UNITS = {"hour": "hour", "day": "day"}
 STORE_ZONE = ZoneInfo(settings.STORE_TIMEZONE)
+MINUTE_SECONDS = 60
+FIVE_MINUTES_SECONDS = 300
+FIFTEEN_MINUTES_SECONDS = 900
 
 
 def store_day_start() -> datetime:
     return datetime.now(STORE_ZONE).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _count_between(low: int | None, high: int | None) -> dict[str, Any]:
+    bounds: list[dict[str, Any]] = []
+    if low is not None:
+        bounds.append({"$gte": ["$seconds", low]})
+    if high is not None:
+        bounds.append({"$lt": ["$seconds", high]})
+    return {"$sum": {"$cond": [{"$and": bounds}, 1, 0]}}
 
 
 class StatsRepository:
@@ -123,3 +135,61 @@ class StatsRepository:
                 }
             )
         return results
+
+    async def created_breakdown(self, start: datetime, end: datetime) -> dict[str, Any]:
+        pipeline = [
+            {"$match": {"created_at": {"$gte": start, "$lt": end}}},
+            {
+                "$facet": {
+                    "raised": [{"$count": "count"}],
+                    "cameras": [{"$group": {"_id": "$camera_id", "count": {"$sum": 1}}}],
+                    "alert_types": [{"$group": {"_id": "$alert_type", "count": {"$sum": 1}}}],
+                }
+            },
+        ]
+        async for doc in self._db.alerts.aggregate(pipeline):
+            raised = doc["raised"][0]["count"] if doc["raised"] else 0
+            return {
+                "raised": raised,
+                "cameras": doc["cameras"],
+                "alert_types": doc["alert_types"],
+            }
+        return {"raised": 0, "cameras": [], "alert_types": []}
+
+    async def decided_breakdown(self, start: datetime, end: datetime) -> dict[str, Any]:
+        pipeline = [
+            {"$match": {"decided_at": {"$type": "date", "$gte": start, "$lt": end}}},
+            {
+                "$project": {
+                    "_id": 0,
+                    "seconds": {
+                        "$dateDiff": {
+                            "startDate": "$created_at",
+                            "endDate": "$decided_at",
+                            "unit": "second",
+                        }
+                    },
+                }
+            },
+            {
+                "$group": {
+                    "_id": None,
+                    "decided": {"$sum": 1},
+                    "median": {"$median": {"input": "$seconds", "method": "approximate"}},
+                    "under_60": _count_between(None, MINUTE_SECONDS),
+                    "under_300": _count_between(MINUTE_SECONDS, FIVE_MINUTES_SECONDS),
+                    "under_900": _count_between(FIVE_MINUTES_SECONDS, FIFTEEN_MINUTES_SECONDS),
+                    "over_900": _count_between(FIFTEEN_MINUTES_SECONDS, None),
+                }
+            },
+        ]
+        async for doc in self._db.alerts.aggregate(pipeline):
+            return doc
+        return {
+            "decided": 0,
+            "median": None,
+            "under_60": 0,
+            "under_300": 0,
+            "under_900": 0,
+            "over_900": 0,
+        }

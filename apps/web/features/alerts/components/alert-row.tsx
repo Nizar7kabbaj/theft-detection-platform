@@ -15,7 +15,6 @@ import {
   relativeAge,
   SEVERITY_CLASS,
   SEVERITY_LABEL,
-  shortAlertId,
 } from "@/features/alerts/lib/format"
 import type { Alert } from "@/features/alerts/schemas/alert"
 
@@ -113,12 +112,6 @@ export function AlertRow({
           >
             {alertTypeLabel(alert.alert_type)}
           </Link>
-          <span
-            className={`${MONO_CLASS} text-[10px] text-muted-foreground`}
-            title={alert.alert_id}
-          >
-            {shortAlertId(alert.alert_id)}
-          </span>
         </span>
       </td>
 

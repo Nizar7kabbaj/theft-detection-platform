@@ -4,9 +4,9 @@ import {
   formatTimestamp,
   SEVERITY_CLASS,
   SEVERITY_LABEL,
-  shortAlertId,
 } from "@/features/alerts/lib/format"
 import type { AlertDetail } from "@/features/alerts/schemas/alert"
+import { STORE_TIME_LABEL } from "@/lib/time/zone"
 
 const META_CLASS = "font-mono text-[11px] text-muted-foreground uppercase tracking-[0.14em]"
 const CHIP_CLASS =
@@ -16,8 +16,7 @@ export function DetailHeader({ action, alert }: { action?: ReactNode; alert: Ale
   return (
     <div className="flex flex-col gap-3">
       <p className={META_CLASS}>
-        alert {shortAlertId(alert.alert_id)} · session {alert.session_id} · frame{" "}
-        {alert.frame_index}
+        session {alert.session_id} · frame {alert.frame_index}
       </p>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
@@ -25,7 +24,7 @@ export function DetailHeader({ action, alert }: { action?: ReactNode; alert: Ale
             {alertTypeLabel(alert.alert_type)}
           </h2>
           <p className="font-mono text-muted-foreground text-xs">
-            {alert.camera_id} · occurred {formatTimestamp(alert.occurred_at)} utc
+            {alert.camera_id} · occurred {formatTimestamp(alert.occurred_at)} {STORE_TIME_LABEL}
           </p>
         </div>
         <div className="flex items-center gap-3">

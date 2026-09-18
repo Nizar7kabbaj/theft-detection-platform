@@ -13,7 +13,6 @@ import {
   relativeAge,
   SEVERITY_CLASS,
   SEVERITY_LABEL,
-  shortAlertId,
 } from "@/features/alerts/lib/format"
 import type { Alert } from "@/features/alerts/schemas/alert"
 
@@ -120,10 +119,6 @@ export function AlertCard({
           </span>
         </span>
       </div>
-
-      <span className={`${MONO_CLASS} text-[10px] text-muted-foreground`} title={alert.alert_id}>
-        {shortAlertId(alert.alert_id)}
-      </span>
 
       {canAcknowledge && !alert.acknowledged ? (
         <Button

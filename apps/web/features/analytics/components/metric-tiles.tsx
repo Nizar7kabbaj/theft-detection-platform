@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card"
+import { formatDuration } from "@/features/analytics/lib/duration-buckets"
 import type { StatsBreakdown } from "@/features/analytics/schemas/breakdown"
 import type { AlertBucket } from "@/features/analytics/schemas/timeseries"
 
@@ -22,13 +23,6 @@ function percent(part: number, whole: number): string {
     return "0%"
   }
   return `${(Math.round((part / whole) * 1000) / 10).toFixed(1)}%`
-}
-
-function clock(seconds: number): string {
-  const whole = Math.max(0, Math.round(seconds))
-  const minutes = Math.floor(whole / 60)
-  const rest = whole % 60
-  return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`
 }
 
 type Tile = {
@@ -74,7 +68,7 @@ function tiles(alerts: readonly AlertBucket[], breakdown: StatsBreakdown | null)
     },
     {
       term: "median time to decision",
-      value: median === null ? ABSENT : clock(median),
+      value: median === null ? ABSENT : formatDuration(median),
       foot:
         breakdown === null
           ? "needs the breakdown aggregation"

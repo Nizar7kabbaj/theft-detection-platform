@@ -4,8 +4,10 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 import { EMPTY_FILTERS } from "@/features/alerts/api/alert-keys"
 import { fetchAlertPage } from "@/features/alerts/api/alerts-server"
+import { clockTime } from "@/features/alerts/lib/format"
 import { fetchCameras } from "@/features/cameras/api/cameras-server"
 import { cameraHealth } from "@/features/cameras/schemas/camera"
+import { STORE_TIME_LABEL } from "@/lib/time/zone"
 import { cn } from "@/lib/utils"
 
 type Rank = "critical" | "warning"
@@ -35,14 +37,10 @@ const MAX_ITEMS = 6
 const NOT_WATCHED = "not watched yet: storage"
 
 function occurredLabel(iso: string): string {
-  const parsed = new Date(iso)
-  if (Number.isNaN(parsed.getTime())) {
+  if (Number.isNaN(Date.parse(iso))) {
     return "time unknown"
   }
-  const hours = String(parsed.getUTCHours()).padStart(2, "0")
-  const minutes = String(parsed.getUTCMinutes()).padStart(2, "0")
-  const seconds = String(parsed.getUTCSeconds()).padStart(2, "0")
-  return `${hours}:${minutes}:${seconds} utc`
+  return `${clockTime(iso)} ${STORE_TIME_LABEL}`
 }
 
 function ageLabel(seconds: number | null | undefined): string {
