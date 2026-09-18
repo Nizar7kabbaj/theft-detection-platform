@@ -50,6 +50,34 @@ class StatsTimeseriesResponse(BaseModel):
     decisions: list[DecisionBucket]
 
 
+class DurationSpread(BaseModel):
+    under_60: int
+    under_300: int
+    under_900: int
+    over_900: int
+
+
+class TypeTally(BaseModel):
+    alert_type: str
+    count: int
+
+
+class CameraTally(BaseModel):
+    camera_id: str
+    count: int
+
+
+class StatsBreakdownResponse(BaseModel):
+    start: datetime
+    end: datetime
+    raised: int
+    decided: int
+    median_decision_seconds: int | None
+    duration: DurationSpread
+    alert_types: list[TypeTally]
+    cameras: list[CameraTally]
+
+
 class EdgeStatsResponse(BaseModel):
     average_fps: float | None
     latency_ms: float | None

@@ -2,7 +2,17 @@
 import type { Route } from "next"
 import { useRouter } from "next/navigation"
 import { useCallback } from "react"
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Pie,
+  PieChart,
+  XAxis,
+  YAxis,
+} from "recharts"
 import {
   type ChartConfig,
   ChartContainer,
@@ -11,6 +21,8 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
+import { DURATION_BUCKETS } from "@/features/analytics/lib/duration-buckets"
+import type { DurationSpread } from "@/features/analytics/schemas/breakdown"
 import type {
   AlertBucket,
   BucketUnit,
@@ -30,6 +42,10 @@ const THROUGHPUT_CONFIG = {
   raised: { label: "raised", color: "var(--chart-2)" },
   decided: { label: "decided", color: "var(--chart-3)" },
 } satisfies ChartConfig
+
+const DURATION_CONFIG: ChartConfig = Object.fromEntries(
+  DURATION_BUCKETS.map((bucket) => [bucket.field, { label: bucket.label }]),
+)
 
 const ALERT_KEYS = ["unspecified", "info", "notice", "warning", "critical"] as const
 const CHART_CLASS =
@@ -157,6 +173,47 @@ export function ThroughputChart({
         <Bar dataKey="raised" fill="var(--color-raised)" radius={[3, 3, 0, 0]} />
         <Bar dataKey="decided" fill="var(--color-decided)" radius={[3, 3, 0, 0]} />
       </BarChart>
+    </ChartContainer>
+  )
+}
+
+export function DurationDonut({ duration }: { duration: DurationSpread }) {
+  const data = DURATION_BUCKETS.filter((bucket) => duration[bucket.field] > 0).map((bucket) => ({
+    key: bucket.field,
+    value: duration[bucket.field],
+    color: bucket.color,
+  }))
+  return (
+    <ChartContainer className="mx-auto aspect-square w-full max-w-64" config={DURATION_CONFIG}>
+      <PieChart>
+        <ChartTooltip content={<ChartTooltipContent hideLabel={true} nameKey="key" />} />
+        <Pie
+          cornerRadius={8}
+          data={data}
+          dataKey="value"
+          endAngle={-270}
+          innerRadius="34%"
+          isAnimationActive={false}
+          nameKey="key"
+          outerRadius="96%"
+          paddingAngle={data.length > 1 ? 3 : 0}
+          startAngle={90}
+          stroke="var(--card)"
+          strokeWidth={4}
+        >
+          {data.map((entry) => (
+            <Cell fill={entry.color} key={entry.key} />
+          ))}
+          <LabelList
+            dataKey="value"
+            fill="#ffffff"
+            fontSize={12}
+            fontWeight={600}
+            position="inside"
+            stroke="none"
+          />
+        </Pie>
+      </PieChart>
     </ChartContainer>
   )
 }

@@ -4,6 +4,7 @@ import { Suspense } from "react"
 import { EdgeCells } from "@/features/dashboard/components/edge-cells"
 import { FleetCells } from "@/features/dashboard/components/fleet-cells"
 import { StoreClock } from "@/features/dashboard/components/store-clock"
+import { STORE_TIME_LABEL } from "@/lib/time/zone"
 import { cn } from "@/lib/utils"
 
 type Tone = "default" | "success" | "warning" | "destructive" | "muted"
@@ -106,7 +107,7 @@ export function CommandStrip() {
         icon={<Clock aria-hidden="true" className="size-4" />}
         label="store clock"
         value={<StoreClock />}
-        note="utc · live"
+        note={`${STORE_TIME_LABEL} · live`}
       />
       <Suspense fallback={<FleetFallback />}>
         <FleetCells />

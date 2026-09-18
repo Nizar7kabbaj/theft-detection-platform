@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAlertDetail } from "@/features/alerts/hooks/use-alert-detail"
 import { DECISION_LABEL, formatTimestamp } from "@/features/alerts/lib/format"
 import type { AlertDetail } from "@/features/alerts/schemas/alert"
+import { STORE_TIME_LABEL } from "@/lib/time/zone"
 
 const LABEL_CLASS = "font-mono text-[10px] text-muted-foreground uppercase tracking-[0.16em]"
 const TIME_CLASS = "font-mono text-foreground text-xs tabular-nums"
@@ -42,7 +43,9 @@ export function AuditTrail({ alert }: { alert: AlertDetail }) {
           {entries.map((entry) => (
             <li className="flex flex-col gap-0.5" key={`${entry.label}-${entry.at}`}>
               <span className={LABEL_CLASS}>{entry.label}</span>
-              <span className={TIME_CLASS}>{formatTimestamp(entry.at)} utc</span>
+              <span className={TIME_CLASS}>
+                {formatTimestamp(entry.at)} {STORE_TIME_LABEL}
+              </span>
               {entry.who === null ? null : <span className={WHO_CLASS}>by {entry.who}</span>}
             </li>
           ))}

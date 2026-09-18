@@ -1,5 +1,6 @@
 "use client"
 import dynamic from "next/dynamic"
+import type { DurationSpread } from "@/features/analytics/schemas/breakdown"
 import type {
   AlertBucket,
   BucketUnit,
@@ -7,6 +8,8 @@ import type {
 } from "@/features/analytics/schemas/timeseries"
 
 const SKELETON_CLASS = "h-64 w-full animate-pulse rounded-sm bg-muted motion-reduce:animate-none"
+const DONUT_SKELETON_CLASS =
+  "mx-auto aspect-square w-full max-w-64 animate-pulse rounded-full bg-muted motion-reduce:animate-none"
 
 const AlertChart = dynamic(
   () => import("@/features/analytics/components/analytics-charts").then((m) => m.AlertVolumeChart),
@@ -21,6 +24,14 @@ const Throughput = dynamic(
   {
     ssr: false,
     loading: () => <div className={SKELETON_CLASS} />,
+  },
+)
+
+const Donut = dynamic(
+  () => import("@/features/analytics/components/analytics-charts").then((m) => m.DurationDonut),
+  {
+    ssr: false,
+    loading: () => <div className={DONUT_SKELETON_CLASS} />,
   },
 )
 
@@ -44,4 +55,8 @@ export function ThroughputChartLazy({
   unit: BucketUnit
 }) {
   return <Throughput alerts={alerts} decisions={decisions} unit={unit} />
+}
+
+export function DurationDonutLazy({ duration }: { duration: DurationSpread }) {
+  return <Donut duration={duration} />
 }

@@ -11,9 +11,13 @@ from app.repositories.stats_repository import STORE_ZONE, StatsRepository, store
 from app.schemas.stats import (
     AlertBucket,
     BucketUnit,
+    CameraTally,
     DecisionBucket,
+    DurationSpread,
+    StatsBreakdownResponse,
     StatsResponse,
     StatsTimeseriesResponse,
+    TypeTally,
 )
 
 _HIGH = ["SEVERITY_WARNING", "SEVERITY_CRITICAL"]
@@ -31,6 +35,8 @@ _DECISION_FIELDS = {
     "DECISION_UNSURE": "unsure",
 }
 _STEP = {BucketUnit.HOUR: timedelta(hours=1), BucketUnit.DAY: timedelta(days=1)}
+_UNASSIGNED_CAMERA = "unassigned"
+_UNSPECIFIED_TYPE = "ALERT_TYPE_UNSPECIFIED"
 
 
 def _truncate(moment: datetime, unit: BucketUnit) -> datetime:
@@ -38,6 +44,15 @@ def _truncate(moment: datetime, unit: BucketUnit) -> datetime:
     if unit is BucketUnit.DAY:
         return floored.replace(hour=0)
     return floored
+
+
+def _tally(rows: list[dict], fallback: str) -> list[tuple[str, int]]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        key = row["_id"]
+        name = key if isinstance(key, str) and key else fallback
+        counts[name] = counts.get(name, 0) + row["count"]
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))
 
 
 class StatsUseCase:
@@ -127,6 +142,47 @@ class StatsUseCase:
 
         cached = await get_or_set(self._redis, key, self.TIMESERIES_TTL, loader)
         return StatsTimeseriesResponse.model_validate(cached)
+
+    async def breakdown(
+        self,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        unit: BucketUnit = BucketUnit.HOUR,
+    ) -> StatsBreakdownResponse:
+        begin, stop = self._resolve_window(start, end, unit)
+        key = make_list_key(
+            "stats:breakdown",
+            {"start": begin.isoformat(), "end": stop.isoformat()},
+        )
+
+        async def loader() -> dict:
+            created, decided = await asyncio.gather(
+                self._repo.created_breakdown(begin, stop),
+                self._repo.decided_breakdown(begin, stop),
+            )
+            median = decided["median"]
+            alert_types = _tally(created["alert_types"], _UNSPECIFIED_TYPE)
+            cameras = _tally(created["cameras"], _UNASSIGNED_CAMERA)
+            return StatsBreakdownResponse(
+                start=begin,
+                end=stop,
+                raised=created["raised"],
+                decided=decided["decided"],
+                median_decision_seconds=None if median is None else max(0, round(median)),
+                duration=DurationSpread(
+                    under_60=decided["under_60"],
+                    under_300=decided["under_300"],
+                    under_900=decided["under_900"],
+                    over_900=decided["over_900"],
+                ),
+                alert_types=[
+                    TypeTally(alert_type=name, count=count) for name, count in alert_types
+                ],
+                cameras=[CameraTally(camera_id=name, count=count) for name, count in cameras],
+            ).model_dump(mode="json")
+
+        cached = await get_or_set(self._redis, key, self.TIMESERIES_TTL, loader)
+        return StatsBreakdownResponse.model_validate(cached)
 
     def _fill_alerts(
         self,

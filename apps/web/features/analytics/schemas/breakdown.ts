@@ -1,4 +1,10 @@
 import * as z from "zod/mini"
+import type { components } from "@/types/api"
+
+type DurationSpreadContract = components["schemas"]["DurationSpread"]
+type TypeTallyContract = components["schemas"]["TypeTally"]
+type CameraTallyContract = components["schemas"]["CameraTally"]
+type BreakdownContract = components["schemas"]["StatsBreakdownResponse"]
 
 const count = z.int().check(z.minimum(0))
 
@@ -33,3 +39,37 @@ export const statsBreakdownSchema = z.object({
   cameras: z.array(cameraTallySchema),
 })
 export type StatsBreakdown = z.output<typeof statsBreakdownSchema>
+
+type Concrete<T> = { [K in keyof T]-?: T[K] }
+type AssertNever<T extends never> = T
+type OnlyIn<Left, Right> = Exclude<keyof Left, keyof Right>
+type ChangedType<Contract, Schema> = {
+  [K in keyof Concrete<Contract>]: K extends keyof Concrete<Schema>
+    ? Concrete<Contract>[K] extends Concrete<Schema>[K]
+      ? never
+      : K
+    : never
+}[keyof Concrete<Contract>]
+
+export type DurationSpreadDrift = [
+  AssertNever<OnlyIn<DurationSpreadContract, DurationSpread>>,
+  AssertNever<OnlyIn<DurationSpread, DurationSpreadContract>>,
+  AssertNever<ChangedType<DurationSpreadContract, DurationSpread>>,
+]
+
+export type TypeTallyDrift = [
+  AssertNever<OnlyIn<TypeTallyContract, TypeTally>>,
+  AssertNever<OnlyIn<TypeTally, TypeTallyContract>>,
+  AssertNever<ChangedType<TypeTallyContract, TypeTally>>,
+]
+
+export type CameraTallyDrift = [
+  AssertNever<OnlyIn<CameraTallyContract, CameraTally>>,
+  AssertNever<OnlyIn<CameraTally, CameraTallyContract>>,
+  AssertNever<ChangedType<CameraTallyContract, CameraTally>>,
+]
+
+export type BreakdownDrift = [
+  AssertNever<OnlyIn<BreakdownContract, StatsBreakdown>>,
+  AssertNever<OnlyIn<StatsBreakdown, BreakdownContract>>,
+]

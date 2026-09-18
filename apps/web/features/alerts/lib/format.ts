@@ -1,10 +1,6 @@
 import type { AlertDetail, Decision } from "@/features/alerts/schemas/alert"
 import { STORE_TIME_ZONE } from "@/lib/time/zone"
 
-const ID_FULL_LENGTH = 32
-const ID_HEAD_LENGTH = 5
-const ID_TAIL_LENGTH = 8
-
 export const SEVERITY_LABEL: Record<AlertDetail["severity"], string> = {
   SEVERITY_UNSPECIFIED: "unspecified",
   SEVERITY_INFO: "info",
@@ -40,13 +36,6 @@ export function classifierStateLabel(value: string | null | undefined): string {
     return "no state recorded"
   }
   return value.replace("INFERENCE_STATE_", "").toLowerCase().replace(/_/g, " ")
-}
-
-export function shortAlertId(value: string): string {
-  if (value.length <= ID_FULL_LENGTH) {
-    return value
-  }
-  return `${value.slice(0, ID_HEAD_LENGTH)}…${value.slice(-ID_TAIL_LENGTH)}`
 }
 
 export function formatTimestamp(value: string): string {
