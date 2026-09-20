@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   experimental: {
     taint: true,
     staleTimes: {
-      dynamic: 30,
+      dynamic: 0,
       static: 180,
     },
   },
