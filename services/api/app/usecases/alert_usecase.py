@@ -254,6 +254,10 @@ class AlertUseCase:
         doc["acknowledged"] = False
         doc["decision"] = Decision.DECISION_UNSPECIFIED.value
         created = await self._repo.create(doc)
+        await invalidate_prefix(self._redis, self.LIST_PREFIX)
+        await invalidate(self._redis, self.CAMERA_FACET_KEY)
+        response = _to_response(created)
+        await self._publish("created", response)
         dispatched = await self._dispatch(payload)
         if not dispatched:
             updated = await self._repo.update(
@@ -261,11 +265,9 @@ class AlertUseCase:
                 {"dispatch_failed": True},
             )
             if updated is not None:
-                created = updated
-        await invalidate_prefix(self._redis, self.LIST_PREFIX)
-        await invalidate(self._redis, self.CAMERA_FACET_KEY)
-        response = _to_response(created)
-        await self._publish("created", response)
+                await invalidate_prefix(self._redis, self.LIST_PREFIX)
+                response = _to_response(updated)
+                await self._publish("updated", response)
         return response
 
     async def list(

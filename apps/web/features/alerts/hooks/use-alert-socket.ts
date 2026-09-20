@@ -23,7 +23,7 @@ export function useAlertSocket(filters: AlertFilters): AlertSocketState {
         setPendingCount((count) => count + 1)
         return
       }
-      if (envelope.event !== "acknowledged") {
+      if (envelope.event !== "acknowledged" && envelope.event !== "updated") {
         return
       }
       const parsed = alertResponseSchema.safeParse(envelope.data)
@@ -49,7 +49,7 @@ export function useAlertSocket(filters: AlertFilters): AlertSocketState {
         })
         return seen ? { ...current, pages } : current
       })
-      if (!seen) {
+      if (!seen && envelope.event === "acknowledged") {
         setPendingCount((count) => count + 1)
       }
     },
