@@ -17,6 +17,7 @@ from app.schemas.policy import (
     PolicyRuntime,
 )
 from app.services.audit_service import AuditClient
+from app.services.policy_sync import POLICY_CHANNEL, POLICY_CURRENT_KEY, policy_message
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,9 @@ def _diff(before: PolicyPayload, after: PolicyPayload) -> list[PolicyChange]:
 
 
 class PolicyUseCase:
-    CURRENT_KEY = "policy:detection:current"
+    CURRENT_KEY = POLICY_CURRENT_KEY
     APPLIED_KEY = "policy:detection:applied"
-    CHANNEL = "policy:detection"
+    CHANNEL = POLICY_CHANNEL
     RESOURCE_ID = "detection_policy"
 
     def __init__(
@@ -142,12 +143,7 @@ class PolicyUseCase:
         )
 
     async def _publish(self, version: int, policy: PolicyPayload) -> None:
-        body = PolicyResponse(
-            version=version,
-            policy=policy,
-            changed_by="",
-            changed_at=datetime.now(UTC),
-        ).model_dump_json(exclude={"runtime", "changed_by", "changed_at"})
+        body = policy_message(version, policy)
         try:
             await self._stream.set(self.CURRENT_KEY, body)
             await self._stream.publish(self.CHANNEL, body)

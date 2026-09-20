@@ -40,6 +40,7 @@ from app.services.audit_drain import run_drain
 from app.services.broadcast_service import BroadcastService
 from app.services.camera_reconcile import run_reconcile
 from app.services.frame_stream import ViewerLimit
+from app.services.policy_sync import run_policy_sync
 from app.services.revocation_service import RevocationService
 from app.services.system_stats import open_prometheus_client
 
@@ -76,6 +77,9 @@ async def lifespan(app: FastAPI):
         )
     )
     app.state.revocation_redis = await open_pubsub_redis()
+    app.state.policy_sync_task = asyncio.create_task(
+        run_policy_sync(get_database(), app.state.stream_redis, app.state.reconcile_stop)
+    )
     app.state.revocations = RevocationService(app.state.revocation_redis)
     await app.state.revocations.start()
     credentials = grpc.ssl_channel_credentials(
@@ -119,6 +123,7 @@ async def lifespan(app: FastAPI):
     yield
     app.state.reconcile_stop.set()
     await app.state.reconcile_task
+    await app.state.policy_sync_task
     app.state.audit_drain_stop.set()
     await app.state.audit_drain_task
     await app.state.audit_channel.close(grace=2)
