@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class ConcealmentPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    grab_ratio: float = Field(default=0.6, ge=0.1, le=1.5)
+    grab_ratio: float = Field(default=0.15, ge=0.1, le=1.5)
     missing_seconds: float = Field(default=1.0, ge=0.2, le=5.0)
     keypoint_confidence: float = Field(default=0.5, ge=0.1, le=0.95)
     expiry_seconds: float = Field(default=10.0, ge=2.0, le=60.0)

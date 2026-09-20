@@ -183,7 +183,7 @@ export const CLASSIFIER_FIELDS: readonly PolicyField[] = [
 
 export const DEFAULT_POLICY: PolicyPayload = {
   concealment: {
-    grab_ratio: 0.6,
+    grab_ratio: 0.15,
     missing_seconds: 1,
     keypoint_confidence: 0.5,
     expiry_seconds: 10,

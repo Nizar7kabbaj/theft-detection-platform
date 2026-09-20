@@ -88,6 +88,7 @@ class LSTMDetector:
         object_classes: list[int],
         object_confidence: float,
         grab_ratio: float,
+        move_ratio: float,
         missing_seconds: float,
         keypoint_confidence: float,
         expiry_seconds: float,
@@ -111,6 +112,7 @@ class LSTMDetector:
         self._clips = ClipBuffer(max_frames=clip_max_frames)
         self._concealment = ConcealmentTracker(
             grab_ratio=grab_ratio,
+            move_ratio=move_ratio,
             missing_seconds=missing_seconds,
             keypoint_confidence=keypoint_confidence,
             expiry_seconds=expiry_seconds,
@@ -230,14 +232,25 @@ class LSTMDetector:
             height, width = frame.shape[:2]
             self._clips.append(camera_id, captured_at, image_bytes)
             persons = self._track_persons(frame, camera_id, frame_index) if run_pose else []
-            objects = self._track_objects(frame)
-            concealments = self._concealment.observe(
+            detections = self._detect_objects(frame)
+            object_ids, concealments = self._concealment.observe(
                 camera_id=camera_id,
                 frame_index=frame_index,
                 captured_at=captured_at,
-                persons=[(person.track_id, person.keypoints) for person in persons],
-                objects=[(obj.track_id, obj.class_name, obj.bbox) for obj in objects],
+                persons=[(person.track_id, person.keypoints, person.bbox) for person in persons],
+                objects=[(class_name, bbox) for class_name, bbox, _confidence in detections],
             )
+            objects = [
+                TrackedObjectResult(
+                    track_id=object_id,
+                    class_name=class_name,
+                    bbox=bbox,
+                    confidence=confidence,
+                )
+                for object_id, (class_name, bbox, confidence) in zip(
+                    object_ids, detections, strict=True
+                )
+            ]
             snapshots: dict[int, str] = {}
             clips: dict[int, str] = {}
             for verdict in concealments:
@@ -396,6 +409,40 @@ class LSTMDetector:
                 )
             )
         return out
+
+    def _detect_objects(
+        self, frame: np.ndarray
+    ) -> list[tuple[str, tuple[float, float, float, float], float]]:
+        if self._objects is None:
+            raise RuntimeError("models not loaded")
+        results = self._objects.predict(
+            frame,
+            classes=self._object_classes,
+            conf=self._object_confidence,
+            verbose=False,
+        )
+        if not results:
+            return []
+        result = results[0]
+        if result.boxes is None or len(result.boxes) == 0:
+            return []
+        xyxy = result.boxes.xyxy.cpu().numpy()
+        confs = result.boxes.conf.cpu().numpy()
+        class_ids = result.boxes.cls.int().cpu().numpy()
+        names = result.names
+        return [
+            (
+                str(names.get(int(class_ids[index]), "unknown")),
+                (
+                    float(xyxy[index][0]),
+                    float(xyxy[index][1]),
+                    float(xyxy[index][2]),
+                    float(xyxy[index][3]),
+                ),
+                float(confs[index]),
+            )
+            for index in range(len(xyxy))
+        ]
 
     def close(self) -> None:
         if self._store is not None:

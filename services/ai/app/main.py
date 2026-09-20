@@ -73,6 +73,7 @@ async def _serve() -> None:
         object_classes=settings.object_class_ids,
         object_confidence=settings.OBJECT_CONFIDENCE,
         grab_ratio=settings.CONCEALMENT_GRAB_RATIO,
+        move_ratio=settings.CONCEALMENT_MOVE_RATIO,
         missing_seconds=settings.CONCEALMENT_MISSING_SECONDS,
         keypoint_confidence=settings.CONCEALMENT_KEYPOINT_CONFIDENCE,
         expiry_seconds=settings.CONCEALMENT_EXPIRY_SECONDS,
