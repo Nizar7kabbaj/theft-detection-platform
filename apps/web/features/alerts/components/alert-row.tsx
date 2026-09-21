@@ -4,7 +4,7 @@ import { ChevronRight } from "lucide-react"
 import type { Route } from "next"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import type { AlertFilters } from "@/features/alerts/api/alert-keys"
 import { useAcknowledgeAlert } from "@/features/alerts/hooks/use-acknowledge-alert"
@@ -16,6 +16,7 @@ import {
   SEVERITY_CLASS,
   SEVERITY_LABEL,
 } from "@/features/alerts/lib/format"
+import { readOpened } from "@/features/alerts/lib/last-opened"
 import type { Alert } from "@/features/alerts/schemas/alert"
 
 const CELL_CLASS = "px-3 py-2.5 align-middle"
@@ -49,6 +50,14 @@ export function AlertRow({
 }) {
   const router = useRouter()
   const [frameFailed, setFrameFailed] = useState(false)
+  const rowRef = useRef<HTMLTableRowElement>(null)
+  const [recent, setRecent] = useState(false)
+  useEffect(() => {
+    if (readOpened() === alert._id) {
+      setRecent(true)
+      rowRef.current?.scrollIntoView({ block: "nearest" })
+    }
+  }, [alert._id])
   const mutation = useAcknowledgeAlert(alert._id, filters)
   const href = `/alerts/${alert._id}` as Route
 
@@ -72,10 +81,14 @@ export function AlertRow({
 
   return (
     <tr
-      className="group/row cursor-pointer border-border border-b transition-colors last:border-b-0 hover:bg-muted/30"
+      aria-current={recent ? "true" : undefined}
+      className={`group/row cursor-pointer border-border border-b transition-colors last:border-b-0 hover:bg-muted/30 ${recent ? "bg-muted/40" : ""}`}
       onClick={openDetail}
+      ref={rowRef}
     >
-      <td className={CELL_CLASS}>
+      <td
+        className={`${CELL_CLASS} border-l-2 ${recent ? "border-l-foreground" : "border-l-transparent"}`}
+      >
         {showFrame ? (
           <img
             alt={`frame from ${alert.camera_id}`}

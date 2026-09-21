@@ -17,6 +17,7 @@ import { DetailNav } from "@/features/alerts/components/detail-nav"
 import { EvidenceFrame } from "@/features/alerts/components/evidence-frame"
 import { EvidencePanel } from "@/features/alerts/components/evidence-panel"
 import { FactStrip } from "@/features/alerts/components/fact-strip"
+import { RememberOpened } from "@/features/alerts/components/remember-opened"
 import { VerdictPanel } from "@/features/alerts/components/verdict-panel"
 import { fetchIdentity } from "@/features/auth/api/identity-server"
 
@@ -55,6 +56,7 @@ export default async function AlertDetailPage({
         nextHref={next === undefined ? null : (`/alerts/${next._id}${search}` as Route)}
         previousHref={previous === undefined ? null : (`/alerts/${previous._id}${search}` as Route)}
       />
+      <RememberOpened alertId={alert._id} />
       <DetailHeader
         action={
           <div className="flex items-center gap-1">
