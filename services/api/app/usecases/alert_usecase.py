@@ -257,6 +257,7 @@ class AlertUseCase:
         created = await self._repo.create(doc)
         await invalidate_prefix(self._redis, self.LIST_PREFIX)
         await invalidate(self._redis, self.CAMERA_FACET_KEY)
+        await invalidate_prefix(self._redis, self.COUNT_PREFIX)
         response = _to_response(created)
         await self._publish("created", response)
         dispatched = await self._dispatch(payload)
@@ -427,6 +428,7 @@ class AlertUseCase:
         response = _to_response(updated)
         if acked_now:
             await invalidate_prefix(self._redis, self.LIST_PREFIX)
+            await invalidate_prefix(self._redis, self.COUNT_PREFIX)
             await self._publish("acknowledged", response)
             await self._audit.emit_alert_acknowledged(
                 alert_id=str(updated["_id"]),
@@ -440,6 +442,7 @@ class AlertUseCase:
             raise NotFoundError(f"alert {alert_id} not found")
         if changed:
             await invalidate_prefix(self._redis, self.LIST_PREFIX)
+            await invalidate_prefix(self._redis, self.COUNT_PREFIX)
             await self._publish("decided", _to_response(updated))
             await self._audit.emit_alert_acknowledged(
                 alert_id=str(updated["_id"]),
