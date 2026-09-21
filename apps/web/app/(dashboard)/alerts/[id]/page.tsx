@@ -57,7 +57,7 @@ export default async function AlertDetailPage({
       />
       <DetailHeader
         action={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
             <AcknowledgeButton alert={alert} />
             {canDelete ? <DeleteAlertButton alertId={alert._id} /> : null}
           </div>
