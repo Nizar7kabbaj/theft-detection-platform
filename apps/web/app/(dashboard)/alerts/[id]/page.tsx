@@ -10,6 +10,7 @@ import { fetchAlertDetail, fetchAlertPage } from "@/features/alerts/api/alerts-s
 import { AcknowledgeButton } from "@/features/alerts/components/acknowledge-button"
 import { AuditTrail } from "@/features/alerts/components/audit-trail"
 import { DecisionControls } from "@/features/alerts/components/decision-controls"
+import { DeleteAlertButton } from "@/features/alerts/components/delete-alert-button"
 import { DeliveryPanel } from "@/features/alerts/components/delivery-panel"
 import { DetailHeader } from "@/features/alerts/components/detail-header"
 import { DetailNav } from "@/features/alerts/components/detail-nav"
@@ -46,6 +47,7 @@ export default async function AlertDetailPage({
   const previous = position > 0 ? items[position - 1] : undefined
   const next = position >= 0 ? items[position + 1] : undefined
   const canDecide = identity.permissions.includes("alert:acknowledge")
+  const canDelete = identity.permissions.includes("alert:delete")
   return (
     <section className="flex flex-1 flex-col gap-5 pb-4">
       <DetailNav
@@ -53,7 +55,15 @@ export default async function AlertDetailPage({
         nextHref={next === undefined ? null : (`/alerts/${next._id}${search}` as Route)}
         previousHref={previous === undefined ? null : (`/alerts/${previous._id}${search}` as Route)}
       />
-      <DetailHeader action={<AcknowledgeButton alert={alert} />} alert={alert} />
+      <DetailHeader
+        action={
+          <div className="flex items-center gap-3">
+            <AcknowledgeButton alert={alert} />
+            {canDelete ? <DeleteAlertButton alertId={alert._id} /> : null}
+          </div>
+        }
+        alert={alert}
+      />
       <FactStrip alert={alert} />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <EvidenceFrame alert={alert} />

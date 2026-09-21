@@ -166,6 +166,18 @@ async def acknowledge_alert(
     return await usecase.acknowledge(alert_id, user.user_id)
 
 
+@router.delete(
+    "/{alert_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_alert(
+    alert_id: str,
+    user: CurrentUser = Depends(require_permission(Permission.ALERT_DELETE)),
+    usecase: AlertUseCase = Depends(get_alert_usecase),
+) -> None:
+    await usecase.delete(alert_id, user.user_id)
+
+
 @router.patch(
     "/{alert_id}/decision",
     response_model=AlertDetail,

@@ -58,3 +58,7 @@ export function fetchAlertDetailClient(id: string, signal?: AbortSignal): Promis
   }
   return apiRequest(path, { schema: alertDetailSchema, signal })
 }
+
+export function deleteAlert(id: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/alerts/${encodeURIComponent(id)}`, { method: "DELETE" })
+}

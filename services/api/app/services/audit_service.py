@@ -119,6 +119,18 @@ def config_changed(
     return _freeze(event, occurred_at)
 
 
+def alert_deleted(alert_id: str, actor_user_id: str) -> PreparedEvent:
+    occurred_at = datetime.now(UTC)
+    event = _new_event(actor_user_id, common_pb2.SEVERITY_NOTICE, occurred_at)
+    action = event.admin_action
+    action.actor_user_id = actor_user_id
+    action.action = pb.ADMIN_ACTION_KIND_DELETE
+    action.target_kind = pb.ADMIN_TARGET_KIND_ALERT
+    action.target_id = alert_id
+    action.reason_code = pb.ADMIN_REASON_CODE_ROUTINE_ADMINISTRATION
+    return _freeze(event, occurred_at)
+
+
 def events_shed(dropped: int) -> PreparedEvent:
     occurred_at = datetime.now(UTC)
     event = _new_event("", common_pb2.SEVERITY_ERROR, occurred_at)
@@ -178,6 +190,17 @@ class AuditClient:
             field_path=field_path,
             before_value=before_value,
             after_value=after_value,
+        )
+        await self._enqueue(prepared)
+
+    async def emit_alert_deleted(
+        self,
+        alert_id: str,
+        actor_user_id: str,
+    ) -> None:
+        prepared = alert_deleted(
+            alert_id=alert_id,
+            actor_user_id=actor_user_id,
         )
         await self._enqueue(prepared)
 

@@ -199,6 +199,7 @@ def _to_detail(doc: dict[str, Any]) -> AlertDetail:
 class AlertUseCase:
     LIST_PREFIX = "cache:alerts:list:"
     CAMERA_FACET_KEY = "cache:alerts:cameras"
+    COUNT_PREFIX = "cache:alerts:count:"
     DISPATCH_ATTEMPTS = 3
     DISPATCH_BACKOFF_SECONDS = 0.5
     TTL = 30
@@ -445,3 +446,13 @@ class AlertUseCase:
                 actor_user_id=actor_id,
             )
         return _to_detail(updated)
+
+    async def delete(self, alert_id: str, actor_id: str) -> None:
+        doc = await self._repo.get(alert_id)
+        if doc is None or not await self._repo.delete(alert_id):
+            raise NotFoundError(f"alert {alert_id} not found")
+        await invalidate_prefix(self._redis, self.LIST_PREFIX)
+        await invalidate_prefix(self._redis, self.COUNT_PREFIX)
+        await invalidate(self._redis, self.CAMERA_FACET_KEY)
+        await self._publish("deleted", _to_response(doc))
+        await self._audit.emit_alert_deleted(alert_id=str(doc["_id"]), actor_user_id=actor_id)

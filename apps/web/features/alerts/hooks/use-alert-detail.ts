@@ -1,7 +1,11 @@
 "use client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { alertKeys } from "@/features/alerts/api/alert-keys"
-import { acknowledgeAlert, fetchAlertDetailClient } from "@/features/alerts/api/alerts-client"
+import {
+  acknowledgeAlert,
+  deleteAlert,
+  fetchAlertDetailClient,
+} from "@/features/alerts/api/alerts-client"
 import type { AlertDetail } from "@/features/alerts/schemas/alert"
 import { ALERT_DETAIL_GC_MS, ALERT_DETAIL_STALE_MS } from "@/lib/api/query-config"
 
@@ -31,6 +35,17 @@ export function useAcknowledgeDetail(id: string) {
         }
       })
       void queryClient.invalidateQueries({ queryKey: alertKeys.all })
+    },
+  })
+}
+
+export function useDeleteAlert(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => deleteAlert(id),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: alertKeys.detail(id) })
+      void queryClient.invalidateQueries({ queryKey: alertKeys.all, refetchType: "none" })
     },
   })
 }

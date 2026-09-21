@@ -12,6 +12,7 @@ class Permission(StrEnum):
     ALERT_READ = "alert:read"
     ALERT_WRITE = "alert:write"
     ALERT_ACKNOWLEDGE = "alert:acknowledge"
+    ALERT_DELETE = "alert:delete"
     STATS_READ = "stats:read"
     AUDIT_QUERY = "audit:query"
     SETTINGS_READ = "settings:read"
