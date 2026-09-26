@@ -1,0 +1,127 @@
+{{- range $name, $raw := .Values.components }}
+{{- if $raw.enabled }}
+{{- $c := include "theft.component" (dict "root" $ "comp" $raw) | fromYaml }}
+{{- $hasEnv := or (and $c.otel $c.otel.enabled) $c.env }}
+{{- $res := deepCopy ($c.resources | default dict) }}
+{{- if and $c.gpu $c.gpu.enabled }}
+{{- $lim := $res.limits | default dict }}
+{{- $_ := set $lim "nvidia.com/gpu" ($c.gpu.count | default 1) }}
+{{- $_ := set $res "limits" $lim }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  replicas: {{ $c.replicas }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: {{ $c.strategy.type }}
+  selector:
+    matchLabels:
+      {{- include "theft.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 8 }}
+      annotations:
+        checksum/env: {{ dict "env" $c.env "otel" $c.otel "global" $.Values.global | toJson | sha256sum }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: {{ $c.automountServiceAccountToken }}
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: {{ $c.terminationGracePeriodSeconds }}
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $c.podSecurityContext | nindent 8 }}
+      {{- with $c.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "theft.image" (dict "root" $ "image" $c.image) }}
+          imagePullPolicy: {{ $.Values.global.image.pullPolicy }}
+          {{- with $c.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $c.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $c.ports }}
+          ports:
+            {{- range . }}
+            - name: {{ .name }}
+              containerPort: {{ .containerPort }}
+              protocol: TCP
+            {{- end }}
+          {{- end }}
+          {{- if $hasEnv }}
+          envFrom:
+            - configMapRef:
+                name: {{ $name }}-env
+          {{- end }}
+          securityContext:
+            {{- toYaml $c.containerSecurityContext | nindent 12 }}
+          {{- with $res }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $c.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $c.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $c.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- range $i, $p := $c.writablePaths }}
+            - name: writable-{{ $i }}
+              mountPath: {{ $p }}
+            {{- end }}
+            {{- if $c.secret.enabled }}
+            - name: secrets
+              mountPath: {{ $c.secret.mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- with $c.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- range $i, $p := $c.writablePaths }}
+        - name: writable-{{ $i }}
+          emptyDir: {}
+        {{- end }}
+        {{- if $c.secret.enabled }}
+        - name: secrets
+          secret:
+            secretName: {{ $c.secret.name }}
+            defaultMode: 0440
+        {{- end }}
+        {{- with $c.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}
+{{- end }}

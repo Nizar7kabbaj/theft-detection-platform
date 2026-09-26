@@ -1,0 +1,15 @@
+global:
+  environment: dev
+  image:
+    registry: ""
+    pullPolicy: IfNotPresent
+
+components:
+  ai:
+    enabled: false
+    image:
+      repository: theft-ai
+  detect-gate:
+    enabled: false
+    image:
+      repository: theft-detect-gate

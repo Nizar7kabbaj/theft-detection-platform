@@ -1,0 +1,8 @@
+global:
+  environment: prod
+  image:
+    registry: ""
+    pullPolicy: IfNotPresent
+
+defaults:
+  replicas: 2
