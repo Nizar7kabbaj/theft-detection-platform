@@ -3,6 +3,7 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-yaml
+        exclude: ^deploy/helm/[^/]+/templates/
       - id: trailing-whitespace
         exclude: ^config/(mongodb/mongod\.conf|tempo/tempo\.yml)$
       - id: end-of-file-fixer

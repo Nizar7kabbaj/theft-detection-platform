@@ -1,0 +1,11 @@
+apiVersion: v2
+name: theft-detection-platform
+description: Retail shoplifting detection services
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.37.0-0"
+sources:
+  - https://github.com/Nizar7kabbaj/theft-detection-platform
+maintainers:
+  - name: Nizar Kabbaj

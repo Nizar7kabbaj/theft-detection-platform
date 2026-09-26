@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["global", "defaults", "components"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment", "image", "otel"],
+      "properties": {
+        "environment": { "type": "string", "enum": ["local", "dev", "prod"] },
+        "storeTimeZone": { "type": "string", "minLength": 1 },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "registry": { "type": "string" },
+            "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+          }
+        },
+        "imagePullSecrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": { "name": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "otel": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "endpoint": { "type": "string", "pattern": "^https?://" },
+            "protocol": { "type": "string", "enum": ["grpc", "http/protobuf", "http/json"] },
+            "tracesExporter": { "type": "string" },
+            "metricsExporter": { "type": "string" },
+            "logsExporter": { "type": "string" },
+            "pythonLogCorrelation": { "type": "string", "enum": ["true", "false"] },
+            "pythonLogFormat": { "type": "string" }
+          }
+        }
+      }
+    },
+    "defaults": { "$ref": "#/$defs/podSettings", "unevaluatedProperties": false },
+    "components": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$" },
+      "additionalProperties": { "$ref": "#/$defs/component" }
+    }
+  },
+  "$defs": {
+    "podSettings": {
+      "type": "object",
+      "properties": {
+        "replicas": { "type": "integer", "minimum": 0 },
+        "strategy": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["RollingUpdate", "Recreate"] }
+          }
+        },
+        "terminationGracePeriodSeconds": { "type": "integer", "minimum": 0 },
+        "automountServiceAccountToken": { "type": "boolean" },
+        "podSecurityContext": { "$ref": "#/$defs/podSecurityContext" },
+        "containerSecurityContext": { "$ref": "#/$defs/containerSecurityContext" },
+        "writablePaths": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^/" },
+          "uniqueItems": true
+        },
+        "resources": { "type": "object" },
+        "nodeSelector": { "type": "object", "additionalProperties": { "type": "string" } },
+        "tolerations": { "type": "array" },
+        "affinity": { "type": "object" },
+        "livenessProbe": { "type": "object" },
+        "readinessProbe": { "type": "object" },
+        "startupProbe": { "type": "object" }
+      }
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "properties": {
+        "runAsNonRoot": { "const": true },
+        "runAsUser": { "type": "integer", "minimum": 1 },
+        "runAsGroup": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "containerSecurityContext": {
+      "type": "object",
+      "properties": {
+        "privileged": { "const": false },
+        "allowPrivilegeEscalation": { "const": false },
+        "readOnlyRootFilesystem": { "type": "boolean" }
+      }
+    },
+    "component": {
+      "type": "object",
+      "allOf": [{ "$ref": "#/$defs/podSettings" }],
+      "unevaluatedProperties": false,
+      "required": ["enabled", "image"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "tag": { "type": "string" },
+            "digest": { "type": "string", "pattern": "^(sha256:[a-f0-9]{64})?$" }
+          }
+        },
+        "otel": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "serviceName": { "type": "string", "minLength": 1 }
+          }
+        },
+        "command": { "type": "array", "items": { "type": "string" } },
+        "args": { "type": "array", "items": { "type": "string" } },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "containerPort"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z]([a-z0-9-]{0,13}[a-z0-9])?$" },
+              "containerPort": { "type": "integer", "minimum": 1, "maximum": 65535 }
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "ports": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "port", "targetPort"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+                  "targetPort": { "type": ["string", "integer"] }
+                }
+              }
+            }
+          }
+        },
+        "env": { "type": "object", "additionalProperties": { "type": "string" } },
+        "secret": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "name": { "type": "string", "minLength": 1 },
+            "mountPath": { "type": "string", "pattern": "^/" }
+          }
+        },
+        "extraVolumes": { "type": "array" },
+        "extraVolumeMounts": { "type": "array" },
+        "gpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "count": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  }
+}

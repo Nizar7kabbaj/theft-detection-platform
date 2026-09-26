@@ -1,0 +1,365 @@
+global:
+  environment: local
+  storeTimeZone: Africa/Casablanca
+  image:
+    registry: ""
+    pullPolicy: IfNotPresent
+  imagePullSecrets: []
+  otel:
+    endpoint: http://theft-alloy:4318
+    protocol: http/protobuf
+    tracesExporter: otlp
+    metricsExporter: prometheus
+    logsExporter: none
+    pythonLogCorrelation: "true"
+    pythonLogFormat: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
+
+defaults:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  terminationGracePeriodSeconds: 30
+  automountServiceAccountToken: false
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  writablePaths:
+    - /tmp
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  livenessProbe: {}
+  readinessProbe: {}
+  startupProbe: {}
+
+components:
+  backend:
+    enabled: true
+    image:
+      repository: theft-backend
+      tag: dev
+      digest: ""
+    otel:
+      enabled: true
+      serviceName: theft-backend
+    ports:
+      - name: http
+        containerPort: 8000
+      - name: metrics
+        containerPort: 9464
+    service:
+      enabled: true
+      ports:
+        - name: http
+          port: 8000
+          targetPort: http
+    env:
+      PROMETHEUS_EXPORTER_PORT: "9464"
+      STORE_TIMEZONE: "{{ .Values.global.storeTimeZone }}"
+    secret:
+      enabled: true
+      name: backend-secrets
+      mountPath: /run/secrets
+    extraVolumes: []
+    extraVolumeMounts: []
+    gpu:
+      enabled: false
+
+  web:
+    enabled: true
+    image:
+      repository: theft-detection-platform-web
+      tag: latest
+      digest: ""
+    otel:
+      enabled: false
+    ports:
+      - name: http
+        containerPort: 3000
+    service:
+      enabled: true
+      ports:
+        - name: http
+          port: 3000
+          targetPort: http
+    env:
+      NODE_ENV: production
+      API_BASE_URL: http://backend:8000
+      AUTH_BASE_URL: http://auth:8000
+    secret:
+      enabled: false
+    extraVolumes: []
+    extraVolumeMounts: []
+    gpu:
+      enabled: false
+
+  auth:
+    enabled: true
+    image:
+      repository: auth
+      tag: dev
+      digest: ""
+    otel:
+      enabled: false
+    terminationGracePeriodSeconds: 20
+    ports:
+      - name: http
+        containerPort: 8000
+      - name: grpc
+        containerPort: 50053
+    service:
+      enabled: true
+      ports:
+        - name: http
+          port: 8000
+          targetPort: http
+        - name: grpc
+          port: 50053
+          targetPort: grpc
+    env:
+      AUTH_HTTP_PORT: "8000"
+      AUTH_GRPC_PORT: "50053"
+      AUTH_TRUSTED_PROXIES: '["127.0.0.0/8","::1/128"]'
+    secret:
+      enabled: true
+      name: auth-secrets
+      mountPath: /run/secrets
+    extraVolumes: []
+    extraVolumeMounts: []
+    gpu:
+      enabled: false
+
+  audit:
+    enabled: true
+    image:
+      repository: audit
+      tag: dev
+      digest: ""
+    otel:
+      enabled: true
+      serviceName: audit
+    ports:
+      - name: grpc
+        containerPort: 50054
+    service:
+      enabled: true
+      ports:
+        - name: grpc
+          port: 50054
+          targetPort: grpc
+    env:
+      AUDIT_GRPC_PORT: "50054"
+    secret:
+      enabled: true
+      name: audit-secrets
+      mountPath: /run/secrets
+    extraVolumes: []
+    extraVolumeMounts: []
+    gpu:
+      enabled: false
+
+  notification:
+    enabled: true
+    image:
+      repository: notification-server
+      tag: dev
+      digest: ""
+    otel:
+      enabled: true
+      serviceName: notification
+    ports:
+      - name: grpc
+        containerPort: 50052
+      - name: metrics
+        containerPort: 9464
+    service:
+      enabled: true
+      ports:
+        - name: grpc
+          port: 50052
+          targetPort: grpc
+    env:
+      PROMETHEUS_EXPORTER_PORT: "9464"
+    secret:
+      enabled: true
+      name: notification-secrets
+      mountPath: /run/secrets
+    extraVolumes: []
+    extraVolumeMounts: []
+    gpu:
+      enabled: false
+
+  notification-worker:
+    enabled: true
+    image:
+      repository: notification-worker
+      tag: dev
+      digest: ""
+    otel:
+      enabled: true
+      serviceName: notification-worker
+    command:
+      - celery
+      - -A
+      - app.worker.bootstrap
+      - worker
+      - --loglevel=INFO
+      - --pool=solo
+      - --concurrency=1
+    ports:
+      - name: metrics
+        containerPort: 9465
+    service:
+      enabled: false
+    env:
+      PROMETHEUS_EXPORTER_PORT: "9465"
+    secret:
+      enabled: true
+      name: notification-worker-secrets
+      mountPath: /run/secrets
+    extraVolumes: []
+    extraVolumeMounts: []
+    gpu:
+      enabled: false
+
+  notification-beat:
+    enabled: true
+    replicas: 1
+    strategy:
+      type: Recreate
+    image:
+      repository: notification-worker
+      tag: dev
+      digest: ""
+    otel:
+      enabled: true
+      serviceName: notification-beat
+    command:
+      - celery
+      - -A
+      - app.worker.bootstrap
+      - beat
+      - --loglevel=INFO
+      - --schedule=/tmp/celerybeat-schedule
+      - --pidfile=/tmp/celerybeat.pid
+    ports:
+      - name: metrics
+        containerPort: 9466
+    service:
+      enabled: false
+    env:
+      PROMETHEUS_EXPORTER_PORT: "9466"
+    secret:
+      enabled: true
+      name: notification-beat-secrets
+      mountPath: /run/secrets
+    extraVolumes: []
+    extraVolumeMounts: []
+    gpu:
+      enabled: false
+
+  ai:
+    enabled: true
+    image:
+      repository: theft-ai
+      tag: dev
+      digest: ""
+    otel:
+      enabled: true
+      serviceName: theft-ai
+    ports:
+      - name: grpc
+        containerPort: 50051
+      - name: metrics
+        containerPort: 9464
+    service:
+      enabled: true
+      ports:
+        - name: grpc
+          port: 50051
+          targetPort: grpc
+    env:
+      PROMETHEUS_EXPORTER_PORT: "9464"
+    secret:
+      enabled: true
+      name: ai-secrets
+      mountPath: /run/secrets
+    extraVolumes: []
+    extraVolumeMounts: []
+    gpu:
+      enabled: true
+      count: 1
+
+  camera:
+    enabled: false
+    image:
+      repository: theft-camera
+      tag: dev
+      digest: ""
+    otel:
+      enabled: true
+      serviceName: theft-camera
+    writablePaths:
+      - /tmp
+      - /app/run
+    ports:
+      - name: metrics
+        containerPort: 9464
+    service:
+      enabled: false
+    env:
+      PROMETHEUS_EXPORTER_PORT: "9464"
+      CAMERA_ID: cam-a
+      FRAME_WIDTH: "1280"
+      FRAME_HEIGHT: "720"
+      AI_HOST: ai
+      AI_PORT: "50051"
+    secret:
+      enabled: true
+      name: camera-secrets
+      mountPath: /run/secrets
+    extraVolumes: []
+    extraVolumeMounts: []
+    gpu:
+      enabled: false
+
+  detect-gate:
+    enabled: true
+    image:
+      repository: theft-detect-gate
+      tag: dev
+      digest: ""
+    otel:
+      enabled: true
+      serviceName: theft-detect-gate
+    ports:
+      - name: metrics
+        containerPort: 9464
+    service:
+      enabled: false
+    env:
+      PROMETHEUS_EXPORTER_PORT: "9464"
+      CAMERA_ID: cam-a
+      SESSION_ID: "1"
+      AI_HOST: ai
+      AI_PORT: "50051"
+    secret:
+      enabled: true
+      name: detect-gate-secrets
+      mountPath: /run/secrets
+    extraVolumes: []
+    extraVolumeMounts: []
+    gpu:
+      enabled: true
+      count: 1

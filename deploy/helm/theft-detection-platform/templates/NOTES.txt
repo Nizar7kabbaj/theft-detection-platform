@@ -1,0 +1,11 @@
+{{ .Chart.Name }} {{ .Chart.AppVersion }} in namespace {{ .Release.Namespace }} ({{ .Values.global.environment }})
+
+enabled components:
+{{- range $name, $c := .Values.components }}
+{{- if $c.enabled }}
+  {{ $name }}{{ if $c.secret.enabled }}  needs secret {{ $c.secret.name }}{{ end }}
+{{- end }}
+{{- end }}
+
+check the rollout:
+  kubectl -n {{ .Release.Namespace }} get pods

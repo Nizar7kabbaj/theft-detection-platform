@@ -1,0 +1,25 @@
+{{- range $name, $comp := .Values.components }}
+{{- if $comp.enabled }}
+{{- $env := dict }}
+{{- if and $comp.otel $comp.otel.enabled }}
+{{- $env = include "theft.otelEnv" (dict "root" $ "serviceName" $comp.otel.serviceName) | fromYaml }}
+{{- end }}
+{{- range $k, $v := $comp.env }}
+{{- $_ := set $env $k (tpl $v $) }}
+{{- end }}
+{{- if $env }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-env
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 4 }}
+data:
+  {{- range $k := keys $env | sortAlpha }}
+  {{ $k }}: {{ get $env $k | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
