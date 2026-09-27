@@ -1,0 +1,4 @@
+*
+!models/shoplifting_classifier.pt
+!models/shoplifting_classifier.meta.json
+**/__pycache__

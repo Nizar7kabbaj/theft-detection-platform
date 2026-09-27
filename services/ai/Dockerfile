@@ -24,12 +24,9 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
+    uv sync --frozen --no-install-project --no-dev \
+    && rm -f /opt/venv/.lock
 
-FROM base AS weights
-ADD --chmod=0644 https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n-pose.pt /app/yolov8n-pose.pt
-ADD --chmod=0644 https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt /app/yolov8n.pt
-ADD --chmod=0644 https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8s.pt /app/yolov8s.pt
 
 FROM base AS probe
 ARG GRPC_HEALTH_PROBE_VERSION
@@ -43,12 +40,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         libglib2.0-0
 ENV PATH=/opt/venv/bin:$PATH
-COPY --from=builder --chown=ai:ai /opt/venv /opt/venv
-COPY --from=weights --chown=ai:ai /app/yolov8n-pose.pt /app/yolov8n-pose.pt
-COPY --from=weights --chown=ai:ai /app/yolov8n.pt /app/yolov8n.pt
-COPY --from=weights --chown=ai:ai /app/yolov8s.pt /app/yolov8s.pt
+COPY --from=builder /opt/venv /opt/venv
 COPY --from=probe /usr/local/bin/grpc_health_probe /usr/local/bin/grpc_health_probe
-COPY --chown=ai:ai app /app/app
+COPY --chmod=u=rwX,go=rX app /app/app
 RUN mkdir -p /app/.ultralytics /app/.matplotlib /app/snapshots \
     && chown ai:ai /app/.ultralytics /app/.matplotlib /app/snapshots
 USER ai

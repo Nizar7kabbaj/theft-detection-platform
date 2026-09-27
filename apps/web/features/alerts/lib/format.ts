@@ -1,5 +1,5 @@
 import type { AlertDetail, Decision } from "@/features/alerts/schemas/alert"
-import { STORE_TIME_ZONE } from "@/lib/time/zone"
+import { storeFormatter } from "@/lib/time/zone"
 
 export const SEVERITY_LABEL: Record<AlertDetail["severity"], string> = {
   SEVERITY_UNSPECIFIED: "unspecified",
@@ -39,24 +39,22 @@ export function classifierStateLabel(value: string | null | undefined): string {
 }
 
 export function formatTimestamp(value: string): string {
-  return new Date(value).toLocaleString("en-GB", {
+  return storeFormatter("en-GB", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    timeZone: STORE_TIME_ZONE,
-  })
+  }).format(new Date(value))
 }
 
 export function clockTime(value: string): string {
-  return new Date(value).toLocaleTimeString("en-GB", {
+  return storeFormatter("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    timeZone: STORE_TIME_ZONE,
-  })
+  }).format(new Date(value))
 }
 
 export function relativeAge(value: string, now: number): string {

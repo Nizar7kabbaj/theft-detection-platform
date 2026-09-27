@@ -1,0 +1,94 @@
+{{- with .Values.seed }}
+{{- $raw := index $.Values.components .component }}
+{{- if and .enabled $raw $raw.enabled }}
+{{- $c := include "theft.component" (dict "root" $ "comp" $raw) | fromYaml }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .component }}-seed
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" (printf "%s-seed" .component)) | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        {{- include "theft.labels" (dict "root" $ "name" (printf "%s-seed" .component)) | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- toYaml $c.podSecurityContext | nindent 8 }}
+      containers:
+        - name: seed
+          image: {{ include "theft.image" (dict "root" $ "image" $c.image) }}
+          imagePullPolicy: {{ $.Values.global.image.pullPolicy }}
+          command:
+            - python
+            - -m
+            - scripts.seed_user
+            - --password-dir
+            - /run/seed
+            {{- range .users }}
+            - --user
+            - {{ printf "%s:%s" .username (join "," .roles) | quote }}
+            {{- end }}
+          env:
+            {{- include "theft.envList" (dict "root" $ "env" ($c.env | default dict)) | nindent 12 }}
+            - name: OTEL_SDK_DISABLED
+              value: "true"
+          securityContext:
+            {{- toYaml $c.containerSecurityContext | nindent 12 }}
+          {{- with $c.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: app-secret
+              mountPath: /run/secrets
+              readOnly: true
+            - name: seed-secret
+              mountPath: /run/seed
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            {{- if $c.postgresCa }}
+            - name: postgres-ca
+              mountPath: /run/postgres-ca
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: app-secret
+          secret:
+            secretName: {{ $c.secret.name }}
+            defaultMode: 0440
+            items:
+              {{- range .appSecretKeys }}
+              - key: {{ . }}
+                path: {{ . }}
+              {{- end }}
+        - name: seed-secret
+          secret:
+            secretName: {{ .secret }}
+            defaultMode: 0440
+        {{- if $c.postgresCa }}
+        - name: postgres-ca
+          secret:
+            secretName: {{ $.Values.global.postgres.caSecret }}
+            defaultMode: 0440
+            items:
+              - key: ca.crt
+                path: ca.crt
+        {{- end }}
+        - name: tmp
+          emptyDir: {}
+{{- end }}
+{{- end }}

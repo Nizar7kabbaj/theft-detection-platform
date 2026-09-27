@@ -1,0 +1,92 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: public-gateway-edge
+  namespace: edge
+spec:
+  workloadSelector:
+    labels:
+      istio: public-gateway
+  configPatches:
+    - applyTo: NETWORK_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: envoy.filters.network.http_connection_manager
+      patch:
+        operation: MERGE
+        value:
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+            server_header_transformation: PASS_THROUGH
+    - applyTo: HTTP_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: envoy.filters.network.http_connection_manager
+              subFilter:
+                name: envoy.filters.http.router
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.local_ratelimit
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+            stat_prefix: edge_rate_limit
+            token_bucket:
+              max_tokens: 100000
+              tokens_per_fill: 100000
+              fill_interval: 1s
+            filter_enabled:
+              runtime_key: edge_rate_limit_enabled
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+            filter_enforced:
+              runtime_key: edge_rate_limit_enforced
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+            max_dynamic_descriptors: 10000
+            rate_limits:
+              - actions:
+                  - header_value_match:
+                      descriptor_key: route_class
+                      descriptor_value: login
+                      expect_match: true
+                      headers:
+                        - name: ":path"
+                          string_match:
+                            exact: /auth/login
+                  - remote_address: {}
+              - actions:
+                  - header_value_match:
+                      descriptor_key: route_class
+                      descriptor_value: general
+                      expect_match: false
+                      headers:
+                        - name: ":path"
+                          string_match:
+                            exact: /auth/login
+                  - remote_address: {}
+            descriptors:
+              - entries:
+                  - key: route_class
+                    value: login
+                  - key: remote_address
+                token_bucket:
+                  max_tokens: 10
+                  tokens_per_fill: 5
+                  fill_interval: 1s
+              - entries:
+                  - key: route_class
+                    value: general
+                  - key: remote_address
+                token_bucket:
+                  max_tokens: 50
+                  tokens_per_fill: 10
+                  fill_interval: 1s

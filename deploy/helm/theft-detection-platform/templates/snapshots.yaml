@@ -1,0 +1,49 @@
+{{- with .Values.global.snapshots }}
+{{- if .enabled }}
+{{- if .local }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ printf "%s-snapshots" $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" "snapshots") | nindent 4 }}
+spec:
+  capacity:
+    storage: {{ .size }}
+  accessModes:
+    - {{ .accessMode }}
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .storageClassName | quote }}
+  volumeMode: Filesystem
+  local:
+    path: {{ .local.path }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - {{ .local.node }}
+{{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: snapshots
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" "snapshots") | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .accessMode }}
+  storageClassName: {{ .storageClassName | quote }}
+  {{- if .local }}
+  volumeName: {{ printf "%s-snapshots" $.Release.Namespace }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .size }}
+{{- end }}
+{{- end }}

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     FRAME_SOURCE: str = "camera"
     CLIP_PATH: str = "/app/fixtures/presence.mp4"
     GATE_FPS: Annotated[int, Field(ge=1, le=60)] = 15
-    MODEL_NAME: str = "yolov8n.pt"
+    MODEL_NAME: str = "/app/ai-model/models/yolov8n.pt"
     MODEL_DEVICE: str = "cuda"
     PERSON_CLASS_ID: Annotated[int, Field(ge=0)] = 0
     DETECTION_CONFIDENCE: Annotated[float, Field(gt=0, le=1)] = 0.5

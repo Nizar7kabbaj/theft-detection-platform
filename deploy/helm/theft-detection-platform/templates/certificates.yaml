@@ -1,0 +1,48 @@
+{{- $used := dict }}
+{{- range $name, $c := .Values.components }}
+{{- if and $c.enabled $c.tls }}
+{{- $_ := set $used $c.tls.identity true }}
+{{- end }}
+{{- end }}
+{{- $pki := .Values.global.pki }}
+{{- range $id := keys $used | sortAlpha }}
+{{- $spec := index $.Values.identities $id }}
+{{- if not $spec }}
+{{- fail (printf "identity %s is used by a component but not defined under identities" $id) }}
+{{- end }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $id }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" $id) | nindent 4 }}
+spec:
+  secretName: {{ $id }}-tls
+  commonName: {{ $id }}
+  duration: {{ $pki.duration }}
+  renewBefore: {{ $pki.renewBefore }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - digital signature
+    {{- if $spec.server }}
+    - server auth
+    {{- end }}
+    - client auth
+  uris:
+    - {{ printf "spiffe://%s/service/%s" $pki.trustDomain $id }}
+  {{- if $spec.server }}
+  dnsNames:
+    {{- toYaml (concat (list $id "localhost") ($spec.dnsNames | default list)) | nindent 4 }}
+  ipAddresses:
+    - 127.0.0.1
+  {{- end }}
+  issuerRef:
+    name: {{ $pki.issuerName }}
+    kind: {{ $pki.issuerKind }}
+    group: cert-manager.io
+{{- end }}

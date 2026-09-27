@@ -1,0 +1,51 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: public
+  namespace: edge
+spec:
+  gatewayClassName: istio
+  addresses:
+    - type: Hostname
+      value: public-gateway.edge.svc.cluster.local
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      hostname: localhost
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      port: 443
+      protocol: HTTPS
+      hostname: localhost
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: localhost-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: theft
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: https-redirect
+  namespace: edge
+spec:
+  parentRefs:
+    - name: public
+      sectionName: http
+  hostnames:
+    - localhost
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301

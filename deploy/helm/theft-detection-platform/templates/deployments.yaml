@@ -8,6 +8,27 @@
 {{- $_ := set $lim "nvidia.com/gpu" ($c.gpu.count | default 1) }}
 {{- $_ := set $res "limits" $lim }}
 {{- end }}
+{{- $appSecret := and $c.secret $c.secret.enabled }}
+{{- $hasSecrets := or $appSecret $c.tls }}
+{{- $mountPath := "/run/secrets" }}
+{{- if and $c.secret $c.secret.mountPath }}
+{{- $mountPath = $c.secret.mountPath }}
+{{- end }}
+{{- $snap := and $.Values.global.snapshots.enabled $c.snapshots $c.snapshots.mount }}
+{{- $models := and $c.models $c.models.mount }}
+{{- if and $models (not $.Values.modelImage) }}
+{{- fail (printf "modelImage is required when %s mounts models" $name) }}
+{{- end }}
+{{- $reload := list }}
+{{- if $appSecret }}
+{{- $reload = append $reload $c.secret.name }}
+{{- end }}
+{{- with $c.tls }}
+{{- $reload = append $reload (printf "%s-tls" .identity) }}
+{{- end }}
+{{- range $c.secretEnv }}
+{{- $reload = append $reload .secret }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -30,6 +51,14 @@ spec:
         {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 8 }}
       annotations:
         checksum/env: {{ dict "env" $c.env "otel" $c.otel "global" $.Values.global | toJson | sha256sum }}
+        {{- with $reload }}
+        secret.reloader.stakater.com/reload: {{ . | uniq | join "," | quote }}
+        {{- end }}
+        {{- with index $.Values.metrics.jobs $name }}
+        prometheus.io/scrape: "true"
+        prometheus.io/job: {{ . | quote }}
+        prometheus.io/path: {{ $.Values.metrics.path | quote }}
+        {{- end }}
     spec:
       serviceAccountName: {{ $name }}
       automountServiceAccountToken: {{ $c.automountServiceAccountToken }}
@@ -78,6 +107,16 @@ spec:
             - configMapRef:
                 name: {{ $name }}-env
           {{- end }}
+          {{- with $c.secretEnv }}
+          env:
+            {{- range . }}
+            - name: {{ .name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secret }}
+                  key: {{ .key }}
+            {{- end }}
+          {{- end }}
           securityContext:
             {{- toYaml $c.containerSecurityContext | nindent 12 }}
           {{- with $res }}
@@ -101,9 +140,24 @@ spec:
             - name: writable-{{ $i }}
               mountPath: {{ $p }}
             {{- end }}
-            {{- if $c.secret.enabled }}
+            {{- if $hasSecrets }}
             - name: secrets
-              mountPath: {{ $c.secret.mountPath }}
+              mountPath: {{ $mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- if $snap }}
+            - name: snapshots
+              mountPath: {{ $c.snapshots.path }}
+              readOnly: {{ $c.snapshots.readOnly }}
+            {{- end }}
+            {{- if $c.postgresCa }}
+            - name: postgres-ca
+              mountPath: /run/postgres-ca
+              readOnly: true
+            {{- end }}
+            {{- if $models }}
+            - name: models
+              mountPath: {{ $c.models.path }}
               readOnly: true
             {{- end }}
             {{- with $c.extraVolumeMounts }}
@@ -114,11 +168,51 @@ spec:
         - name: writable-{{ $i }}
           emptyDir: {}
         {{- end }}
-        {{- if $c.secret.enabled }}
+        {{- if $hasSecrets }}
         - name: secrets
-          secret:
-            secretName: {{ $c.secret.name }}
+          projected:
             defaultMode: 0440
+            sources:
+              {{- if $appSecret }}
+              - secret:
+                  name: {{ $c.secret.name }}
+              {{- end }}
+              {{- with $c.tls }}
+              - secret:
+                  name: {{ .identity }}-tls
+                  items:
+                    - key: tls.crt
+                      path: {{ .filePrefix }}_tls_cert
+                    - key: tls.key
+                      path: {{ .filePrefix }}_tls_key
+                    - key: ca.crt
+                      path: {{ .filePrefix }}_tls_ca
+                    {{- range .caAliases }}
+                    - key: ca.crt
+                      path: {{ . }}
+                    {{- end }}
+              {{- end }}
+        {{- end }}
+        {{- if $snap }}
+        - name: snapshots
+          persistentVolumeClaim:
+            claimName: snapshots
+            readOnly: {{ $c.snapshots.readOnly }}
+        {{- end }}
+        {{- if $c.postgresCa }}
+        - name: postgres-ca
+          secret:
+            secretName: {{ $.Values.global.postgres.caSecret }}
+            defaultMode: 0440
+            items:
+              - key: ca.crt
+                path: ca.crt
+        {{- end }}
+        {{- if $models }}
+        - name: models
+          image:
+            reference: {{ include "theft.image" (dict "root" $ "image" $.Values.modelImage) }}
+            pullPolicy: {{ $.Values.global.image.pullPolicy }}
         {{- end }}
         {{- with $c.extraVolumes }}
         {{- toYaml . | nindent 8 }}

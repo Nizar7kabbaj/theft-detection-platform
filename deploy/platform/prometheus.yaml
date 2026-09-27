@@ -1,0 +1,107 @@
+alertmanager:
+  enabled: false
+kube-state-metrics:
+  enabled: false
+prometheus-node-exporter:
+  enabled: false
+prometheus-pushgateway:
+  enabled: false
+
+configmapReload:
+  prometheus:
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ALL]
+    resources:
+      requests:
+        cpu: 5m
+        memory: 32Mi
+      limits:
+        memory: 32Mi
+
+server:
+  global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+  retention: 2d
+  retentionSize: 1GB
+  persistentVolume:
+    enabled: true
+    size: 2Gi
+  securityContext:
+    runAsUser: 65534
+    runAsGroup: 65534
+    runAsNonRoot: true
+    fsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+  resources:
+    requests:
+      cpu: 50m
+      memory: 384Mi
+    limits:
+      memory: 384Mi
+
+scrapeConfigs:
+  prometheus:
+    enabled: true
+  kubernetes-api-servers:
+    enabled: false
+  kubernetes-nodes:
+    enabled: false
+  kubernetes-nodes-cadvisor:
+    enabled: false
+  kubernetes-service-endpoints:
+    enabled: false
+  kubernetes-service-endpoints-slow:
+    enabled: false
+  prometheus-pushgateway:
+    enabled: false
+  kubernetes-services:
+    enabled: false
+  kubernetes-pods:
+    enabled: false
+  kubernetes-pods-slow:
+    enabled: false
+  node:
+    enabled: true
+    job_name: node
+    kubernetes_sd_configs:
+      - role: endpointslice
+        namespaces:
+          names: [node-exporter]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: node-exporter
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: instance
+  theft-pods:
+    enabled: true
+    job_name: theft-pods
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [theft]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        regex: "true"
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        regex: metrics
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        regex: (.+)
+        target_label: __metrics_path__
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_job]
+        regex: (.+)
+        target_label: job
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod

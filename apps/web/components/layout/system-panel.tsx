@@ -13,7 +13,7 @@ import {
 } from "@/features/analytics/api/system-stats-client"
 import type { ServiceMemory, SystemStats } from "@/features/analytics/schemas/system-stats"
 import { readCookie, writeCookie } from "@/lib/cookies/write"
-import { STORE_TIME_ZONE } from "@/lib/time/zone"
+import { storeTimeZone } from "@/lib/time/zone"
 
 const TILE_CLASS = "flex flex-col gap-2 border-border border-b p-3 odd:border-r"
 const THERMAL_CLASS = "flex flex-col gap-1.5 p-3 odd:border-r"
@@ -189,7 +189,7 @@ function useClock(): string {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
-          timeZone: STORE_TIME_ZONE,
+          timeZone: storeTimeZone(),
         }),
       )
     }

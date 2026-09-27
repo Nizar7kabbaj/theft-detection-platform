@@ -1,0 +1,51 @@
+{{- if .Values.global.gateway.enabled }}
+{{- $g := .Values.global.gateway }}
+{{- range $rule := .Values.routes.rules }}
+{{- $comp := index $.Values.components $rule.component }}
+{{- if and $comp $comp.enabled }}
+{{- $hs := index $.Values.routes.headerSets $rule.headerSet }}
+{{- if not $hs }}
+{{- fail (printf "route %s uses unknown headerSet %s" $rule.name $rule.headerSet) }}
+{{- end }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $rule.name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" $rule.component) | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ $g.name }}
+      namespace: {{ $g.namespace }}
+      sectionName: {{ $g.sectionName }}
+  hostnames:
+    - {{ $g.hostname | quote }}
+  rules:
+    - matches:
+        {{- range $rule.matches }}
+        - path:
+            type: {{ .type }}
+            value: {{ .value | quote }}
+        {{- end }}
+      filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            {{- with $hs.set }}
+            set:
+              {{- range $k := keys . | sortAlpha }}
+              - name: {{ $k }}
+                value: {{ get $hs.set $k | quote }}
+              {{- end }}
+            {{- end }}
+            {{- with $hs.remove }}
+            remove:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+      backendRefs:
+        - name: {{ $rule.component }}
+          port: {{ $rule.port }}
+{{- end }}
+{{- end }}
+{{- end }}

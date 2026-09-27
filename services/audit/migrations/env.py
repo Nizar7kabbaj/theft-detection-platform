@@ -7,7 +7,7 @@ from alembic import context
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
-from app.core.database import resolve_owner_url
+from app.core.database import connect_args, resolve_owner_url
 from app.db import models  # noqa: F401
 from app.db.base import Base
 
@@ -41,6 +41,7 @@ async def run_migrations_online() -> None:
         {"sqlalchemy.url": resolve_owner_url()},
         prefix="sqlalchemy.",
         poolclass=NullPool,
+        connect_args=connect_args(),
     )
     async with engine.connect() as connection:
         await connection.run_sync(do_run_migrations)

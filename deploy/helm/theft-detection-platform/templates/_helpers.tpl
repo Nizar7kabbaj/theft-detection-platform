@@ -55,3 +55,58 @@ OTEL_LOGS_EXPORTER: {{ $o.logsExporter | quote }}
 OTEL_PYTHON_LOG_CORRELATION: {{ $o.pythonLogCorrelation | quote }}
 OTEL_PYTHON_LOG_FORMAT: {{ $o.pythonLogFormat | quote }}
 {{- end -}}
+
+{{- define "theft.envList" -}}
+{{- $root := .root -}}
+{{- range $k := keys .env | sortAlpha }}
+- name: {{ $k }}
+  value: {{ tpl (get $.env $k) $root | quote }}
+{{- end }}
+{{- end -}}
+
+{{- define "theft.psqlContainer" -}}
+- name: {{ .name }}
+  image: {{ .root.Values.global.postgres.psqlImage }}
+  imagePullPolicy: IfNotPresent
+  command:
+    - sh
+    - -c
+    - {{ printf "PGPASSWORD=\"$(cat /run/secrets/%s)\" exec psql -X -q -v ON_ERROR_STOP=1 -f /sql/%s" .migration.ownerPasswordKey .file | quote }}
+  env:
+    - name: PGHOST
+      value: {{ .root.Values.global.postgres.host | quote }}
+    - name: PGPORT
+      value: {{ .root.Values.global.postgres.port | quote }}
+    - name: PGDATABASE
+      value: {{ .migration.database | quote }}
+    - name: PGUSER
+      value: {{ .migration.ownerUser | quote }}
+    - name: PGSSLMODE
+      value: verify-full
+    - name: PGSSLROOTCERT
+      value: /run/pg/ca.crt
+    - name: PGAPPNAME
+      value: {{ printf "%s-%s" .jobName .name | quote }}
+    - name: HOME
+      value: /tmp
+  securityContext:
+    {{- toYaml .securityContext | nindent 4 }}
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 64Mi
+  volumeMounts:
+    - name: sql
+      mountPath: /sql
+      readOnly: true
+    - name: owner-secret
+      mountPath: /run/secrets
+      readOnly: true
+    - name: pg-ca
+      mountPath: /run/pg
+      readOnly: true
+    - name: tmp
+      mountPath: /tmp
+{{- end -}}

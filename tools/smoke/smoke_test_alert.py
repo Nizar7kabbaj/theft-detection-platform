@@ -5,15 +5,21 @@ import asyncio
 import sys
 import time
 
+import grpc
+from google.protobuf.timestamp_pb2 import Timestamp
+
 sys.path.insert(0, "/app")
 
+from app.core.database import (
+    close_mongodb_connection,
+    connect_to_mongodb,
+    get_collection,
+)
+from app.server.grpc_gen import alert_pb2, alert_pb2_grpc, common_pb2
+from app.shared.config import settings
 
-def _send(alert_id: str) -> int:
-    import grpc
-    from google.protobuf.timestamp_pb2 import Timestamp
 
-    from app.server.grpc_gen import alert_pb2, alert_pb2_grpc, common_pb2
-
+def _send(alert_id: str, target: str) -> int:
     occurred = Timestamp()
     occurred.GetCurrentTime()
 
@@ -36,7 +42,12 @@ def _send(alert_id: str) -> int:
         alert_type=common_pb2.ALERT_TYPE_OBJECT_PROXIMITY,
     )
 
-    channel = grpc.insecure_channel("notification-service:50052")
+    credentials = grpc.ssl_channel_credentials(
+        root_certificates=settings.TLS_CA_FILE.read_bytes(),
+        private_key=settings.TLS_KEY_FILE.read_bytes(),
+        certificate_chain=settings.TLS_CERT_FILE.read_bytes(),
+    )
+    channel = grpc.secure_channel(target, credentials)
     stub = alert_pb2_grpc.AlertServiceStub(channel)
     reply = stub.SendAlert(alert, timeout=5.0)
     channel.close()
@@ -52,13 +63,6 @@ def _send(alert_id: str) -> int:
 
 
 async def _verify(alert_id: str) -> int:
-    from app.core.database import (
-        close_mongodb_connection,
-        connect_to_mongodb,
-        get_collection,
-    )
-    from app.shared.config import settings
-
     await connect_to_mongodb()
     try:
         intents = get_collection(settings.DELIVERY_INTENT_COLLECTION)
@@ -84,16 +88,16 @@ async def _verify(alert_id: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--send", action="store_true")
-    parser.add_argument("--verify", action="store_true")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--send", action="store_true")
+    mode.add_argument("--verify", action="store_true")
     parser.add_argument("--alert-id", default=f"smoke-{int(time.time())}")
+    parser.add_argument("--target", default="notification:50052")
     args = parser.parse_args()
 
     if args.send:
-        return _send(args.alert_id)
-    if args.verify:
-        return asyncio.run(_verify(args.alert_id))
-    parser.error("pass --send or --verify")
+        return _send(args.alert_id, args.target)
+    return asyncio.run(_verify(args.alert_id))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,23 @@
+global:
+  logAsJson: true
+  proxy:
+    seccompProfile:
+      type: RuntimeDefault
+pilot:
+  autoscaleEnabled: false
+  replicaCount: 1
+  seccompProfile:
+    type: RuntimeDefault
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 256Mi
+meshConfig:
+  accessLogFile: /dev/stdout
+  accessLogEncoding: JSON
+  tlsDefaults:
+    minProtocolVersion: TLSV1_3
+  meshMTLS:
+    minProtocolVersion: TLSV1_3

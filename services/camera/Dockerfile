@@ -16,7 +16,8 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
+    uv sync --frozen --no-install-project --no-dev \
+    && rm -f /opt/venv/.lock
 FROM base AS runtime
 RUN rm -f /etc/apt/apt.conf.d/docker-clean \
     && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
@@ -26,8 +27,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         libgl1 \
         libglib2.0-0
 ENV PATH=/opt/venv/bin:$PATH
-COPY --from=builder --chown=camera:camera /opt/venv /opt/venv
-COPY --chown=camera:camera app /app/app
+COPY --from=builder /opt/venv /opt/venv
+COPY --chmod=u=rwX,go=rX app /app/app
 RUN mkdir -p /app/run \
     && chown camera:camera /app/run
 USER camera

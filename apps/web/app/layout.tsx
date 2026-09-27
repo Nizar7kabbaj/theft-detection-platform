@@ -3,6 +3,8 @@ import "./globals.css"
 import { cookies, headers } from "next/headers"
 import { inter } from "@/lib/theme/font"
 import { DEFAULT_THEME, parseTheme, THEME_COOKIE_NAME } from "@/lib/theme/theme-cookie"
+import { storeTimeZone } from "@/lib/time/zone"
+import { StoreTimeZone } from "@/providers/store-time-zone"
 
 export const metadata: Metadata = {
   title: {
@@ -22,6 +24,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const nonce = headerList.get("x-nonce") ?? undefined
   const theme = parseTheme(cookieStore.get(THEME_COOKIE_NAME)?.value)
   const serverDark = theme !== "light"
+  const zone = storeTimeZone()
   return (
     <html
       lang="en"
@@ -30,7 +33,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     >
       <body className="font-sans antialiased">
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
-        {children}
+        <StoreTimeZone zone={zone}>{children}</StoreTimeZone>
       </body>
     </html>
   )

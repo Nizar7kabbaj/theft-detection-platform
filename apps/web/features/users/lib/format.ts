@@ -1,4 +1,4 @@
-import { STORE_TIME_ZONE } from "@/lib/time/zone"
+import { storeFormatter } from "@/lib/time/zone"
 
 const MINUTE = 60
 const HOUR = 3600
@@ -34,12 +34,9 @@ export function shortDate(value: string): string {
   if (Number.isNaN(parsed)) {
     return "unknown"
   }
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: STORE_TIME_ZONE,
-  }).format(new Date(parsed))
+  return storeFormatter("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(
+    new Date(parsed),
+  )
 }
 
 export function initials(username: string): string {

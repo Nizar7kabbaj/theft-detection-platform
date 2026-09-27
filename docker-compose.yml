@@ -9,7 +9,9 @@ x-otel-env: &otel-env
 
 services:
   backend:
-    build: ./services/api
+    build:
+      context: ./services/api
+      target: runtime
     image: theft-backend:dev
     container_name: theft-backend
     networks:
@@ -25,7 +27,7 @@ services:
       OTEL_SERVICE_NAME: "theft-backend"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0"
       PROMETHEUS_EXPORTER_PORT: "9464"
-      STORE_TIMEZONE: ${STORE_TIME_ZONE:-Africa/Casablanca}
+      STORE_TIME_ZONE: ${STORE_TIME_ZONE:-Africa/Casablanca}
     depends_on:
       mongo:
         condition: service_healthy
@@ -93,8 +95,8 @@ services:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
-      args:
-        STORE_TIME_ZONE: ${STORE_TIME_ZONE:-Africa/Casablanca}
+      target: runtime
+    image: theft-web:dev
     container_name: theft-web
     restart: unless-stopped
     networks:
@@ -103,6 +105,7 @@ services:
       NODE_ENV: production
       API_BASE_URL: http://backend:8000
       AUTH_BASE_URL: http://auth:8000
+      STORE_TIME_ZONE: ${STORE_TIME_ZONE:-Africa/Casablanca}
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
@@ -146,6 +149,14 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  ai-models:
+    build:
+      context: ./ml
+      target: models
+    image: theft-ai-models:dev
+    scale: 0
+    profiles: ["ai"]
+
   ai:
     build: ./services/ai
     image: theft-ai:dev
@@ -162,7 +173,9 @@ services:
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=theft-ai"
       PROMETHEUS_EXPORTER_PORT: "9464"
     volumes:
-      - ./ml:/app/ai-model:ro
+      - type: image
+        source: theft-ai-models:dev
+        target: /app/ai-model/models
       - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
       - ./config/redis/ai_redis_password:/run/secrets/ai_redis_password:ro
       - ./config/pki/ai/tls.crt:/run/secrets/ai_tls_cert:ro
@@ -250,6 +263,9 @@ services:
       AI_PORT: "50051"
     volumes:
       - ./config/redis/gate_redis_password:/run/secrets/gate_redis_password:ro
+      - type: image
+        source: theft-ai-models:dev
+        target: /app/ai-model/models
       - ./config/pki/detect-gate/tls.crt:/run/secrets/gate_tls_cert:ro
       - ./config/pki/detect-gate/tls.key:/run/secrets/gate_tls_key:ro
       - ./config/pki/ca/ca.crt:/run/secrets/gate_tls_ca:ro
@@ -284,6 +300,7 @@ services:
         AUTH_HTTP_PORT: "8000"
         AUTH_GRPC_PORT: "50053"
         AUTH_TRUSTED_PROXIES: '["127.0.0.0/8","::1/128","172.31.240.10/32"]'
+        AUTH_POSTGRES_SSL_MODE: disable
       ports:
         - "127.0.0.1:8002:8000"
       volumes:
@@ -341,6 +358,7 @@ services:
           <<: *otel-env
           OTEL_SERVICE_NAME: "audit"
           OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=audit"
+          AUDIT_POSTGRES_SSL_MODE: disable
           AUDIT_GRPC_PORT: "50054"
         ports:
           - "127.0.0.1:50054:50054"
@@ -380,6 +398,7 @@ services:
         - ./services/audit/.env
       environment:
         AUDIT_POSTGRES_HOST: "postgres"
+        AUDIT_POSTGRES_SSL_MODE: disable
       volumes:
         - ./config/postgres/audit_owner_postgres_password:/run/secrets/audit_owner_postgres_password:ro
         - ./config/postgres/audit_app_postgres_password:/run/secrets/audit_app_postgres_password:ro
@@ -405,6 +424,7 @@ services:
       - ./services/auth/.env
     environment:
       AUTH_POSTGRES_HOST: "postgres"
+      AUTH_POSTGRES_SSL_MODE: disable
     volumes:
       - ./config/postgres/auth_owner_postgres_password:/run/secrets/auth_owner_postgres_password:ro
       - ./config/postgres/auth_app_postgres_password:/run/secrets/postgres_password:ro
@@ -431,6 +451,7 @@ services:
     environment:
       HARNESS_POSTGRES_HOST: "postgres-harness"
       AUDIT_POSTGRES_HOST: "postgres-harness"
+      AUDIT_POSTGRES_SSL_MODE: disable
     volumes:
       - ./config/postgres/harness_postgres_password:/run/secrets/audit_owner_postgres_password:ro
       - ./config/postgres/harness_postgres_password:/run/secrets/audit_app_postgres_password:ro
@@ -511,7 +532,6 @@ services:
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification"
       PROMETHEUS_EXPORTER_PORT: "9464"
     volumes:
-      - ./ml:/app/ai-model:ro
       - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
       - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
@@ -552,7 +572,6 @@ services:
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification-worker"
       PROMETHEUS_EXPORTER_PORT: "9465"
     volumes:
-      - ./ml:/app/ai-model:ro
       - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
       - ./config/telegram/bot_token:/run/secrets/telegram_bot_token:ro

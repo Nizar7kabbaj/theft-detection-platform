@@ -3,6 +3,8 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./services/api/app:/app/app
-      - ./ml/outputs/snapshots:/app/ai-model/outputs/snapshots:ro
     environment:
       - DEBUG=True
+  ai:
+    volumes:
+      - ./ml/outputs/webcam-validation:/app/ai-model/outputs/webcam-validation:ro

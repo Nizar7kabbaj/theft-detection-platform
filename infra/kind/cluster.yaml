@@ -5,8 +5,43 @@ networking:
   ipFamily: ipv4
   apiServerAddress: 127.0.0.1
   apiServerPort: 6443
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
+kubeadmConfigPatches:
+  - |
+    kind: ClusterConfiguration
+    apiServer:
+      extraArgs:
+        - name: encryption-provider-config
+          value: /etc/kubernetes/encryption/config.yaml
+        - name: encryption-provider-config-automatic-reload
+          value: "true"
+      extraVolumes:
+        - name: encryption
+          hostPath: /etc/kubernetes/encryption
+          mountPath: /etc/kubernetes/encryption
+          readOnly: true
+          pathType: DirectoryOrCreate
 nodes:
   - role: control-plane
     image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+    extraMounts:
+      - hostPath: /etc/theft-kind/encryption.yaml
+        containerPath: /etc/kubernetes/encryption/config.yaml
+        readOnly: true
   - role: worker
     image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+    extraMounts:
+      - hostPath: /srv/theft/snapshots
+        containerPath: /srv/theft/snapshots
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 80
+        listenAddress: 127.0.0.1
+        protocol: TCP
+      - containerPort: 30443
+        hostPort: 443
+        listenAddress: 127.0.0.1
+        protocol: TCP

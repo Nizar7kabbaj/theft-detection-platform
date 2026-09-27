@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["issuer", "certificates", "postgres", "mongo", "redis"],
+  "$defs": {
+    "digestImage": {
+      "type": "string",
+      "pattern": "@sha256:[a-f0-9]{64}$"
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cpu", "memory"],
+          "properties": {
+            "cpu": { "type": "string" },
+            "memory": { "type": "string" }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["memory"],
+          "properties": {
+            "memory": { "type": "string" }
+          }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["size", "storageClass"],
+      "properties": {
+        "size": { "type": "string" },
+        "storageClass": { "type": "string" }
+      }
+    }
+  },
+  "properties": {
+    "issuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind"],
+      "properties": {
+        "name": { "type": "string" },
+        "kind": { "enum": ["Issuer", "ClusterIssuer"] }
+      }
+    },
+    "certificates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duration", "renewBefore", "trustDomain"],
+      "properties": {
+        "duration": { "type": "string" },
+        "renewBefore": { "type": "string" },
+        "trustDomain": { "type": "string" }
+      }
+    },
+    "postgres": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "image", "instances", "storage", "resources", "parameters", "bootstrap", "roles", "databases"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/$defs/digestImage" },
+        "instances": { "type": "integer", "minimum": 1 },
+        "storage": { "$ref": "#/$defs/storage" },
+        "resources": { "$ref": "#/$defs/resources" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "bootstrap": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["database", "owner", "secret"],
+          "properties": {
+            "database": { "type": "string" },
+            "owner": { "type": "string" },
+            "secret": { "type": "string" }
+          }
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "secret"],
+            "properties": {
+              "name": { "type": "string" },
+              "secret": { "type": "string" }
+            }
+          }
+        },
+        "databases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "owner"],
+            "properties": {
+              "name": { "type": "string" },
+              "owner": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "mongo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "image", "cacheSizeGB", "storage", "resources"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/$defs/digestImage" },
+        "cacheSizeGB": { "type": "string" },
+        "storage": { "$ref": "#/$defs/storage" },
+        "resources": { "$ref": "#/$defs/resources" }
+      }
+    },
+    "redis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "instances"],
+      "properties": {
+        "image": { "$ref": "#/$defs/digestImage" },
+        "instances": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["enabled", "persistence", "resources", "extraArgs"],
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "persistence": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["enabled"],
+                "properties": {
+                  "enabled": { "type": "boolean" },
+                  "size": { "type": "string" },
+                  "storageClass": { "type": "string" }
+                }
+              },
+              "resources": { "$ref": "#/$defs/resources" },
+              "extraArgs": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

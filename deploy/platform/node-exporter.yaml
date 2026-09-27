@@ -1,0 +1,12 @@
+fullnameOverride: node-exporter
+hostNetwork: true
+hostPID: true
+hostRootFsMount:
+  enabled: true
+  mountPropagation: HostToContainer
+resources:
+  requests:
+    cpu: 10m
+    memory: 48Mi
+  limits:
+    memory: 48Mi

@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 import grpc
+from google.protobuf.timestamp_pb2 import Timestamp
 
 sys.path.insert(0, "/app")
 
 from app.grpc_gen import inference_pb2, inference_pb2_grpc
 
-IMAGE_PATH = Path("/app/ai-model/outputs/webcam-validation/concealment_test.jpg")
+IMAGE_PATH = Path("/app/ai-model/outputs/webcam-validation/phase_holding.jpg")
 CAMERA_ID = "smoke-cam"
 SESSION_ID = 42
 FRAME_COUNT = 35
+FRAME_INTERVAL_NS = 1_000_000_000 // 30
+KEYPOINT_VISIBLE_CONFIDENCE = 0.5
+LEFT_WRIST = 9
+RIGHT_WRIST = 10
 
 
 def main() -> int:
@@ -35,11 +41,15 @@ def main() -> int:
 
     classified = 0
     last = None
+    start_ns = time.time_ns()
     for frame_index in range(FRAME_COUNT):
+        timestamp = Timestamp()
+        timestamp.FromNanoseconds(start_ns + frame_index * FRAME_INTERVAL_NS)
         frame = inference_pb2.Frame(
             payload=payload,
             session_id=SESSION_ID,
             frame_index=frame_index,
+            timestamp=timestamp,
             camera_id=CAMERA_ID,
         )
         response = stub.Analyze(frame, timeout=30.0)
@@ -69,7 +79,7 @@ def main() -> int:
     print(f"  frame size        : {last.frame_width} x {last.frame_height}")
     print(f"  persons           : {len(last.persons)}")
     for person in last.persons:
-        visible = sum(1 for kp in person.keypoints if kp.confidence >= 0.5)
+        visible = sum(1 for kp in person.keypoints if kp.confidence >= KEYPOINT_VISIBLE_CONFIDENCE)
         print(
             f"    track {person.track_id}  state="
             f"{inference_pb2.InferenceState.Name(person.inference_state)}  "
@@ -79,13 +89,12 @@ def main() -> int:
             f"      bbox ({person.bbox.x1:.0f}, {person.bbox.y1:.0f}) "
             f"({person.bbox.x2:.0f}, {person.bbox.y2:.0f})"
         )
-        for index in (9, 10):
+        for index in (LEFT_WRIST, RIGHT_WRIST):
             if index < len(person.keypoints):
                 wrist = person.keypoints[index]
-                side = "left" if index == 9 else "right"
+                side = "left" if index == LEFT_WRIST else "right"
                 print(
-                    f"      {side} wrist ({wrist.x:.0f}, {wrist.y:.0f}) "
-                    f"conf={wrist.confidence:.2f}"
+                    f"      {side} wrist ({wrist.x:.0f}, {wrist.y:.0f}) conf={wrist.confidence:.2f}"
                 )
     print(f"  objects           : {len(last.objects)}")
     for obj in last.objects:

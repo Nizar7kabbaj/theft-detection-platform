@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     STREAM_DETECT_PREFIX: str = "detect"
     STREAM_STATS_CAMERA_PREFIX: str = "stats:camera"
     STREAM_STATS_NODE_KEY: str = "stats:node"
-    STORE_TIMEZONE: str = "Africa/Casablanca"
+    STORE_TIME_ZONE: str = "Africa/Casablanca"
     PROMETHEUS_URL: str = "http://prometheus:9090"
     PROMETHEUS_TIMEOUT_SECONDS: float = 3.0
     SYSTEM_STATS_TTL_SECONDS: int = 10
@@ -48,7 +48,6 @@ class Settings(BaseSettings):
     API_PORT: int = 8000
     DEBUG: bool = True
     SNAPSHOTS_DIR: str = "/app/snapshots"
-    ALERTS_DIR: str = "ai-model/outputs/alerts"
     INFERENCE_TARGET: str = "ai:50051"
     NOTIFICATION_TARGET: str = "notification:50052"
     AUTH_TARGET: str = "auth:50053"
@@ -82,7 +81,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    @field_validator("STORE_TIMEZONE")
+    @field_validator("STORE_TIME_ZONE")
     @classmethod
     def _known_zone(cls, value: str) -> str:
         try:

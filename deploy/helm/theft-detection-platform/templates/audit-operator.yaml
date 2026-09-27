@@ -1,0 +1,71 @@
+{{- with .Values.auditOperator }}
+{{- if .run }}
+{{- if not .args }}
+{{- fail "auditOperator.args is required" }}
+{{- end }}
+{{- $raw := index $.Values.components .component }}
+{{- $c := include "theft.component" (dict "root" $ "comp" $raw) | fromYaml }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ required "auditOperator.name is required" .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" "audit-operator") | nindent 4 }}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: {{ .ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "theft.labels" (dict "root" $ "name" "audit-operator") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- toYaml $c.podSecurityContext | nindent 8 }}
+      containers:
+        - name: operator
+          image: {{ include "theft.image" (dict "root" $ "image" $c.image) }}
+          imagePullPolicy: {{ $.Values.global.image.pullPolicy }}
+          command: ["python", "-m", "tools.operator"]
+          args:
+            {{- toYaml .args | nindent 12 }}
+          env:
+            {{- include "theft.envList" (dict "root" $ "env" ($c.env | default dict)) | nindent 12 }}
+            - name: OTEL_SDK_DISABLED
+              value: "true"
+          securityContext:
+            {{- toYaml $c.containerSecurityContext | nindent 12 }}
+          {{- with $c.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: operator-secret
+              mountPath: /run/secrets
+              readOnly: true
+            - name: postgres-ca
+              mountPath: /run/postgres-ca
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: operator-secret
+          secret:
+            secretName: {{ .secret }}
+            defaultMode: 0440
+        - name: postgres-ca
+          secret:
+            secretName: {{ $.Values.global.postgres.caSecret }}
+            defaultMode: 0440
+            items:
+              - key: ca.crt
+                path: ca.crt
+        - name: tmp
+          emptyDir: {}
+{{- end }}
+{{- end }}

@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -28,6 +29,8 @@ class Settings(BaseSettings):
     postgres_app_password_file: Path = Path("/run/secrets/audit_app_postgres_password")
     postgres_owner_user: str = "audit_owner"
     postgres_owner_password_file: Path = Path("/run/secrets/audit_owner_postgres_password")
+    postgres_ssl_mode: Literal["disable", "verify-full"] = "verify-full"
+    postgres_ssl_ca_file: Path = Path("/run/postgres-ca/ca.crt")
 
     redis_host: str = "redis"
     redis_port: int = 6380
