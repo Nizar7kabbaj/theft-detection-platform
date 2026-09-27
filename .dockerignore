@@ -1,7 +1,7 @@
 venv
 .venv
-__pycache__
-*.pyc
+**/__pycache__
+**/*.pyc
 
 ml/outputs
 ml/data

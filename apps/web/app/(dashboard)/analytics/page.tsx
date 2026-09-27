@@ -29,7 +29,7 @@ import { SeverityPanel } from "@/features/analytics/components/severity-panel"
 import { fetchIdentity } from "@/features/auth/api/identity-server"
 import { fetchCameras } from "@/features/cameras/api/cameras-server"
 import { cameraHealth } from "@/features/cameras/schemas/camera"
-import { STORE_TIME_LABEL, STORE_TIME_ZONE } from "@/lib/time/zone"
+import { STORE_TIME_LABEL, storeTimeZone } from "@/lib/time/zone"
 
 export const metadata: Metadata = { title: "analytics" }
 export const dynamic = "force-dynamic"
@@ -51,7 +51,7 @@ const EMPTY_FLEET: Fleet = { names: new Map(), offline: new Set() }
 function windowLabel(start: string, end: string, unit: string, buckets: number): string {
   const format = (at: Date) =>
     new Intl.DateTimeFormat("en-GB", {
-      timeZone: STORE_TIME_ZONE,
+      timeZone: storeTimeZone(),
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -230,7 +230,7 @@ export default async function AnalyticsPage({
       <div className="flex items-center justify-between border-border/60 border-t pt-4">
         <p className={FOOT}>source: alert archive</p>
         <p className={FOOT}>
-          {series.unit} buckets, times in {STORE_TIME_LABEL} ({STORE_TIME_ZONE})
+          {series.unit} buckets, times in {STORE_TIME_LABEL} ({storeTimeZone()})
         </p>
       </div>
     </section>

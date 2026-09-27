@@ -22,7 +22,13 @@ _WEBHOOK_DURATION_BUCKETS = (0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
 def setup_base(service_name: str) -> None:
     resource = Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", service_name)})
     tracer_provider = TracerProvider(resource=resource)
-    tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    exporters = {
+        name.strip()
+        for name in os.getenv("OTEL_TRACES_EXPORTER", "otlp").split(",")
+        if name.strip()
+    }
+    if "otlp" in exporters:
+        tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
     trace.set_tracer_provider(tracer_provider)
     metric_reader = PrometheusMetricReader()
     views = [

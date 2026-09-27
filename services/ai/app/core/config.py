@@ -14,8 +14,8 @@ def _read_secret(path: str) -> str:
 class Settings(BaseSettings):
     GRPC_HOST: str = "0.0.0.0"
     GRPC_PORT: int = 50051
-    YOLO_MODEL_NAME: str = "yolov8n-pose.pt"
-    YOLO_OBJECT_MODEL_NAME: str = "yolov8s.pt"
+    YOLO_MODEL_NAME: str = "/app/ai-model/models/yolov8n-pose.pt"
+    YOLO_OBJECT_MODEL_NAME: str = "/app/ai-model/models/yolov8s.pt"
     LSTM_MODEL_PATH: str = "/app/ai-model/models/shoplifting_classifier.pt"
     DEVICE: str = "cuda"
     LOG_LEVEL: str = "INFO"

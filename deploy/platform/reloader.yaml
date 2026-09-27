@@ -1,0 +1,24 @@
+reloader:
+  watchGlobally: true
+  namespaceSelector: "kubernetes.io/metadata.name=theft"
+  reloadStrategy: annotations
+  autoReloadAll: false
+  reloadOnCreate: false
+  deployment:
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65534
+      seccompProfile:
+        type: RuntimeDefault
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+    resources:
+      requests:
+        cpu: 10m
+        memory: 128Mi
+      limits:
+        memory: 128Mi

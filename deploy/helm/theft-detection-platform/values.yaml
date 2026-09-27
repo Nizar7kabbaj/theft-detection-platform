@@ -13,6 +13,28 @@ global:
     logsExporter: none
     pythonLogCorrelation: "true"
     pythonLogFormat: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
+  gateway:
+    enabled: true
+    name: public
+    namespace: edge
+    sectionName: https
+    hostname: localhost
+  pki:
+    issuerName: theft-ca
+    issuerKind: ClusterIssuer
+    trustDomain: theft-detection-platform
+    duration: 2160h
+    renewBefore: 720h
+  postgres:
+    host: postgres-rw
+    port: 5432
+    caSecret: postgres-server-tls
+    psqlImage: ghcr.io/cloudnative-pg/postgresql:17-minimal-trixie@sha256:cfc42005357630d2c0bfca095c93a6abe44884486acb0de2e5e511a087b7eb15
+  snapshots:
+    enabled: false
+    size: 20Gi
+    storageClassName: ""
+    accessMode: ReadWriteOnce
 
 defaults:
   replicas: 1
@@ -43,6 +65,156 @@ defaults:
   readinessProbe: {}
   startupProbe: {}
 
+identities:
+  api:
+    server: false
+  auth:
+    server: true
+  audit:
+    server: true
+  notification:
+    server: true
+  ai:
+    server: true
+  camera:
+    server: false
+  detect-gate:
+    server: false
+
+routes:
+  headerSets:
+    web:
+      set:
+        X-Frame-Options: DENY
+        X-Content-Type-Options: nosniff
+        Referrer-Policy: strict-origin-when-cross-origin
+        Strict-Transport-Security: max-age=31536000; includeSubDomains
+        X-XSS-Protection: "0"
+        Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
+        Cross-Origin-Resource-Policy: same-site
+        Cross-Origin-Opener-Policy: same-origin
+      remove:
+        - server
+        - x-powered-by
+    api:
+      set:
+        X-Frame-Options: DENY
+        X-Content-Type-Options: nosniff
+        Referrer-Policy: strict-origin-when-cross-origin
+        Strict-Transport-Security: max-age=31536000; includeSubDomains
+        X-XSS-Protection: "0"
+        Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
+        Cross-Origin-Resource-Policy: same-site
+        Cross-Origin-Opener-Policy: same-origin
+        Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+      remove:
+        - server
+        - x-powered-by
+  rules:
+    - name: backend
+      component: backend
+      port: 8000
+      headerSet: api
+      matches:
+        - type: PathPrefix
+          value: /api
+        - type: PathPrefix
+          value: /ws
+        - type: Exact
+          value: /health
+    - name: auth-login
+      component: auth
+      port: 8000
+      headerSet: api
+      matches:
+        - type: Exact
+          value: /auth/login
+    - name: auth
+      component: auth
+      port: 8000
+      headerSet: api
+      matches:
+        - type: PathPrefix
+          value: /auth
+    - name: web
+      component: web
+      port: 3000
+      headerSet: web
+      matches:
+        - type: PathPrefix
+          value: /
+
+migrations:
+  auth-migrate:
+    enabled: true
+    component: auth
+    database: authdb
+    ownerUser: auth_owner
+    ownerSecret: auth-migrate-secrets
+    ownerPasswordKey: auth_owner_postgres_password
+    command:
+      - alembic
+      - upgrade
+      - head
+    preSql: |
+      REVOKE CONNECT ON DATABASE authdb FROM PUBLIC;
+      GRANT CONNECT ON DATABASE authdb TO auth_app;
+      GRANT USAGE ON SCHEMA public TO auth_app;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO auth_app;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO auth_app;
+    postSql: |
+      GRANT DELETE ON audit_outbox TO auth_app;
+      REVOKE UPDATE ON audit_outbox_dead FROM auth_app;
+      REVOKE ALL ON alembic_version FROM auth_app;
+  audit-migrate:
+    enabled: true
+    component: audit
+    database: auditdb
+    ownerUser: audit_owner
+    ownerSecret: audit-migrate-secrets
+    ownerPasswordKey: audit_owner_postgres_password
+    command:
+      - alembic
+      - upgrade
+      - head
+    preSql: |
+      REVOKE CONNECT ON DATABASE auditdb FROM PUBLIC;
+      GRANT CONNECT ON DATABASE auditdb TO audit_app;
+      REVOKE ALL ON SCHEMA public FROM PUBLIC;
+      GRANT USAGE ON SCHEMA public TO audit_app;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT INSERT, SELECT ON TABLES TO audit_app;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO audit_app;
+    postSql: |
+      REVOKE ALL ON alembic_version FROM audit_app;
+
+auditOperator:
+  run: false
+  component: audit
+  secret: audit-operator-secrets
+  name: ""
+  args: []
+  ttlSecondsAfterFinished: 3600
+
+metrics:
+  path: /metrics
+  jobs:
+    backend: backend
+    notification: notification-service
+    notification-worker: notification-worker
+    ai: ai
+    camera: camera
+    detect-gate: detect-gate
+
+seed:
+  enabled: false
+  component: auth
+  secret: auth-seed-secrets
+  appSecretKeys:
+    - postgres_password
+  users:
+    - username: admin
+      roles: [admin]
+
 components:
   backend:
     enabled: true
@@ -66,11 +238,35 @@ components:
           targetPort: http
     env:
       PROMETHEUS_EXPORTER_PORT: "9464"
-      STORE_TIMEZONE: "{{ .Values.global.storeTimeZone }}"
+      STORE_TIME_ZONE: "{{ .Values.global.storeTimeZone }}"
+      PROMETHEUS_URL: http://prometheus-server.monitoring.svc.cluster.local
+      DATABASE_NAME: theft_detection_db
+      API_HOST: 0.0.0.0
+      API_PORT: "8000"
+      DEBUG: "False"
+      SNAPSHOTS_DIR: /app/snapshots
+      MONGODB_HOST: mongo:27017
+      REDIS_HOST: redis
+      STREAM_REDIS_HOST: redis-stream
     secret:
       enabled: true
       name: backend-secrets
       mountPath: /run/secrets
+    tls:
+      identity: api
+      filePrefix: api
+      caAliases:
+        - mongo_ca.crt
+    snapshots:
+      mount: true
+      readOnly: true
+      path: /app/snapshots
+    resources:
+      requests:
+        cpu: 50m
+        memory: 192Mi
+      limits:
+        memory: 192Mi
     extraVolumes: []
     extraVolumeMounts: []
     gpu:
@@ -79,11 +275,14 @@ components:
   web:
     enabled: true
     image:
-      repository: theft-detection-platform-web
-      tag: latest
+      repository: theft-web
+      tag: dev
       digest: ""
     otel:
       enabled: false
+    writablePaths:
+      - /tmp
+      - /app/.next/cache
     ports:
       - name: http
         containerPort: 3000
@@ -97,8 +296,15 @@ components:
       NODE_ENV: production
       API_BASE_URL: http://backend:8000
       AUTH_BASE_URL: http://auth:8000
+      STORE_TIME_ZONE: "{{ .Values.global.storeTimeZone }}"
     secret:
       enabled: false
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        memory: 256Mi
     extraVolumes: []
     extraVolumeMounts: []
     gpu:
@@ -107,7 +313,7 @@ components:
   auth:
     enabled: true
     image:
-      repository: auth
+      repository: theft-auth
       tag: dev
       digest: ""
     otel:
@@ -128,13 +334,35 @@ components:
           port: 50053
           targetPort: grpc
     env:
+      AUTH_SERVICE_NAME: auth
+      AUTH_HTTP_HOST: 0.0.0.0
       AUTH_HTTP_PORT: "8000"
+      AUTH_GRPC_HOST: 0.0.0.0
       AUTH_GRPC_PORT: "50053"
-      AUTH_TRUSTED_PROXIES: '["127.0.0.0/8","::1/128"]'
+      AUTH_GRPC_MAX_WORKERS: "8"
+      AUTH_LOG_LEVEL: info
+      AUTH_POSTGRES_HOST: "{{ .Values.global.postgres.host }}"
+      AUTH_POSTGRES_PORT: "{{ .Values.global.postgres.port }}"
+      AUTH_POSTGRES_DB: authdb
+      AUTH_POSTGRES_APP_USER: auth_app
+      AUTH_POSTGRES_OWNER_USER: auth_owner
+      AUTH_REDIS_HOST: redis
+      AUTH_AUDIT_TARGET: audit:50054
+      AUTH_TRUSTED_PROXIES: '["127.0.0.0/8","::1/128","10.244.0.0/16"]'
     secret:
       enabled: true
       name: auth-secrets
       mountPath: /run/secrets
+    tls:
+      identity: auth
+      filePrefix: auth
+    postgresCa: true
+    resources:
+      requests:
+        cpu: 25m
+        memory: 384Mi
+      limits:
+        memory: 384Mi
     extraVolumes: []
     extraVolumeMounts: []
     gpu:
@@ -143,7 +371,7 @@ components:
   audit:
     enabled: true
     image:
-      repository: audit
+      repository: theft-audit
       tag: dev
       digest: ""
     otel:
@@ -159,11 +387,55 @@ components:
           port: 50054
           targetPort: grpc
     env:
+      AUDIT_SERVICE_NAME: audit
+      AUDIT_GRPC_HOST: 0.0.0.0
       AUDIT_GRPC_PORT: "50054"
+      AUDIT_GRPC_MAX_WORKERS: "8"
+      AUDIT_LOG_LEVEL: info
+      AUDIT_POSTGRES_HOST: "{{ .Values.global.postgres.host }}"
+      AUDIT_POSTGRES_PORT: "{{ .Values.global.postgres.port }}"
+      AUDIT_POSTGRES_DB: auditdb
+      AUDIT_POSTGRES_APP_USER: audit_app
+      AUDIT_POSTGRES_APP_PASSWORD_FILE: /run/secrets/audit_app_postgres_password
+      AUDIT_POSTGRES_OWNER_USER: audit_owner
+      AUDIT_POSTGRES_OWNER_PASSWORD_FILE: /run/secrets/audit_owner_postgres_password
+      AUDIT_REDIS_HOST: redis
+      AUDIT_REDIS_PORT: "6380"
+      AUDIT_REDIS_USER: audit
+      AUDIT_REDIS_DB: "0"
+      AUDIT_REDIS_PASSWORD_FILE: /run/secrets/audit_redis_password
+      AUDIT_APPEND_RATE_LIMIT: "2000"
+      AUDIT_APPEND_RATE_WINDOW_SECONDS: "1"
+      AUDIT_SCHEMA_VERSION: "1"
+      AUDIT_MIN_ACCEPTED_SCHEMA_VERSION: "1"
+      AUDIT_PSEUDONYM_KEY_FILE: /run/secrets/audit_pseudonym_key
+      AUDIT_PSEUDONYM_KEY_ID: p1
+      AUDIT_CHECKPOINT_PRIVATE_KEY_FILE: /run/secrets/audit_checkpoint_private_key
+      AUDIT_CHECKPOINT_PUBLIC_KEY_FILE: /run/secrets/audit_checkpoint_public_key
+      AUDIT_CHECKPOINT_KEY_ID: c1
+      AUDIT_CHECKPOINT_INTERVAL_EVENTS: "1000"
+      AUDIT_CHECKPOINT_INTERVAL_SECONDS: "300"
+      AUDIT_RETENTION_DAYS: "365"
+      AUDIT_SEGMENT_INTERVAL_DAYS: "30"
+      AUDIT_TLS_ENABLED: "true"
+      AUDIT_TLS_CERT_FILE: /run/secrets/audit_tls_cert
+      AUDIT_TLS_KEY_FILE: /run/secrets/audit_tls_key
+      AUDIT_TLS_CA_FILE: /run/secrets/audit_tls_ca
+      AUDIT_TLS_REQUIRE_CLIENT_AUTH: "true"
     secret:
       enabled: true
       name: audit-secrets
       mountPath: /run/secrets
+    tls:
+      identity: audit
+      filePrefix: audit
+    postgresCa: true
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 128Mi
     extraVolumes: []
     extraVolumeMounts: []
     gpu:
@@ -172,7 +444,7 @@ components:
   notification:
     enabled: true
     image:
-      repository: notification-server
+      repository: theft-notification-server
       tag: dev
       digest: ""
     otel:
@@ -181,6 +453,8 @@ components:
     ports:
       - name: grpc
         containerPort: 50052
+      - name: http
+        containerPort: 8000
       - name: metrics
         containerPort: 9464
     service:
@@ -189,12 +463,34 @@ components:
         - name: grpc
           port: 50052
           targetPort: grpc
+        - name: http
+          port: 8000
+          targetPort: http
     env:
       PROMETHEUS_EXPORTER_PORT: "9464"
+      DATABASE_NAME: theft_detection_db
+      MONGODB_HOST: mongo:27017
+      REDIS_HOST: redis-broker
+      SNAPSHOTS_DIR: /app/snapshots
+    secretEnv:
+      - name: TELEGRAM_CHAT_ID
+        secret: notification-env
+        key: telegram_chat_id
     secret:
       enabled: true
       name: notification-secrets
       mountPath: /run/secrets
+    tls:
+      identity: notification
+      filePrefix: notification
+      caAliases:
+        - mongo_ca.crt
+    resources:
+      requests:
+        cpu: 25m
+        memory: 160Mi
+      limits:
+        memory: 160Mi
     extraVolumes: []
     extraVolumeMounts: []
     gpu:
@@ -203,7 +499,7 @@ components:
   notification-worker:
     enabled: true
     image:
-      repository: notification-worker
+      repository: theft-notification-worker
       tag: dev
       digest: ""
     otel:
@@ -224,10 +520,33 @@ components:
       enabled: false
     env:
       PROMETHEUS_EXPORTER_PORT: "9465"
+      DATABASE_NAME: theft_detection_db
+      MONGODB_HOST: mongo:27017
+      REDIS_HOST: redis-broker
+      SNAPSHOTS_DIR: /app/snapshots
+    secretEnv:
+      - name: TELEGRAM_CHAT_ID
+        secret: notification-env
+        key: telegram_chat_id
     secret:
       enabled: true
       name: notification-worker-secrets
       mountPath: /run/secrets
+    tls:
+      identity: notification
+      filePrefix: notification
+      caAliases:
+        - mongo_ca.crt
+    snapshots:
+      mount: true
+      readOnly: true
+      path: /app/snapshots
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 256Mi
     extraVolumes: []
     extraVolumeMounts: []
     gpu:
@@ -239,7 +558,7 @@ components:
     strategy:
       type: Recreate
     image:
-      repository: notification-worker
+      repository: theft-notification-worker
       tag: dev
       digest: ""
     otel:
@@ -260,10 +579,28 @@ components:
       enabled: false
     env:
       PROMETHEUS_EXPORTER_PORT: "9466"
+      DATABASE_NAME: theft_detection_db
+      MONGODB_HOST: mongo:27017
+      REDIS_HOST: redis-broker
+    secretEnv:
+      - name: TELEGRAM_CHAT_ID
+        secret: notification-env
+        key: telegram_chat_id
     secret:
       enabled: true
       name: notification-beat-secrets
       mountPath: /run/secrets
+    tls:
+      identity: notification
+      filePrefix: notification
+      caAliases:
+        - mongo_ca.crt
+    resources:
+      requests:
+        cpu: 10m
+        memory: 128Mi
+      limits:
+        memory: 128Mi
     extraVolumes: []
     extraVolumeMounts: []
     gpu:
@@ -278,6 +615,10 @@ components:
     otel:
       enabled: true
       serviceName: theft-ai
+    writablePaths:
+      - /tmp
+      - /app/.ultralytics
+      - /app/.matplotlib
     ports:
       - name: grpc
         containerPort: 50051
@@ -291,10 +632,42 @@ components:
           targetPort: grpc
     env:
       PROMETHEUS_EXPORTER_PORT: "9464"
+      REDIS_HOST: redis-stream
+      REDIS_TLS: "true"
+      REDIS_DB: "2"
+      REDIS_USER: ai
+      NODE_STATS_KEY: stats:node
+      NODE_STATS_INTERVAL_SECONDS: "2.0"
+      NODE_STATS_TTL_SECONDS: "15"
+      NODE_STATS_DEVICE_INDEX: "0"
+      DEVICE: cuda
+      ANOMALY_THRESHOLD: "0.6"
+      TRACKER_TTL_SECONDS: "60"
+      LOG_LEVEL: INFO
+      DEBUG: "false"
+      CONCEALMENT_MISSING_SECONDS: "1.0"
+      API_BASE_URL: http://backend:8000
+      AUTH_BASE_URL: http://auth:8000
     secret:
       enabled: true
       name: ai-secrets
       mountPath: /run/secrets
+    tls:
+      identity: ai
+      filePrefix: ai
+    snapshots:
+      mount: true
+      readOnly: false
+      path: /app/snapshots
+    models:
+      mount: true
+      path: /app/ai-model/models
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+      limits:
+        memory: 2Gi
     extraVolumes: []
     extraVolumeMounts: []
     gpu:
@@ -321,14 +694,40 @@ components:
     env:
       PROMETHEUS_EXPORTER_PORT: "9464"
       CAMERA_ID: cam-a
+      DEVICE_PATH: /dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_3521BF9F-video-index0
       FRAME_WIDTH: "1280"
       FRAME_HEIGHT: "720"
       AI_HOST: ai
       AI_PORT: "50051"
+      REDIS_HOST: redis-stream
+      REDIS_TLS: "true"
+      REDIS_DB: "2"
+      REDIS_USER: camera
+      FRAME_STREAM_PREFIX: frame
+      FRAME_STREAM_MAXLEN: "900"
+      DETECT_STREAM_PREFIX: detect
+      DETECT_STREAM_MAXLEN: "300"
+      STATS_KEY_PREFIX: stats:camera
+      STATS_INTERVAL_SECONDS: "1.0"
+      STATS_TTL_SECONDS: "10"
+      PUBLISH_QUEUE_DEPTH: "30"
+      IDLE_FPS: "15"
+      ACTIVE_FPS: "30"
+      LOG_LEVEL: INFO
+      DEBUG: "false"
     secret:
       enabled: true
       name: camera-secrets
       mountPath: /run/secrets
+    tls:
+      identity: camera
+      filePrefix: camera
+    resources:
+      requests:
+        cpu: 100m
+        memory: 160Mi
+      limits:
+        memory: 160Mi
     extraVolumes: []
     extraVolumeMounts: []
     gpu:
@@ -343,6 +742,11 @@ components:
     otel:
       enabled: true
       serviceName: theft-detect-gate
+    writablePaths:
+      - /tmp
+      - /app/.ultralytics
+      - /app/.matplotlib
+      - /app/run
     ports:
       - name: metrics
         containerPort: 9464
@@ -354,10 +758,36 @@ components:
       SESSION_ID: "1"
       AI_HOST: ai
       AI_PORT: "50051"
+      REDIS_HOST: redis-stream
+      REDIS_TLS: "true"
+      REDIS_DB: "2"
+      REDIS_USER: gate
+      FRAME_SOURCE: camera
+      FRAME_STREAM_PREFIX: frame
+      FRAME_READ_BLOCK_MS: "2000"
+      MODEL_NAME: /app/ai-model/models/yolov8n.pt
+      MODEL_DEVICE: cuda
+      DETECTION_CONFIDENCE: "0.3"
+      EXIT_DEBOUNCE_FRAMES: "30"
+      GATE_FPS: "15"
+      LOG_LEVEL: INFO
+      DEBUG: "false"
     secret:
       enabled: true
       name: detect-gate-secrets
       mountPath: /run/secrets
+    tls:
+      identity: detect-gate
+      filePrefix: gate
+    models:
+      mount: true
+      path: /app/ai-model/models
+    resources:
+      requests:
+        cpu: 750m
+        memory: 2304Mi
+      limits:
+        memory: 2304Mi
     extraVolumes: []
     extraVolumeMounts: []
     gpu:

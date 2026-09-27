@@ -1,0 +1,153 @@
+{{- with .Values.mongo }}
+{{- if .enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mongo
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "data.labels" (dict "root" $ "name" "mongo" "component" "database") | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "data.labels" (dict "root" $ "name" "mongo" "component" "database") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "data.selectorLabels" (dict "root" $ "name" "mongo") | nindent 4 }}
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: mongodb
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-headless
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "data.labels" (dict "root" $ "name" "mongo" "component" "database") | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "data.selectorLabels" (dict "root" $ "name" "mongo") | nindent 4 }}
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: mongodb
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "data.labels" (dict "root" $ "name" "mongo" "component" "database") | nindent 4 }}
+spec:
+  serviceName: mongo-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "data.selectorLabels" (dict "root" $ "name" "mongo") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "data.labels" (dict "root" $ "name" "mongo" "component" "database") | nindent 8 }}
+      annotations:
+        secret.reloader.stakater.com/reload: "mongo-secrets,mongo-tls"
+        configmap.reloader.stakater.com/reload: "mongo-config,mongo-init"
+    spec:
+      serviceAccountName: mongo
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        {{- include "data.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: mongo
+          image: {{ .image }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - mongod
+            - --config
+            - /etc/mongo/mongod.conf
+            - --wiredTigerCacheSizeGB
+            - {{ .cacheSizeGB | quote }}
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              value: root
+            - name: MONGO_INITDB_ROOT_PASSWORD_FILE
+              value: /run/secrets/mongo_root_password
+          ports:
+            - name: mongodb
+              containerPort: 27017
+              protocol: TCP
+          securityContext:
+            {{- include "data.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+            - name: configdb
+              mountPath: /data/configdb
+            - name: tmp
+              mountPath: /tmp
+            - name: config
+              mountPath: /etc/mongo
+              readOnly: true
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: secrets
+              mountPath: /run/secrets
+              readOnly: true
+      volumes:
+        - name: configdb
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: config
+          projected:
+            defaultMode: 0440
+            sources:
+              - configMap:
+                  name: mongo-config
+                  items:
+                    - key: mongod.conf
+                      path: mongod.conf
+              - secret:
+                  name: mongo-tls
+                  items:
+                    - key: tls-combined.pem
+                      path: tls/mongod.pem
+                    - key: ca.crt
+                      path: tls/ca.crt
+        - name: init
+          configMap:
+            name: mongo-init
+            defaultMode: 0550
+        - name: secrets
+          secret:
+            secretName: mongo-secrets
+            defaultMode: 0440
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ .storage.storageClass }}
+        resources:
+          requests:
+            storage: {{ .storage.size }}
+{{- end }}
+{{- end }}

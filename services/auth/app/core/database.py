@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import ssl
 from collections.abc import AsyncIterator
 from functools import lru_cache
 from pathlib import Path
@@ -38,6 +39,30 @@ def _load_password(path: Path) -> str:
     return password
 
 
+@lru_cache(maxsize=2)
+def _ssl_context(ca_file: Path) -> ssl.SSLContext:
+    try:
+        context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=str(ca_file))
+    except FileNotFoundError as exc:
+        raise DatabaseCredentialError(f"postgres ca file missing at {ca_file}") from exc
+    except (OSError, ssl.SSLError) as exc:
+        raise DatabaseCredentialError(f"postgres ca file unreadable at {ca_file}") from exc
+    context.minimum_version = ssl.TLSVersion.TLSv1_3
+    return context
+
+
+def connect_args(server_settings: dict[str, str] | None = None) -> dict[str, object]:
+    settings = get_settings()
+    args: dict[str, object] = {
+        "ssl": False
+        if settings.postgres_ssl_mode == "disable"
+        else _ssl_context(settings.postgres_ssl_ca_file)
+    }
+    if server_settings:
+        args["server_settings"] = server_settings
+    return args
+
+
 def _build_url(user: str, password: str) -> str:
     settings = get_settings()
     return (
@@ -71,7 +96,7 @@ def get_engine() -> AsyncEngine:
             max_overflow=5,
             pool_pre_ping=True,
             echo=False,
-            connect_args={"server_settings": {"application_name": settings.service_name}},
+            connect_args=connect_args({"application_name": settings.service_name}),
         )
         logger.info("postgres engine created")
     return _engine

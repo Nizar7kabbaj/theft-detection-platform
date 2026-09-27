@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "pinned sha256 checksums in the kind platform installer"
+condition = "AND"
+paths = ['''^ops/host/kind/install-platform\.sh$''']
+regexTarget = "match"
+regexes = ['''[A-Z0-9_]+_SHA256="[a-f0-9]{64}"$''']

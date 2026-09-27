@@ -1,0 +1,70 @@
+{{- with .Values.postgres }}
+{{- if .enabled }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "data.labels" (dict "root" $ "name" "postgres" "component" "database") | nindent 4 }}
+spec:
+  instances: {{ .instances }}
+  imageName: {{ .image }}
+  enableSuperuserAccess: false
+  primaryUpdateStrategy: unsupervised
+  storage:
+    size: {{ .storage.size }}
+    storageClass: {{ .storage.storageClass }}
+  resources:
+    {{- toYaml .resources | nindent 4 }}
+  postgresql:
+    parameters:
+      {{- range $k, $v := .parameters }}
+      {{ $k }}: {{ $v | quote }}
+      {{- end }}
+    pg_hba:
+      - hostnossl all all all reject
+      - host postgres all all reject
+      - host template1 all all reject
+  certificates:
+    serverTLSSecret: postgres-server-tls
+    serverCASecret: postgres-server-tls
+  bootstrap:
+    initdb:
+      database: {{ .bootstrap.database }}
+      owner: {{ .bootstrap.owner }}
+      secret:
+        name: {{ .bootstrap.secret }}
+  managed:
+    roles:
+      {{- range .roles }}
+      - name: {{ .name }}
+        ensure: present
+        login: true
+        superuser: false
+        createdb: false
+        createrole: false
+        inherit: false
+        passwordSecret:
+          name: {{ .secret }}
+      {{- end }}
+{{- range .databases }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "data.labels" (dict "root" $ "name" .name "component" "database") | nindent 4 }}
+spec:
+  name: {{ .name }}
+  owner: {{ .owner }}
+  ensure: present
+  databaseReclaimPolicy: retain
+  cluster:
+    name: postgres
+{{- end }}
+{{- end }}
+{{- end }}

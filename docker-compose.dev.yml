@@ -1,5 +1,6 @@
 services:
   web:
+    image: theft-web:devserver
     build:
       context: ./apps/web
       dockerfile: Dockerfile

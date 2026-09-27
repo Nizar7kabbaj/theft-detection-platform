@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import ssl
 from collections.abc import AsyncIterator
 from functools import lru_cache
 from pathlib import Path
@@ -63,6 +64,30 @@ def resolve_owner_url() -> str:
     )
 
 
+@lru_cache(maxsize=2)
+def _ssl_context(ca_file: Path) -> ssl.SSLContext:
+    try:
+        context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=str(ca_file))
+    except FileNotFoundError as exc:
+        raise DatabaseCredentialError(f"postgres ca file missing at {ca_file}") from exc
+    except (OSError, ssl.SSLError) as exc:
+        raise DatabaseCredentialError(f"postgres ca file unreadable at {ca_file}") from exc
+    context.minimum_version = ssl.TLSVersion.TLSv1_3
+    return context
+
+
+def connect_args(server_settings: dict[str, str] | None = None) -> dict[str, object]:
+    settings = get_settings()
+    args: dict[str, object] = {
+        "ssl": False
+        if settings.postgres_ssl_mode == "disable"
+        else _ssl_context(settings.postgres_ssl_ca_file)
+    }
+    if server_settings:
+        args["server_settings"] = server_settings
+    return args
+
+
 def _server_settings() -> dict[str, str]:
     settings = get_settings()
     return {
@@ -95,7 +120,7 @@ def get_engine() -> AsyncEngine:
             pool_recycle=1800,
             pool_pre_ping=True,
             echo=False,
-            connect_args={"server_settings": _server_settings()},
+            connect_args=connect_args(_server_settings()),
         )
         logger.info("postgres engine created")
     return _engine
@@ -122,7 +147,7 @@ def get_owner_engine() -> AsyncEngine:
             pool_timeout=30,
             pool_pre_ping=True,
             echo=False,
-            connect_args={"server_settings": _owner_server_settings()},
+            connect_args=connect_args(_owner_server_settings()),
         )
         logger.info("postgres owner engine created")
     return _owner_engine

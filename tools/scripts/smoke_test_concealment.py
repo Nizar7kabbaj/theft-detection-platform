@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 import grpc
+from google.protobuf.timestamp_pb2 import Timestamp
 
 sys.path.insert(0, "/app")
 
@@ -16,6 +18,7 @@ CAMERA_ID = "concealment-cam"
 SESSION_ID = 77
 HOLDING_FRAMES = 40
 HIDDEN_FRAMES = 50
+FRAME_INTERVAL_NS = 1_000_000_000 // 30
 
 
 def main() -> int:
@@ -38,11 +41,15 @@ def main() -> int:
     sequence = [(holding, "holding")] * HOLDING_FRAMES + [(hidden, "hidden")] * HIDDEN_FRAMES
     fired = 0
 
+    start_ns = time.time_ns()
     for frame_index, (payload, phase) in enumerate(sequence):
+        timestamp = Timestamp()
+        timestamp.FromNanoseconds(start_ns + frame_index * FRAME_INTERVAL_NS)
         frame = inference_pb2.Frame(
             payload=payload,
             session_id=SESSION_ID,
             frame_index=frame_index,
+            timestamp=timestamp,
             camera_id=CAMERA_ID,
         )
         response = stub.Analyze(frame, timeout=30.0)

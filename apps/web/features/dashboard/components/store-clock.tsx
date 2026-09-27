@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
-import { STORE_TIME_ZONE } from "@/lib/time/zone"
+import { storeTimeZone } from "@/lib/time/zone"
 
 const PLACEHOLDER = "--:--:--"
 
@@ -10,7 +10,7 @@ function storeTime(now: Date): string {
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
-    timeZone: STORE_TIME_ZONE,
+    timeZone: storeTimeZone(),
   }).format(now)
 }
 

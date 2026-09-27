@@ -22,8 +22,8 @@ _SERVICE_JOBS = {
 _CPU_QUERY = '(1 - avg(rate(node_cpu_seconds_total{mode="idle"}[2m]))) * 100'
 _MEMORY_QUERY = "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"
 _NETWORK_QUERY = (
-    'sum(rate(node_network_receive_bytes_total{device=~"wl.*|en.*"}[2m]))'
-    ' + sum(rate(node_network_transmit_bytes_total{device=~"wl.*|en.*"}[2m]))'
+    'sum(rate(node_network_receive_bytes_total{device=~"wl.*|en.*|eth.*"}[2m]))'
+    ' + sum(rate(node_network_transmit_bytes_total{device=~"wl.*|en.*|eth.*"}[2m]))'
 )
 _GPU_QUERY = "avg(nvidia_smi_utilization_gpu_ratio) * 100"
 _GPU_TEMPERATURE_QUERY = "avg(nvidia_smi_temperature_gpu)"

@@ -1,0 +1,26 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: localhost
+  namespace: edge
+spec:
+  secretName: localhost-tls
+  commonName: localhost
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - digital signature
+    - server auth
+  dnsNames:
+    - localhost
+    - "*.localhost"
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    name: edge-ca
+    kind: ClusterIssuer
+    group: cert-manager.io

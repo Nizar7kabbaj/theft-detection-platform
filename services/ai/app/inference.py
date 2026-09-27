@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,22 +7,16 @@ from typing import Protocol
 
 import cv2
 import numpy as np
+from ultralytics import YOLO
 
 from app.annotator import draw_annotated
 from app.clip_buffer import ClipBuffer
 from app.clip_writer import write_clip
 from app.concealment import ConcealmentTracker, ConcealmentVerdict
 from app.core.config import settings
-from app.tracker_store import TrackerStore
-
-_AI_MODEL_SCRIPTS = Path("/app/ai-model/scripts")
-if _AI_MODEL_SCRIPTS.exists() and str(_AI_MODEL_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_AI_MODEL_SCRIPTS))
-
-from predictor import ShoplifterPredictor
-from ultralytics import YOLO
-
 from app.grpc_gen.inference_pb2 import InferenceState
+from app.predictor import ShoplifterPredictor
+from app.tracker_store import TrackerStore
 
 
 @dataclass(frozen=True, slots=True)

@@ -28,8 +28,6 @@ EXPOSE 3000
 CMD ["pnpm", "exec", "next", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
 
 FROM base AS builder
-ARG STORE_TIME_ZONE
-ENV NEXT_PUBLIC_STORE_TIME_ZONE=${STORE_TIME_ZONE}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN --mount=type=cache,target=/app/.next/cache \
@@ -41,10 +39,10 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 WORKDIR /app
-RUN chown node:node /app
-COPY --from=builder --chown=node:node /app/.next/standalone ./
-COPY --from=builder --chown=node:node /app/.next/static ./.next/static
-COPY --from=builder --chown=node:node /app/public ./public
+RUN mkdir -p /app/.next/cache && chown node:node /app/.next/cache
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 USER node
 EXPOSE 3000
 CMD ["node", "server.js"]

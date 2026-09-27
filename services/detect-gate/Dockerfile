@@ -23,10 +23,8 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
-
-FROM base AS weights
-ADD --chmod=0644 https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt /app/yolov8n.pt
+    uv sync --frozen --no-install-project --no-dev \
+    && rm -f /opt/venv/.lock
 
 FROM base AS runtime
 RUN rm -f /etc/apt/apt.conf.d/docker-clean \
@@ -36,9 +34,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         libglib2.0-0
 ENV PATH=/opt/venv/bin:$PATH
-COPY --from=builder --chown=gate:gate /opt/venv /opt/venv
-COPY --from=weights --chown=gate:gate /app/yolov8n.pt /app/yolov8n.pt
-COPY --chown=gate:gate app /app/app
+COPY --from=builder /opt/venv /opt/venv
+COPY --chmod=u=rwX,go=rX app /app/app
 RUN mkdir -p /app/.ultralytics /app/.matplotlib /app/run \
     && chown gate:gate /app/.ultralytics /app/.matplotlib /app/run
 USER gate

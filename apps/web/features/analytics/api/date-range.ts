@@ -1,5 +1,5 @@
 import type { BucketUnit } from "@/features/analytics/schemas/timeseries"
-import { STORE_TIME_ZONE } from "@/lib/time/zone"
+import { storeFormatter } from "@/lib/time/zone"
 
 export type DateRange = {
   start: string | null
@@ -14,20 +14,18 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const OFFSET_PATTERN = /GMT([+-]\d{2}:\d{2})/
 const DAY_MS = 86400000
 
-const OFFSET_FORMAT = new Intl.DateTimeFormat("en-US", {
-  timeZone: STORE_TIME_ZONE,
-  timeZoneName: "longOffset",
-})
+function offsetFormat(): Intl.DateTimeFormat {
+  return storeFormatter("en-US", { timeZoneName: "longOffset" })
+}
 
-const DAY_FORMAT = new Intl.DateTimeFormat("en-CA", {
-  timeZone: STORE_TIME_ZONE,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-})
+function dayFormat(): Intl.DateTimeFormat {
+  return storeFormatter("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" })
+}
 
 function storeOffset(at: Date): string {
-  const part = OFFSET_FORMAT.formatToParts(at).find((entry) => entry.type === "timeZoneName")
+  const part = offsetFormat()
+    .formatToParts(at)
+    .find((entry) => entry.type === "timeZoneName")
   const matched = part === undefined ? null : OFFSET_PATTERN.exec(part.value)
   return matched?.[1] ?? "+00:00"
 }
@@ -58,7 +56,7 @@ export function endInstant(day: string): string {
 }
 
 export function today(): string {
-  return DAY_FORMAT.format(new Date())
+  return dayFormat().format(new Date())
 }
 
 export function shiftDays(day: string, days: number): string {

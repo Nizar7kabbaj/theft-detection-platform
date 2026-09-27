@@ -1,0 +1,93 @@
+{{- range $name, $m := .Values.migrations }}
+{{- $raw := index $.Values.components $m.component }}
+{{- if and $m.enabled $raw $raw.enabled }}
+{{- $c := include "theft.component" (dict "root" $ "comp" $raw) | fromYaml }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-sql
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  pre.sql: |
+    {{- $m.preSql | nindent 4 }}
+  post.sql: |
+    {{- $m.postSql | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- toYaml $c.podSecurityContext | nindent 8 }}
+      initContainers:
+        {{- include "theft.psqlContainer" (dict "root" $ "name" "grants-pre" "file" "pre.sql" "migration" $m "jobName" $name "securityContext" $c.containerSecurityContext) | nindent 8 }}
+        - name: migrate
+          image: {{ include "theft.image" (dict "root" $ "image" $c.image) }}
+          imagePullPolicy: {{ $.Values.global.image.pullPolicy }}
+          command:
+            {{- toYaml $m.command | nindent 12 }}
+          env:
+            {{- include "theft.envList" (dict "root" $ "env" ($c.env | default dict)) | nindent 12 }}
+            - name: OTEL_SDK_DISABLED
+              value: "true"
+          securityContext:
+            {{- toYaml $c.containerSecurityContext | nindent 12 }}
+          {{- with $c.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: owner-secret
+              mountPath: /run/secrets
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: pg-ca
+              mountPath: /run/postgres-ca
+              readOnly: true
+      containers:
+        {{- include "theft.psqlContainer" (dict "root" $ "name" "grants-post" "file" "post.sql" "migration" $m "jobName" $name "securityContext" $c.containerSecurityContext) | nindent 8 }}
+      volumes:
+        - name: sql
+          configMap:
+            name: {{ $name }}-sql
+        - name: owner-secret
+          secret:
+            secretName: {{ $m.ownerSecret }}
+            defaultMode: 0440
+        - name: pg-ca
+          secret:
+            secretName: {{ $.Values.global.postgres.caSecret }}
+            defaultMode: 0440
+            items:
+              - key: ca.crt
+                path: ca.crt
+        - name: tmp
+          emptyDir: {}
+{{- end }}
+{{- end }}

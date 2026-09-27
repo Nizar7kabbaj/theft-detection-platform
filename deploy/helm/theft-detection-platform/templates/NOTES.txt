@@ -3,9 +3,13 @@
 enabled components:
 {{- range $name, $c := .Values.components }}
 {{- if $c.enabled }}
-  {{ $name }}{{ if $c.secret.enabled }}  needs secret {{ $c.secret.name }}{{ end }}
+  {{ $name }}{{ if $c.secret.enabled }}  secret {{ $c.secret.name }}{{ end }}{{ with $c.tls }}  identity {{ .identity }}{{ end }}
 {{- end }}
+{{- end }}
+{{- if .Values.global.gateway.enabled }}
+
+served at https://{{ .Values.global.gateway.hostname }} through {{ .Values.global.gateway.namespace }}/{{ .Values.global.gateway.name }}
 {{- end }}
 
 check the rollout:
-  kubectl -n {{ .Release.Namespace }} get pods
+  kubectl -n {{ .Release.Namespace }} get pods,jobs,certificates,httproutes

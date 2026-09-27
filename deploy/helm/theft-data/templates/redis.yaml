@@ -1,0 +1,131 @@
+{{- range $name, $r := .Values.redis.instances }}
+{{- if $r.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "data.labels" (dict "root" $ "name" $name "component" "cache") | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "data.labels" (dict "root" $ "name" $name "component" "cache") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "data.selectorLabels" (dict "root" $ "name" $name) | nindent 4 }}
+  ports:
+    - name: redis-tls
+      port: 6380
+      targetPort: redis-tls
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-headless
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "data.labels" (dict "root" $ "name" $name "component" "cache") | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "data.selectorLabels" (dict "root" $ "name" $name) | nindent 4 }}
+  ports:
+    - name: redis-tls
+      port: 6380
+      targetPort: redis-tls
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "data.labels" (dict "root" $ "name" $name "component" "cache") | nindent 4 }}
+spec:
+  serviceName: {{ $name }}-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "data.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "data.labels" (dict "root" $ "name" $name "component" "cache") | nindent 8 }}
+      annotations:
+        secret.reloader.stakater.com/reload: {{ printf "%s-config,%s-tls" $name $name | quote }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        {{- include "data.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: redis
+          image: {{ $.Values.redis.image }}
+          imagePullPolicy: IfNotPresent
+          args:
+            {{- toYaml (concat (list "redis-server" (printf "/etc/redis/%s.conf" $name)) $r.extraArgs) | nindent 12 }}
+          ports:
+            - name: redis-tls
+              containerPort: 6380
+              protocol: TCP
+          securityContext:
+            {{- include "data.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml $r.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/redis
+              readOnly: true
+      volumes:
+        - name: config
+          projected:
+            defaultMode: 0440
+            sources:
+              - secret:
+                  name: {{ $name }}-config
+                  items:
+                    - key: {{ $name }}.conf
+                      path: {{ $name }}.conf
+                    - key: {{ $name }}.acl
+                      path: {{ $name }}.acl
+              - secret:
+                  name: {{ $name }}-tls
+                  items:
+                    - key: tls.crt
+                      path: tls/tls.crt
+                    - key: tls.key
+                      path: tls/tls.key
+                    - key: ca.crt
+                      path: tls/ca.crt
+        {{- if not $r.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+  {{- if $r.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ $r.persistence.storageClass }}
+        resources:
+          requests:
+            storage: {{ $r.persistence.size }}
+  {{- end }}
+{{- end }}
+{{- end }}

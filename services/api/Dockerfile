@@ -19,12 +19,13 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
+    uv sync --frozen --no-install-project --no-dev \
+    && rm -f /opt/venv/.lock
 
 FROM base AS runtime
 ENV PATH=/opt/venv/bin:$PATH
-COPY --from=builder --chown=api:api /opt/venv /opt/venv
-COPY --chown=api:api app /app/app
+COPY --from=builder /opt/venv /opt/venv
+COPY --chmod=u=rwX,go=rX app /app/app
 USER api
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -40,7 +41,8 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --extra dev
+    uv sync --frozen --no-install-project --extra dev \
+    && rm -f /opt/venv/.lock
 COPY --chown=api:api pyproject.toml /app/pyproject.toml
 COPY --chown=api:api app /app/app
 COPY --chown=api:api tests /app/tests

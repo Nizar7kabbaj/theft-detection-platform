@@ -20,7 +20,8 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
+    uv sync --frozen --no-install-project --no-dev \
+    && rm -f /opt/venv/.lock
 
 FROM base AS probe
 ARG GRPC_HEALTH_PROBE_VERSION
@@ -28,12 +29,12 @@ ADD --chmod=0755 https://github.com/grpc-ecosystem/grpc-health-probe/releases/do
 
 FROM base AS runtime
 ENV PATH=/opt/venv/bin:$PATH
-COPY --from=builder --chown=audit:audit /opt/venv /opt/venv
+COPY --from=builder /opt/venv /opt/venv
 COPY --from=probe /usr/local/bin/grpc_health_probe /usr/local/bin/grpc_health_probe
-COPY --chown=audit:audit app /app/app
-COPY --chown=audit:audit tools /app/tools
-COPY --chown=audit:audit alembic.ini /app/alembic.ini
-COPY --chown=audit:audit migrations /app/migrations
+COPY --chmod=u=rwX,go=rX app /app/app
+COPY --chmod=u=rwX,go=rX tools /app/tools
+COPY --chmod=u=rwX,go=rX alembic.ini /app/alembic.ini
+COPY --chmod=u=rwX,go=rX migrations /app/migrations
 USER audit
 EXPOSE 50054
 CMD ["python", "-m", "app.main"]

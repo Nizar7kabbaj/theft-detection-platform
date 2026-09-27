@@ -1,7 +1,8 @@
 from pathlib import Path
+
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 class ShoplifterLSTM(nn.Module):
@@ -18,10 +19,13 @@ class ShoplifterLSTM(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(hidden_size, num_classes),
         )
+
     def forward(self, x):
         out, _ = self.lstm(x)
         last = out[:, -1, :]
         return self.classifier(last)
+
+
 class ShoplifterPredictor:
     def __init__(self, model_path, device=None, store=None):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -38,6 +42,7 @@ class ShoplifterPredictor:
         self.model.load_state_dict(ckpt["state_dict"])
         self.model.eval()
         self._store = store
+
     def _normalize(self, bbox_xyxy, keypoints):
         x1, y1, x2, y2 = bbox_xyxy
         cx = (x1 + x2) / 2.0
@@ -53,6 +58,7 @@ class ShoplifterPredictor:
         if bad.any():
             kp[bad] = 0.0
         return kp.reshape(-1).astype(np.float32)
+
     def update(self, camera_id, track_id, bbox_xyxy, keypoints, frame_index):
         if self._store is None:
             raise RuntimeError("predictor has no tracker store")
@@ -74,9 +80,10 @@ class ShoplifterPredictor:
         with torch.no_grad():
             logits = self.model(x)
             probs = torch.softmax(logits, dim=1)[0]
-            p_normal  = float(probs[0].item())
+            p_normal = float(probs[0].item())
             p_anomaly = float(probs[1].item())
         return p_normal, p_anomaly
+
     def drop_track(self, camera_id, track_id):
         if self._store is not None:
             self._store.drop(camera_id=camera_id, track_id=track_id)

@@ -1,0 +1,43 @@
+replicaCount: 1
+autoscaling:
+  enabled: false
+service:
+  type: NodePort
+  ports:
+    - name: status-port
+      port: 15021
+      protocol: TCP
+      targetPort: 15021
+    - name: http2
+      port: 80
+      protocol: TCP
+      targetPort: 80
+      nodePort: 30080
+    - name: https
+      port: 443
+      protocol: TCP
+      targetPort: 443
+      nodePort: 30443
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1337
+  runAsGroup: 1337
+  fsGroup: 1337
+  seccompProfile:
+    type: RuntimeDefault
+  sysctls:
+    - name: net.ipv4.ip_unprivileged_port_start
+      value: "0"
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop:
+      - ALL
+resources:
+  requests:
+    cpu: 50m
+    memory: 256Mi
+  limits:
+    memory: 256Mi

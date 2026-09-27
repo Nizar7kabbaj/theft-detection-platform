@@ -1,4 +1,4 @@
-import { STORE_TIME_ZONE } from "@/lib/time/zone"
+import { storeFormatter } from "@/lib/time/zone"
 
 export const RANGE_PRESETS = ["today", "7d", "30d", "90d"] as const
 
@@ -15,19 +15,20 @@ const PRESET_DAYS: Record<RangePreset, number> = {
   "90d": 90,
 }
 
-const ZONE_PARTS = new Intl.DateTimeFormat("en-CA", {
-  timeZone: STORE_TIME_ZONE,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-})
+function zoneParts(): Intl.DateTimeFormat {
+  return storeFormatter("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+}
 
 function readParts(instant: Date): Record<string, number> {
-  const parts = ZONE_PARTS.formatToParts(instant)
+  const parts = zoneParts().formatToParts(instant)
   const out: Record<string, number> = {}
   for (const part of parts) {
     if (part.type !== "literal") {

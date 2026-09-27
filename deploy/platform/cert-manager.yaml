@@ -1,0 +1,36 @@
+crds:
+  enabled: true
+  keep: true
+global:
+  leaderElection:
+    namespace: cert-manager
+enableCertificateOwnerRef: true
+prometheus:
+  enabled: false
+resources:
+  requests:
+    cpu: 25m
+    memory: 128Mi
+  limits:
+    memory: 128Mi
+webhook:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 64Mi
+cainjector:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 128Mi
+    limits:
+      memory: 128Mi
+startupapicheck:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 64Mi

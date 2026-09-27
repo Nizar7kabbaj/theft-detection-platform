@@ -44,6 +44,8 @@ class InferenceServicer(inference_pb2_grpc.InferenceServiceServicer):
         request: inference_pb2.Frame,
         context: grpc.aio.ServicerContext,
     ) -> inference_pb2.Detection:
+        if not request.HasField("timestamp") or request.timestamp.seconds <= 0:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "frame timestamp is required")
         result = await self._run_inference(request)
         if result is None:
             return inference_pb2.Detection(detection_present=False)

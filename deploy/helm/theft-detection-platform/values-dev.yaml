@@ -3,6 +3,32 @@ global:
   image:
     registry: ""
     pullPolicy: IfNotPresent
+  otel:
+    tracesExporter: none
+  snapshots:
+    enabled: true
+    size: 20Gi
+    storageClassName: ""
+    accessMode: ReadWriteOnce
+    local:
+      path: /srv/theft/snapshots
+      node: theft-dev-worker
+
+seed:
+  enabled: true
+  users:
+    - username: admin
+      roles: [admin]
+    - username: operator
+      roles: [operator]
+    - username: viewer
+      roles: [viewer]
+    - username: ml-engineer
+      roles: [ml_engineer]
+    - username: compliance
+      roles: [compliance]
+    - username: detector-ai
+      roles: [detector]
 
 components:
   ai:

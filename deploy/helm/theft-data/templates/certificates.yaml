@@ -1,0 +1,16 @@
+{{- if .Values.postgres.enabled }}
+{{- $ns := .Release.Namespace }}
+{{- $pgNames := list "localhost" }}
+{{- range $svc := list "postgres-rw" "postgres-ro" "postgres-r" }}
+{{- $pgNames = concat $pgNames (list $svc (printf "%s.%s" $svc $ns) (printf "%s.%s.svc" $svc $ns) (printf "%s.%s.svc.cluster.local" $svc $ns)) }}
+{{- end }}
+{{ include "data.certificate" (dict "root" $ "name" "postgres" "secretName" "postgres-server-tls" "identity" "postgres" "dnsNames" $pgNames "combined" false) }}
+{{- end }}
+{{- if .Values.mongo.enabled }}
+{{ include "data.certificate" (dict "root" $ "name" "mongo" "secretName" "mongo-tls" "identity" "mongo" "dnsNames" (list "mongo" "localhost") "combined" true) }}
+{{- end }}
+{{- range $name, $r := .Values.redis.instances }}
+{{- if $r.enabled }}
+{{ include "data.certificate" (dict "root" $ "name" $name "secretName" (printf "%s-tls" $name) "identity" $name "dnsNames" (list $name (printf "theft-%s" $name) "localhost") "combined" false) }}
+{{- end }}
+{{- end }}

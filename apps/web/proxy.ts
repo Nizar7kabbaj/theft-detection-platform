@@ -197,5 +197,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   return response
 }
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|healthz|csp-report|client-error).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|healthz|csp-report|client-error).*)",
+  ],
 }

@@ -1,0 +1,96 @@
+issuer:
+  name: theft-ca
+  kind: ClusterIssuer
+
+certificates:
+  duration: 2160h
+  renewBefore: 720h
+  trustDomain: theft-detection-platform
+
+postgres:
+  enabled: true
+  image: ghcr.io/cloudnative-pg/postgresql:17-minimal-trixie@sha256:cfc42005357630d2c0bfca095c93a6abe44884486acb0de2e5e511a087b7eb15
+  instances: 1
+  storage:
+    size: 2Gi
+    storageClass: standard
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 256Mi
+  parameters:
+    shared_buffers: 64MB
+    max_connections: "50"
+  bootstrap:
+    database: authdb
+    owner: auth_owner
+    secret: pg-role-auth-owner
+  roles:
+    - name: auth_owner
+      secret: pg-role-auth-owner
+    - name: auth_app
+      secret: pg-role-auth-app
+    - name: audit_owner
+      secret: pg-role-audit-owner
+    - name: audit_app
+      secret: pg-role-audit-app
+  databases:
+    - name: auditdb
+      owner: audit_owner
+
+mongo:
+  enabled: true
+  image: docker.io/library/mongo@sha256:9854f7139445d766a9523571d6f047530c45547460ffcf8259eb2bf4264632ca
+  cacheSizeGB: "0.25"
+  storage:
+    size: 2Gi
+    storageClass: standard
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 512Mi
+
+redis:
+  image: docker.io/library/redis@sha256:29e8589c3f9ba699b5f7aa4b3c7733c58852a3626439e619aa0ee78de08c6ca0
+  instances:
+    redis:
+      enabled: true
+      persistence:
+        enabled: true
+        size: 1Gi
+        storageClass: standard
+      resources:
+        requests:
+          cpu: 25m
+          memory: 128Mi
+        limits:
+          memory: 128Mi
+      extraArgs: []
+    redis-broker:
+      enabled: true
+      persistence:
+        enabled: true
+        size: 1Gi
+        storageClass: standard
+      resources:
+        requests:
+          cpu: 25m
+          memory: 128Mi
+        limits:
+          memory: 128Mi
+      extraArgs: []
+    redis-stream:
+      enabled: true
+      persistence:
+        enabled: false
+      resources:
+        requests:
+          cpu: 25m
+          memory: 1792Mi
+        limits:
+          memory: 1792Mi
+      extraArgs: []

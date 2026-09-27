@@ -1,6 +1,7 @@
 from functools import cached_property, lru_cache
 from ipaddress import IPv4Network, IPv6Network, ip_network
 from pathlib import Path
+from typing import Literal
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -29,6 +30,8 @@ class Settings(BaseSettings):
     postgres_app_password_file: Path = Path("/run/secrets/postgres_password")
     postgres_owner_user: str = "auth_owner"
     postgres_owner_password_file: Path = Path("/run/secrets/auth_owner_postgres_password")
+    postgres_ssl_mode: Literal["disable", "verify-full"] = "verify-full"
+    postgres_ssl_ca_file: Path = Path("/run/postgres-ca/ca.crt")
 
     argon2_time_cost: int = 3
     argon2_memory_cost: int = 65536

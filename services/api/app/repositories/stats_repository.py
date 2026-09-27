@@ -7,7 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.core.config import settings
 
 BUCKET_UNITS = {"hour": "hour", "day": "day"}
-STORE_ZONE = ZoneInfo(settings.STORE_TIMEZONE)
+STORE_ZONE = ZoneInfo(settings.STORE_TIME_ZONE)
 MINUTE_SECONDS = 60
 FIVE_MINUTES_SECONDS = 300
 FIFTEEN_MINUTES_SECONDS = 900
@@ -75,7 +75,7 @@ class StatsRepository:
                             "$dateTrunc": {
                                 "date": "$created_at",
                                 "unit": BUCKET_UNITS[unit],
-                                "timezone": settings.STORE_TIMEZONE,
+                                "timezone": settings.STORE_TIME_ZONE,
                             }
                         },
                         "severity": "$severity",
@@ -115,7 +115,7 @@ class StatsRepository:
                             "$dateTrunc": {
                                 "date": "$decided_at",
                                 "unit": BUCKET_UNITS[unit],
-                                "timezone": settings.STORE_TIMEZONE,
+                                "timezone": settings.STORE_TIME_ZONE,
                             }
                         },
                         "decision": "$decision",
