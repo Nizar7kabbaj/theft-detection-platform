@@ -5,12 +5,14 @@ from functools import lru_cache
 from urllib.parse import quote_plus
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
+from pymongo import AsyncMongoClient
 
 from app.shared.config import settings
 
 logger = logging.getLogger(__name__)
 
 _client: AsyncIOMotorClient | None = None
+_probe_client: AsyncMongoClient | None = None
 
 
 @lru_cache(maxsize=1)
@@ -42,14 +44,28 @@ def _resolve_mongodb_url() -> str:
 
 async def connect_to_mongodb() -> None:
     global _client
-    logger.info("connecting to mongodb")
     _client = AsyncIOMotorClient(_resolve_mongodb_url())
-    await _client.admin.command("ping")
-    logger.info("connected to mongodb")
+    logger.info("mongodb client created")
+
+
+async def ping_mongodb() -> None:
+    global _probe_client
+    if _probe_client is None:
+        _probe_client = AsyncMongoClient(
+            _resolve_mongodb_url(),
+            serverSelectionTimeoutMS=1000,
+            connectTimeoutMS=1000,
+            maxPoolSize=1,
+            appname="notification-health",
+        )
+    await _probe_client.admin.command("ping")
 
 
 async def close_mongodb_connection() -> None:
-    global _client
+    global _client, _probe_client
+    if _probe_client is not None:
+        await _probe_client.close()
+        _probe_client = None
     if _client is not None:
         _client.close()
         _client = None

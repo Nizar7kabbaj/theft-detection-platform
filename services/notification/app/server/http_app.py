@@ -21,10 +21,6 @@ def create_app() -> FastAPI:
         logger.exception("unhandled error in http handler: %s", exc)
         return JSONResponse(status_code=500, content={"detail": "internal error"})
 
-    @app.get("/health", tags=["health"])
-    async def health() -> dict[str, str]:
-        return {"status": "ok"}
-
     app.include_router(webhooks_router)
 
     return app

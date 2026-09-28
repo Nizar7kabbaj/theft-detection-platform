@@ -39,16 +39,10 @@ services:
         condition: service_healthy
       audit-service:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)\""]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=theft-detection-platform_edge"
-      - "traefik.http.routers.backend.rule=Host(`localhost`) && (PathPrefix(`/api`) || PathPrefix(`/ws`) || Path(`/health`))"
+      - "traefik.http.routers.backend.rule=Host(`localhost`) && (PathPrefix(`/api`) || PathPrefix(`/ws`))"
       - "traefik.http.routers.backend.entrypoints=websecure"
       - "traefik.http.routers.backend.tls=true"
       - "traefik.http.routers.backend.middlewares=api-chain@file"
@@ -183,12 +177,6 @@ services:
       - ./config/pki/ca/ca.crt:/run/secrets/ai_tls_ca:ro
       - ./config/auth/detector_password:/run/secrets/alert_password:ro
       - ai_snapshots:/app/snapshots
-    healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=ai:50051", "-tls", "-tls-ca-cert=/run/secrets/ai_tls_ca", "-tls-client-cert=/run/secrets/ai_tls_cert", "-tls-client-key=/run/secrets/ai_tls_key"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
     deploy:
       resources:
         reservations:
@@ -230,12 +218,6 @@ services:
       FRAME_HEIGHT: "720"
       AI_HOST: "ai"
       AI_PORT: "50051"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import os,sys,time; p='/app/run/camera_heartbeat'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 10 else 1)"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 180s
     depends_on:
       ai:
         condition: service_healthy
@@ -319,12 +301,6 @@ services:
           condition: service_started
         audit-service:
           condition: service_healthy
-      healthcheck:
-        test: ["CMD", "grpc_health_probe", "-addr=auth:50053", "-tls", "-tls-ca-cert=/run/secrets/auth_tls_ca", "-tls-client-cert=/run/secrets/auth_tls_cert", "-tls-client-key=/run/secrets/auth_tls_key"]
-        interval: 30s
-        timeout: 5s
-        retries: 5
-        start_period: 15s
       labels:
         - "traefik.enable=true"
         - "traefik.docker.network=theft-detection-platform_edge"
@@ -376,12 +352,6 @@ services:
             condition: service_healthy
           redis:
             condition: service_started
-        healthcheck:
-          test: ["CMD", "grpc_health_probe", "-addr=audit:50054", "-tls", "-tls-ca-cert=/run/secrets/audit_tls_ca", "-tls-client-cert=/run/secrets/audit_tls_cert", "-tls-client-key=/run/secrets/audit_tls_key"]
-          interval: 30s
-          timeout: 5s
-          retries: 5
-          start_period: 15s
         restart: unless-stopped
 
   audit-operator:
@@ -545,12 +515,6 @@ services:
         condition: service_healthy
       mongo:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=notification:50052", "-tls", "-tls-ca-cert=/run/secrets/notification_tls_ca", "-tls-client-cert=/run/secrets/notification_tls_cert", "-tls-client-key=/run/secrets/notification_tls_key"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
     restart: unless-stopped
 
   notification-worker:
@@ -586,12 +550,6 @@ services:
         condition: service_healthy
       notification-service:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "celery -A app.worker.bootstrap inspect ping -t 5 > /dev/null 2>&1 || exit 1"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     restart: unless-stopped
 
   notification-beat:
@@ -648,21 +606,12 @@ services:
       - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_notification_password:ro
       - ./config/mongodb/secrets/mongo_monitor_password:/run/secrets/mongo_monitor_password:ro
     healthcheck:
-      test:
-        - CMD
-        - mongosh
-        - --tls
-        - --tlsCAFile
-        - /etc/mongo/tls/ca.crt
-        - --host
-        - mongo
-        - --quiet
-        - --eval
-        - "db.adminCommand('ping').ok"
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/27017"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
     restart: unless-stopped
 
   redis:
@@ -682,11 +631,18 @@ services:
       - ./config/pki/redis/tls.key:/etc/redis/tls/tls.key:ro
       - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt --user health -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis.conf)\" ping | grep -q PONG"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
+      test:
+        - CMD-SHELL
+        - >-
+          p="$$(sed -n 's/^requirepass //p' /etc/redis/redis.conf)";
+          [ "$$(REDISCLI_AUTH="$$p" redis-cli --user health --tls -p 6380
+          --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key
+          --cacert /etc/redis/tls/ca.crt ping)" = PONG ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
     restart: unless-stopped
 
   redis-broker:
@@ -706,11 +662,18 @@ services:
       - ./config/pki/redis-broker/tls.key:/etc/redis/tls/tls.key:ro
       - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt --user health -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-broker.conf)\" ping | grep -q PONG"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
+      test:
+        - CMD-SHELL
+        - >-
+          p="$$(sed -n 's/^requirepass //p' /etc/redis/redis-broker.conf)";
+          [ "$$(REDISCLI_AUTH="$$p" redis-cli --user health --tls -p 6380
+          --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key
+          --cacert /etc/redis/tls/ca.crt ping)" = PONG ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
     restart: unless-stopped
 
   redis-stream:
@@ -730,10 +693,18 @@ services:
       - ./config/pki/redis-stream/tls.key:/etc/redis/tls/tls.key:ro
       - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --tls -p 6380 --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt -a \"$$(sed -n 's/^requirepass //p' /etc/redis/redis-stream.conf)\" ping | grep -q PONG"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      test:
+        - CMD-SHELL
+        - >-
+          p="$$(sed -n 's/^requirepass //p' /etc/redis/redis-stream.conf)";
+          [ "$$(REDISCLI_AUTH="$$p" redis-cli --tls -p 6380
+          --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key
+          --cacert /etc/redis/tls/ca.crt ping)" = PONG ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
 
   prometheus:
     profiles: ["observability"]

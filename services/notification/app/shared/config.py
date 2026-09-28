@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     GRPC_PORT: int = 50052
     HTTP_HOST: str = "0.0.0.0"
     HTTP_PORT: int = 8000
+    HEALTH_HOST: str = "127.0.0.1"
+    HEALTH_PORT: int = 8081
+    HEALTH_PROBE_INTERVAL_SEC: float = 2.0
+    HEALTH_PROBE_TIMEOUT_SEC: float = 1.5
     REDIS_HOST: str = "theft-redis-broker"
     REDIS_PORT: int = 6380
     REDIS_TLS: bool = True
@@ -46,6 +50,7 @@ class Settings(BaseSettings):
     DLQ_ENABLED: bool = True
     ALERTMANAGER_WEBHOOK_TOKEN_FILE: Path = Path("/run/secrets/webhook_token")
     LOG_LEVEL: str = "INFO"
+    HEARTBEAT_FILE: Path = Path("/app/run/heartbeat")
 
     TLS_CERT_FILE: Path = Path("/run/secrets/notification_tls_cert")
     TLS_KEY_FILE: Path = Path("/run/secrets/notification_tls_key")

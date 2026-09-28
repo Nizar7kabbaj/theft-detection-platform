@@ -1,9 +1,12 @@
+import asyncio
 import logging
 from functools import lru_cache
 from urllib.parse import quote_plus
 
 from fastapi import Request
 from redis.asyncio import Redis, from_url
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from app.core.config import settings
 
@@ -66,6 +69,19 @@ def _tls_options() -> dict[str, object]:
     }
 
 
+async def _ping_until_ready(client: Redis, name: str) -> None:
+    delay = 0.5
+    while True:
+        try:
+            await client.ping()
+        except (RedisConnectionError, RedisTimeoutError) as exc:
+            logger.warning("%s unreachable, retrying in %.1fs: %s", name, delay, exc)
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 10.0)
+        else:
+            return
+
+
 async def open_redis() -> Redis:
     mode = (settings.REDIS_MODE or "local").lower()
     logger.info("connecting to redis", extra={"mode": mode})
@@ -75,7 +91,7 @@ async def open_redis() -> Redis:
         decode_responses=True,
         **_tls_options(),
     )
-    await client.ping()
+    await _ping_until_ready(client, "redis")
     logger.info("connected to redis", extra={"mode": mode})
     return client
 
@@ -89,7 +105,7 @@ async def open_pubsub_redis() -> Redis:
         socket_keepalive=True,
         **_tls_options(),
     )
-    await client.ping()
+    await _ping_until_ready(client, "pubsub redis")
     logger.info("pubsub redis connection ready")
     return client
 
@@ -113,7 +129,7 @@ async def open_stream_redis() -> Redis:
         socket_keepalive=True,
         **_tls_options(),
     )
-    await client.ping()
+    await _ping_until_ready(client, "stream redis")
     logger.info("stream redis connection ready")
     return client
 

@@ -19,7 +19,12 @@ from app.api.v1 import (
 )
 from app.core.config import settings
 from app.core.csrf import csrf_protect
-from app.core.database import close_mongodb_connection, connect_to_mongodb, get_database
+from app.core.database import (
+    close_mongodb_connection,
+    connect_to_mongodb,
+    get_database,
+    ping_mongodb,
+)
 from app.core.errors import (
     AlertUnavailableError,
     AppError,
@@ -29,6 +34,7 @@ from app.core.errors import (
     NotFoundError,
     ValidationError,
 )
+from app.core.health import HealthState, Probe, start_probe_server
 from app.core.rate_limit import RateLimitedError, rate_limit
 from app.core.redis import close_redis, open_pubsub_redis, open_redis, open_stream_redis
 from app.grpc_gen.alert_pb2_grpc import AlertServiceStub
@@ -53,9 +59,52 @@ _GRPC_CHANNEL_OPTIONS = [
 ]
 
 
+def _readiness_probes(app: FastAPI) -> dict[str, Probe]:
+    def redis_probe(attr: str) -> Probe:
+        async def probe() -> bool:
+            client = getattr(app.state, attr, None)
+            return client is not None and bool(await client.ping())
+
+        return probe
+
+    async def started() -> bool:
+        return bool(getattr(app.state, "started", False))
+
+    return {
+        "startup": started,
+        "mongodb": ping_mongodb,
+        "redis": redis_probe("redis"),
+        "stream": redis_probe("stream_redis"),
+    }
+
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def _health(app: FastAPI):
+    state = HealthState()
+    await state.start()
+    server = await start_probe_server(state.servicer, settings.HEALTH_HOST, settings.HEALTH_PORT)
+    stop = asyncio.Event()
+    task = asyncio.create_task(
+        state.watch(
+            _readiness_probes(app),
+            settings.HEALTH_PROBE_INTERVAL_SECONDS,
+            settings.HEALTH_PROBE_TIMEOUT_SECONDS,
+            stop,
+        )
+    )
+    try:
+        yield
+    finally:
+        stop.set()
+        await task
+        await state.shutdown()
+        await server.stop(grace=None)
+
+
+@asynccontextmanager
+async def _services(app: FastAPI):
     logger.info("backend starting")
+    app.state.started = False
     await connect_to_mongodb()
     app.state.redis = await open_redis()
     app.state.broadcaster = BroadcastService(
@@ -119,8 +168,10 @@ async def lifespan(app: FastAPI):
     app.state.audit_drain_task = asyncio.create_task(
         run_drain(get_database(), app.state.audit_stub, app.state.audit_drain_stop)
     )
+    app.state.started = True
     logger.info("backend ready")
     yield
+    app.state.started = False
     app.state.reconcile_stop.set()
     await app.state.reconcile_task
     await app.state.policy_sync_task
@@ -138,6 +189,12 @@ async def lifespan(app: FastAPI):
     await app.state.prometheus.aclose()
     await close_mongodb_connection()
     logger.info("backend stopped")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with _health(app), _services(app):
+        yield
 
 
 def register_error_handlers(app: FastAPI) -> None:
@@ -196,8 +253,3 @@ app.include_router(identity.router, prefix="/api/v1", dependencies=[Depends(rate
 app.include_router(policy.router, prefix="/api/v1", dependencies=[Depends(rate_limit)])
 app.include_router(permissions.router, prefix="/api/v1", dependencies=[Depends(rate_limit)])
 app.include_router(streams.router)
-
-
-@app.get("/health", tags=["health"])
-async def health() -> dict[str, str]:
-    return {"status": "ok"}

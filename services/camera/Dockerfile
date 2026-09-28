@@ -33,7 +33,7 @@ RUN mkdir -p /app/run \
     && chown camera:camera /app/run
 USER camera
 EXPOSE 9464
-HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=10s --timeout=3s --start-period=180s --start-interval=2s --retries=3 \
     CMD test -f /app/run/camera_heartbeat && \
         [ $(( $(date +%s) - $(stat -c %Y /app/run/camera_heartbeat) )) -lt 10 ] || exit 1
 CMD ["python", "-m", "app.main"]

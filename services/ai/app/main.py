@@ -7,7 +7,7 @@ import signal
 from concurrent.futures import ThreadPoolExecutor
 
 import grpc
-from grpc_health.v1 import health, health_pb2, health_pb2_grpc
+from grpc_health.v1 import health, health_pb2_grpc
 
 from app.alert_client import AlertClient
 from app.core.config import settings
@@ -17,6 +17,7 @@ from app.node_stats import NodeStatsPublisher
 from app.observability import register_presence_gauge, setup_observability
 from app.policy_watcher import PolicyWatcher
 from app.presence_servicer import PresenceServicer
+from app.server.health import HealthState, start_probe_server
 from app.server.interceptors import IdentityInterceptor
 from app.servicer import InferenceServicer
 
@@ -35,34 +36,8 @@ def _server_credentials() -> grpc.ServerCredentials:
     )
 
 
-class AsyncHealthServicer(health.HealthServicer):
-    async def Check(self, request, context):
-        return super().Check(request, context)
-
-    async def Watch(self, request, context):
-        async for response in self._async_watch(request, context):
-            yield response
-
-    async def _async_watch(self, request, context):
-        for response in super().Watch(request, context):
-            yield response
-
-
-def _set_health(
-    health_servicer: health.HealthServicer,
-    state: health_pb2.HealthCheckResponse.ServingStatus.ValueType,
-) -> None:
-    for name in (INFERENCE_SERVICE_FULL_NAME, PRESENCE_SERVICE_FULL_NAME, ""):
-        health_servicer.set(name, state)
-
-
-async def _serve() -> None:
-    setup_observability(service_name="theft-ai")
-    logging.getLogger().setLevel(settings.LOG_LEVEL)
-    log = logging.getLogger("app.main")
-    log.info("starting ai service")
-    executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="inference")
-    detector = LSTMDetector(
+def _build_detector() -> LSTMDetector:
+    return LSTMDetector(
         yolo_model_name=settings.YOLO_MODEL_NAME,
         object_model_name=settings.YOLO_OBJECT_MODEL_NAME,
         lstm_model_path=settings.LSTM_MODEL_PATH,
@@ -82,7 +57,10 @@ async def _serve() -> None:
         clip_max_frames=settings.CLIP_MAX_FRAMES,
         clip_enabled=settings.CLIP_ENABLED,
     )
-    alert_client = AlertClient(
+
+
+def _build_alert_client() -> AlertClient:
+    return AlertClient(
         api_base_url=settings.API_BASE_URL,
         auth_base_url=settings.AUTH_BASE_URL,
         username=settings.ALERT_USERNAME,
@@ -93,26 +71,16 @@ async def _serve() -> None:
         verify=True,
         timeout_seconds=settings.ALERT_TIMEOUT_SECONDS,
     )
-    node_stats = NodeStatsPublisher(
-        redis_url=settings.REDIS_URL,
-        connection_kwargs=settings.redis_tls_options,
-        stats_key=settings.NODE_STATS_KEY,
-        interval_seconds=settings.NODE_STATS_INTERVAL_SECONDS,
-        ttl_seconds=settings.NODE_STATS_TTL_SECONDS,
-        device_index=settings.NODE_STATS_DEVICE_INDEX,
-    )
-    policy_watcher = PolicyWatcher(
-        redis_url=settings.REDIS_URL,
-        connection_kwargs=settings.redis_tls_options,
-        detector=detector,
-        executor=executor,
-        device=settings.DEVICE,
-    )
 
+
+def _build_server(
+    health_servicer: health.aio.HealthServicer,
+    detector: LSTMDetector,
+    executor: ThreadPoolExecutor,
+    alert_client: AlertClient,
+) -> grpc.aio.Server:
     server = grpc.aio.server(interceptors=[IdentityInterceptor()])
-    health_servicer = AsyncHealthServicer()
     health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
-    _set_health(health_servicer, health_pb2.HealthCheckResponse.NOT_SERVING)
     presence_servicer = PresenceServicer(
         lease_seconds=settings.PRESENCE_LEASE_SECONDS,
         absent_holdoff_seconds=settings.PRESENCE_ABSENT_HOLDOFF_SECONDS,
@@ -129,23 +97,15 @@ async def _serve() -> None:
         ),
         server,
     )
-    log.info(
-        "presence gating enabled=%s lease=%.1fs holdoff=%.1fs",
-        settings.PRESENCE_GATING_ENABLED,
-        settings.PRESENCE_LEASE_SECONDS,
-        settings.PRESENCE_ABSENT_HOLDOFF_SECONDS,
-    )
-    bind_address = f"{settings.GRPC_HOST}:{settings.GRPC_PORT}"
-    server.add_secure_port(bind_address, _server_credentials())
-    log.info("loading detector")
-    await asyncio.get_running_loop().run_in_executor(executor, detector.load)
-    log.info("detector ready")
-    await policy_watcher.prime()
-    await server.start()
-    node_stats_task = asyncio.create_task(node_stats.run())
-    policy_task = asyncio.create_task(policy_watcher.run())
-    _set_health(health_servicer, health_pb2.HealthCheckResponse.SERVING)
-    log.info("grpc server listening on %s", bind_address)
+    server.add_secure_port(f"{settings.GRPC_HOST}:{settings.GRPC_PORT}", _server_credentials())
+    return server
+
+
+async def _serve() -> None:
+    setup_observability(service_name="theft-ai")
+    logging.getLogger().setLevel(settings.LOG_LEVEL)
+    log = logging.getLogger("app.main")
+    log.info("starting ai service")
     stop_event = asyncio.Event()
 
     def _on_signal(signame: str) -> None:
@@ -155,8 +115,62 @@ async def _serve() -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _on_signal, sig.name)
+
+    state = HealthState(readiness_names=(INFERENCE_SERVICE_FULL_NAME, PRESENCE_SERVICE_FULL_NAME))
+    await state.start()
+    probe_server = await start_probe_server(
+        state.servicer, settings.HEALTH_HOST, settings.HEALTH_PORT
+    )
+    loaded = asyncio.Event()
+
+    async def models_loaded() -> bool:
+        return loaded.is_set()
+
+    watch_task = asyncio.create_task(
+        state.watch(
+            {"models": models_loaded},
+            settings.HEALTH_PROBE_INTERVAL_SECONDS,
+            settings.HEALTH_PROBE_TIMEOUT_SECONDS,
+            stop_event,
+        )
+    )
+    executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="inference")
+    detector = _build_detector()
+    alert_client = _build_alert_client()
+    node_stats = NodeStatsPublisher(
+        redis_url=settings.REDIS_URL,
+        connection_kwargs=settings.redis_tls_options,
+        stats_key=settings.NODE_STATS_KEY,
+        interval_seconds=settings.NODE_STATS_INTERVAL_SECONDS,
+        ttl_seconds=settings.NODE_STATS_TTL_SECONDS,
+        device_index=settings.NODE_STATS_DEVICE_INDEX,
+    )
+    policy_watcher = PolicyWatcher(
+        redis_url=settings.REDIS_URL,
+        connection_kwargs=settings.redis_tls_options,
+        detector=detector,
+        executor=executor,
+        device=settings.DEVICE,
+    )
+    server = _build_server(state.servicer, detector, executor, alert_client)
+    log.info(
+        "presence gating enabled=%s lease=%.1fs holdoff=%.1fs",
+        settings.PRESENCE_GATING_ENABLED,
+        settings.PRESENCE_LEASE_SECONDS,
+        settings.PRESENCE_ABSENT_HOLDOFF_SECONDS,
+    )
+    log.info("loading detector")
+    await loop.run_in_executor(executor, detector.load)
+    log.info("detector ready")
+    await policy_watcher.prime()
+    await server.start()
+    node_stats_task = asyncio.create_task(node_stats.run())
+    policy_task = asyncio.create_task(policy_watcher.run())
+    loaded.set()
+    log.info("grpc server listening on %s:%d", settings.GRPC_HOST, settings.GRPC_PORT)
     await stop_event.wait()
-    _set_health(health_servicer, health_pb2.HealthCheckResponse.NOT_SERVING)
+    await watch_task
+    await state.shutdown()
     await node_stats.stop()
     node_stats_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
@@ -169,6 +183,7 @@ async def _serve() -> None:
     executor.shutdown(wait=True)
     detector.close()
     alert_client.close()
+    await probe_server.stop(grace=None)
     log.info("ai service stopped")
 
 

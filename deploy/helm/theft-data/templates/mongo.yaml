@@ -94,6 +94,24 @@ spec:
             {{- include "data.containerSecurityContext" . | nindent 12 }}
           resources:
             {{- toYaml .resources | nindent 12 }}
+          startupProbe:
+            tcpSocket:
+              port: mongodb
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: mongodb
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: mongodb
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
           volumeMounts:
             - name: data
               mountPath: /data/db

@@ -298,6 +298,7 @@
         "nodeSelector": { "type": "object", "additionalProperties": { "type": "string" } },
         "tolerations": { "type": "array" },
         "affinity": { "type": "object" },
+        "lifecycle": { "type": "object" },
         "livenessProbe": { "type": "object" },
         "readinessProbe": { "type": "object" },
         "startupProbe": { "type": "object" }

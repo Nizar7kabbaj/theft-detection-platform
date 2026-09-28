@@ -18,8 +18,10 @@ class Settings(BaseSettings):
     grpc_port: int = 50054
     grpc_max_workers: int = 8
     grpc_max_concurrent_rpcs: int = 64
-    health_probe_interval_seconds: int = 10
-    health_probe_timeout_seconds: float = 3.0
+    health_host: str = "127.0.0.1"
+    health_port: int = 8081
+    health_probe_interval_seconds: float = 2.0
+    health_probe_timeout_seconds: float = 1.5
     log_level: str = "info"
 
     postgres_host: str = "postgres"

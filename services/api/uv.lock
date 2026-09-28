@@ -51,6 +51,7 @@ dependencies = [
     { name = "anyio" },
     { name = "fastapi" },
     { name = "grpcio" },
+    { name = "grpcio-health-checking" },
     { name = "httpx" },
     { name = "motor" },
     { name = "opentelemetry-api" },
@@ -91,6 +92,7 @@ requires-dist = [
     { name = "anyio", specifier = "==4.14.2" },
     { name = "fastapi", specifier = "==0.136.1" },
     { name = "grpcio", specifier = "==1.71.2" },
+    { name = "grpcio-health-checking", specifier = "==1.71.2" },
     { name = "grpcio-tools", marker = "extra == 'dev'", specifier = "==1.71.2" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "motor", specifier = "==3.7.1" },
@@ -286,6 +288,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/09/a8/eca124357c465ea928bffb0af616718a6d12816559f1a705117e1cb20314/grpcio-1.71.2-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:c2409fcbd429df4aacb20e2bdd12ff508b7140a257140afeba72614b2724e836", size = 6134496, upload-time = "2025-06-28T04:18:53.364Z" },
     { url = "https://files.pythonhosted.org/packages/5b/1e/a7f46715021ed955238ab715f5b4d5949b943ef90f3391dc4955e7b65089/grpcio-1.71.2-cp311-cp311-win32.whl", hash = "sha256:0123787c64e1e52982d1a6b32224e6f265ef69e0aa088ba6b744b1bed85f756d", size = 3551426, upload-time = "2025-06-28T04:18:54.798Z" },
     { url = "https://files.pythonhosted.org/packages/ce/e5/bc1e1276911d16f0d303205271de09beaf42300869fa1ccb2f05ecd05b42/grpcio-1.71.2-cp311-cp311-win_amd64.whl", hash = "sha256:0b695e676750cb7c9c2e2511c0b9797ab281fc1b1cc39e9d9ae05db2602c0386", size = 4217593, upload-time = "2025-06-28T04:18:56.192Z" },
+]
+
+[[package]]
+name = "grpcio-health-checking"
+version = "1.71.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "grpcio" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/53/86/20994347ef36b7626fb74539f13128100dd8b7eaac67efc063264e6cdc80/grpcio_health_checking-1.71.2.tar.gz", hash = "sha256:1c21ece88c641932f432b573ef504b20603bdf030ad4e1ec35dd7fdb4ea02637", size = 16770, upload-time = "2025-06-28T04:24:08.768Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/74/7bc6ab96bf1083cab2684f9c3ae434caa638de3d5c5574e8435e2c146598/grpcio_health_checking-1.71.2-py3-none-any.whl", hash = "sha256:f91db41410d6bd18a7828c5b6ac2bebd77a63483263cbe42bf3c0c9b86cece33", size = 18918, upload-time = "2025-06-28T04:23:56.923Z" },
 ]
 
 [[package]]

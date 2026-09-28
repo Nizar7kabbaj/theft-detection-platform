@@ -172,7 +172,8 @@ export interface paths {
         get: operations["get_alert_api_v1_alerts__alert_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Alert */
+        delete: operations["delete_alert_api_v1_alerts__alert_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -409,23 +410,6 @@ export interface paths {
         };
         /** Get Role Permissions */
         get: operations["get_role_permissions_api_v1_permissions_roles_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Health */
-        get: operations["health_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -750,7 +734,7 @@ export interface components {
         ConcealmentPolicy: {
             /**
              * Grab Ratio
-             * @default 0.6
+             * @default 0.15
              */
             grab_ratio: number;
             /**
@@ -961,7 +945,7 @@ export interface components {
          * Permission
          * @enum {string}
          */
-        Permission: "camera:read" | "camera:write" | "detection:read" | "detection:write" | "detection:infer" | "alert:read" | "alert:write" | "alert:acknowledge" | "stats:read" | "audit:query" | "settings:read" | "settings:write" | "user:read" | "user:write";
+        Permission: "camera:read" | "camera:write" | "detection:read" | "detection:write" | "detection:infer" | "alert:read" | "alert:write" | "alert:acknowledge" | "alert:delete" | "stats:read" | "audit:query" | "settings:read" | "settings:write" | "user:read" | "user:write";
         /** Person */
         Person: {
             /**
@@ -1632,6 +1616,35 @@ export interface operations {
             };
         };
     };
+    delete_alert_api_v1_alerts__alert_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_alert_snapshot_api_v1_alerts__alert_id__snapshot_get: {
         parameters: {
             query?: never;
@@ -2011,28 +2024,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RolePermissionMap"];
-                };
-            };
-        };
-    };
-    health_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
                 };
             };
         };

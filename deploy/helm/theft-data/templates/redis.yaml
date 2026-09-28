@@ -1,5 +1,6 @@
 {{- range $name, $r := .Values.redis.instances }}
 {{- if $r.enabled }}
+{{- $ping := printf `p="$(sed -n 's/^requirepass //p' /etc/redis/%s.conf)"; [ "$(REDISCLI_AUTH="$p" redis-cli --user %s --tls --cert /etc/redis/tls/tls.crt --key /etc/redis/tls/tls.key --cacert /etc/redis/tls/ca.crt -p 6380 ping)" = PONG ]` $name $r.probeUser }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -84,6 +85,33 @@ spec:
             {{- include "data.containerSecurityContext" . | nindent 12 }}
           resources:
             {{- toYaml $r.resources | nindent 12 }}
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - {{ $ping | quote }}
+            periodSeconds: 2
+            timeoutSeconds: 3
+            failureThreshold: 150
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - {{ $ping | quote }}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - {{ $ping | quote }}
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: data
               mountPath: /data

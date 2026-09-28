@@ -135,8 +135,9 @@
           "additionalProperties": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["enabled", "persistence", "resources", "extraArgs"],
+            "required": ["enabled", "probeUser", "persistence", "resources", "extraArgs"],
             "properties": {
+              "probeUser": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
               "enabled": { "type": "boolean" },
               "persistence": {
                 "type": "object",

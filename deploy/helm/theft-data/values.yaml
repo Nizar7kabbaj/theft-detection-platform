@@ -59,6 +59,7 @@ redis:
   instances:
     redis:
       enabled: true
+      probeUser: health
       persistence:
         enabled: true
         size: 1Gi
@@ -72,6 +73,7 @@ redis:
       extraArgs: []
     redis-broker:
       enabled: true
+      probeUser: health
       persistence:
         enabled: true
         size: 1Gi
@@ -85,6 +87,7 @@ redis:
       extraArgs: []
     redis-stream:
       enabled: true
+      probeUser: default
       persistence:
         enabled: false
       resources:
