@@ -61,9 +61,31 @@ defaults:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  livenessProbe: {}
-  readinessProbe: {}
-  startupProbe: {}
+  lifecycle:
+    preStop:
+      sleep:
+        seconds: 5
+  startupProbe:
+    grpc:
+      port: 8081
+      service: liveness
+    periodSeconds: 2
+    timeoutSeconds: 2
+    failureThreshold: 60
+  readinessProbe:
+    grpc:
+      port: 8081
+      service: readiness
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 2
+  livenessProbe:
+    grpc:
+      port: 8081
+      service: liveness
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
 
 identities:
   api:
@@ -120,8 +142,6 @@ routes:
           value: /api
         - type: PathPrefix
           value: /ws
-        - type: Exact
-          value: /health
     - name: auth-login
       component: auth
       port: 8000
@@ -230,6 +250,8 @@ components:
         containerPort: 8000
       - name: metrics
         containerPort: 9464
+      - name: health
+        containerPort: 8081
     service:
       enabled: true
       ports:
@@ -243,6 +265,7 @@ components:
       DATABASE_NAME: theft_detection_db
       API_HOST: 0.0.0.0
       API_PORT: "8000"
+      HEALTH_HOST: "0.0.0.0"
       DEBUG: "False"
       SNAPSHOTS_DIR: /app/snapshots
       MONGODB_HOST: mongo:27017
@@ -280,6 +303,27 @@ components:
       digest: ""
     otel:
       enabled: false
+    startupProbe:
+      httpGet:
+        path: /healthz
+        port: http
+      periodSeconds: 2
+      timeoutSeconds: 2
+      failureThreshold: 60
+    readinessProbe:
+      httpGet:
+        path: /healthz
+        port: http
+      periodSeconds: 5
+      timeoutSeconds: 2
+      failureThreshold: 2
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: http
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
     writablePaths:
       - /tmp
       - /app/.next/cache
@@ -324,6 +368,8 @@ components:
         containerPort: 8000
       - name: grpc
         containerPort: 50053
+      - name: health
+        containerPort: 8081
     service:
       enabled: true
       ports:
@@ -340,6 +386,7 @@ components:
       AUTH_GRPC_HOST: 0.0.0.0
       AUTH_GRPC_PORT: "50053"
       AUTH_GRPC_MAX_WORKERS: "8"
+      AUTH_HEALTH_HOST: "0.0.0.0"
       AUTH_LOG_LEVEL: info
       AUTH_POSTGRES_HOST: "{{ .Values.global.postgres.host }}"
       AUTH_POSTGRES_PORT: "{{ .Values.global.postgres.port }}"
@@ -380,6 +427,8 @@ components:
     ports:
       - name: grpc
         containerPort: 50054
+      - name: health
+        containerPort: 8081
     service:
       enabled: true
       ports:
@@ -391,6 +440,7 @@ components:
       AUDIT_GRPC_HOST: 0.0.0.0
       AUDIT_GRPC_PORT: "50054"
       AUDIT_GRPC_MAX_WORKERS: "8"
+      AUDIT_HEALTH_HOST: "0.0.0.0"
       AUDIT_LOG_LEVEL: info
       AUDIT_POSTGRES_HOST: "{{ .Values.global.postgres.host }}"
       AUDIT_POSTGRES_PORT: "{{ .Values.global.postgres.port }}"
@@ -457,6 +507,8 @@ components:
         containerPort: 8000
       - name: metrics
         containerPort: 9464
+      - name: health
+        containerPort: 8081
     service:
       enabled: true
       ports:
@@ -468,6 +520,7 @@ components:
           targetPort: http
     env:
       PROMETHEUS_EXPORTER_PORT: "9464"
+      HEALTH_HOST: "0.0.0.0"
       DATABASE_NAME: theft_detection_db
       MONGODB_HOST: mongo:27017
       REDIS_HOST: redis-broker
@@ -513,6 +566,29 @@ components:
       - --loglevel=INFO
       - --pool=solo
       - --concurrency=1
+    writablePaths:
+      - /tmp
+      - /app/run
+    lifecycle: {}
+    readinessProbe: {}
+    startupProbe:
+      exec:
+        command:
+          - sh
+          - -c
+          - test $(( $(date +%s) - $(stat -c %Y /app/run/heartbeat) )) -lt 180
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 60
+    livenessProbe:
+      exec:
+        command:
+          - sh
+          - -c
+          - test $(( $(date +%s) - $(stat -c %Y /app/run/heartbeat) )) -lt 180
+      periodSeconds: 30
+      timeoutSeconds: 3
+      failureThreshold: 2
     ports:
       - name: metrics
         containerPort: 9465
@@ -572,6 +648,29 @@ components:
       - --loglevel=INFO
       - --schedule=/tmp/celerybeat-schedule
       - --pidfile=/tmp/celerybeat.pid
+    writablePaths:
+      - /tmp
+      - /app/run
+    lifecycle: {}
+    readinessProbe: {}
+    startupProbe:
+      exec:
+        command:
+          - sh
+          - -c
+          - test $(( $(date +%s) - $(stat -c %Y /app/run/heartbeat) )) -lt 90
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 60
+    livenessProbe:
+      exec:
+        command:
+          - sh
+          - -c
+          - test $(( $(date +%s) - $(stat -c %Y /app/run/heartbeat) )) -lt 90
+      periodSeconds: 30
+      timeoutSeconds: 3
+      failureThreshold: 2
     ports:
       - name: metrics
         containerPort: 9466
@@ -624,6 +723,15 @@ components:
         containerPort: 50051
       - name: metrics
         containerPort: 9464
+      - name: health
+        containerPort: 8081
+    startupProbe:
+      grpc:
+        port: 8081
+        service: readiness
+      periodSeconds: 2
+      timeoutSeconds: 2
+      failureThreshold: 150
     service:
       enabled: true
       ports:
@@ -636,6 +744,7 @@ components:
       REDIS_TLS: "true"
       REDIS_DB: "2"
       REDIS_USER: ai
+      HEALTH_HOST: "0.0.0.0"
       NODE_STATS_KEY: stats:node
       NODE_STATS_INTERVAL_SECONDS: "2.0"
       NODE_STATS_TTL_SECONDS: "15"
@@ -686,6 +795,26 @@ components:
     writablePaths:
       - /tmp
       - /app/run
+    lifecycle: {}
+    readinessProbe: {}
+    startupProbe:
+      exec:
+        command:
+          - sh
+          - -c
+          - test $(( $(date +%s) - $(stat -c %Y /app/run/camera_heartbeat) )) -lt 10
+      periodSeconds: 2
+      timeoutSeconds: 2
+      failureThreshold: 30
+    livenessProbe:
+      exec:
+        command:
+          - sh
+          - -c
+          - test $(( $(date +%s) - $(stat -c %Y /app/run/camera_heartbeat) )) -lt 10
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
     ports:
       - name: metrics
         containerPort: 9464
@@ -747,6 +876,26 @@ components:
       - /app/.ultralytics
       - /app/.matplotlib
       - /app/run
+    lifecycle: {}
+    readinessProbe: {}
+    startupProbe:
+      exec:
+        command:
+          - sh
+          - -c
+          - test $(( $(date +%s) - $(stat -c %Y /app/run/detect_gate_heartbeat) )) -lt 10
+      periodSeconds: 2
+      timeoutSeconds: 2
+      failureThreshold: 150
+    livenessProbe:
+      exec:
+        command:
+          - sh
+          - -c
+          - test $(( $(date +%s) - $(stat -c %Y /app/run/detect_gate_heartbeat) )) -lt 10
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
     ports:
       - name: metrics
         containerPort: 9464

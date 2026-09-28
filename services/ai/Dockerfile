@@ -1,6 +1,5 @@
 ARG PYTHON_VERSION=3.11
 ARG UV_VERSION=0.11.32
-ARG GRPC_HEALTH_PROBE_VERSION=v0.4.25
 
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
@@ -28,10 +27,6 @@ RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     && rm -f /opt/venv/.lock
 
 
-FROM base AS probe
-ARG GRPC_HEALTH_PROBE_VERSION
-ADD --chmod=0755 https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 /usr/local/bin/grpc_health_probe
-
 FROM base AS runtime
 RUN rm -f /etc/apt/apt.conf.d/docker-clean \
     && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
@@ -41,12 +36,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         libglib2.0-0
 ENV PATH=/opt/venv/bin:$PATH
 COPY --from=builder /opt/venv /opt/venv
-COPY --from=probe /usr/local/bin/grpc_health_probe /usr/local/bin/grpc_health_probe
 COPY --chmod=u=rwX,go=rX app /app/app
 RUN mkdir -p /app/.ultralytics /app/.matplotlib /app/snapshots \
     && chown ai:ai /app/.ultralytics /app/.matplotlib /app/snapshots
 USER ai
 EXPOSE 50051 9464
-HEALTHCHECK --interval=10s --timeout=3s --start-period=40s --retries=3 \
-    CMD grpc_health_probe -addr=localhost:50051 -tls -tls-ca-cert=/run/secrets/ai_tls_ca -tls-client-cert=/run/secrets/ai_tls_cert -tls-client-key=/run/secrets/ai_tls_key || exit 1
+HEALTHCHECK --interval=10s --timeout=4s --start-period=300s --start-interval=5s --retries=3 \
+    CMD ["python", "-m", "app.healthcheck"]
 CMD ["python", "-m", "app.main"]

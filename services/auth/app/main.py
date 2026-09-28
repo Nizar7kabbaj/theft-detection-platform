@@ -1,22 +1,26 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import signal
+from collections.abc import Mapping
 
 import grpc
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from grpc_health.v1 import health, health_pb2, health_pb2_grpc
+from grpc_health.v1 import health, health_pb2_grpc
 from grpc_reflection.v1alpha import reflection
+from sqlalchemy import text
 
 from app.api.v1.auth import router as auth_router
 from app.api.v1.users import router as users_router
 from app.core.config import get_settings
-from app.core.database import dispose_engine
-from app.core.redis import close_redis
+from app.core.database import dispose_engine, get_sessionmaker
+from app.core.redis import close_redis, get_redis
 from app.server.grpc_gen import auth_pb2, auth_pb2_grpc
+from app.server.health import HealthState, Probe, start_probe_server
 from app.server.interceptors import IdentityInterceptor
 from app.server.servicer import AuthServicer
 from app.services.audit_drain import run_drain
@@ -53,58 +57,74 @@ def create_app() -> FastAPI:
         logger.exception("unhandled error in http handler: %s", exc)
         return JSONResponse(status_code=500, content={"detail": "internal error"})
 
-    @app.get("/health", tags=["health"])
-    async def health_check() -> dict[str, str]:
-        return {"status": "ok"}
-
     app.include_router(auth_router)
     app.include_router(users_router)
     return app
 
 
-class AsyncHealthServicer(health.HealthServicer):
-    async def Check(self, request, context):
-        return super().Check(request, context)
-
-    async def Watch(self, request, context):
-        for response in super().Watch(request, context):
-            yield response
+async def _postgres_ping() -> None:
+    async with get_sessionmaker()() as session:
+        await session.execute(text("SELECT 1"))
 
 
-async def _run_grpc(stop_event: asyncio.Event) -> None:
+async def _redis_ping() -> None:
+    await get_redis().ping()
+
+
+def _http_started(server: uvicorn.Server) -> Probe:
+    async def probe() -> bool:
+        return server.started
+
+    return probe
+
+
+async def _run_grpc(stop_event: asyncio.Event, probes: Mapping[str, Probe]) -> None:
     settings = get_settings()
+    state = HealthState(readiness_names=(AUTH_SERVICE_FULL_NAME,))
+    await state.start()
+    probe_server = await start_probe_server(
+        state.servicer, settings.health_host, settings.health_port
+    )
+    watch_task = asyncio.create_task(
+        state.watch(
+            probes,
+            settings.health_probe_interval_seconds,
+            settings.health_probe_timeout_seconds,
+            stop_event,
+        )
+    )
     server = grpc.aio.server(
         migration_thread_pool=None,
         maximum_concurrent_rpcs=None,
         interceptors=[IdentityInterceptor()],
     )
-    health_servicer = AsyncHealthServicer()
-    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
-    health_servicer.set(AUTH_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
-    health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
+    health_pb2_grpc.add_HealthServicer_to_server(state.servicer, server)
     auth_pb2_grpc.add_AuthServiceServicer_to_server(AuthServicer(), server)
-    service_names = (
-        auth_pb2.DESCRIPTOR.services_by_name["AuthService"].full_name,
-        health.SERVICE_NAME,
-        reflection.SERVICE_NAME,
+    reflection.enable_server_reflection(
+        (
+            auth_pb2.DESCRIPTOR.services_by_name["AuthService"].full_name,
+            health.SERVICE_NAME,
+            reflection.SERVICE_NAME,
+        ),
+        server,
     )
-    reflection.enable_server_reflection(service_names, server)
     bind_address = f"{settings.grpc_host}:{settings.grpc_port}"
     server.add_secure_port(bind_address, _server_credentials())
-    await server.start()
-    health_servicer.set(AUTH_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.SERVING)
-    health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
-    logger.info("grpc server listening on %s", bind_address)
     try:
+        await server.start()
+        logger.info("grpc server listening on %s", bind_address)
         await stop_event.wait()
     finally:
-        health_servicer.set(AUTH_SERVICE_FULL_NAME, health_pb2.HealthCheckResponse.NOT_SERVING)
-        health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
+        watch_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await watch_task
+        await state.shutdown()
         await server.stop(grace=5)
+        await probe_server.stop(grace=None)
         logger.info("grpc server stopped")
 
 
-async def _run_http(stop_event: asyncio.Event) -> None:
+def _build_http_server() -> uvicorn.Server:
     settings = get_settings()
     config = uvicorn.Config(
         app=create_app(),
@@ -114,7 +134,11 @@ async def _run_http(stop_event: asyncio.Event) -> None:
         access_log=False,
         lifespan="off",
     )
-    server = uvicorn.Server(config)
+    return uvicorn.Server(config)
+
+
+async def _run_http(stop_event: asyncio.Event, server: uvicorn.Server) -> None:
+    settings = get_settings()
     logger.info("http server listening on %s:%d", settings.http_host, settings.http_port)
     serve_task = asyncio.create_task(server.serve())
     await stop_event.wait()
@@ -138,8 +162,14 @@ async def _serve() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _on_signal, sig.name)
 
-    grpc_task = asyncio.create_task(_run_grpc(stop_event))
-    http_task = asyncio.create_task(_run_http(stop_event))
+    http_server = _build_http_server()
+    probes: dict[str, Probe] = {
+        "postgres": _postgres_ping,
+        "redis": _redis_ping,
+        "http": _http_started(http_server),
+    }
+    grpc_task = asyncio.create_task(_run_grpc(stop_event, probes))
+    http_task = asyncio.create_task(_run_http(stop_event, http_server))
     drain_task = asyncio.create_task(run_drain(stop_event))
     sweep_task = asyncio.create_task(run_session_sweep(stop_event))
     tasks = (grpc_task, http_task)

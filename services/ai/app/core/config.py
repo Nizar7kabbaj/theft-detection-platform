@@ -14,6 +14,10 @@ def _read_secret(path: str) -> str:
 class Settings(BaseSettings):
     GRPC_HOST: str = "0.0.0.0"
     GRPC_PORT: int = 50051
+    HEALTH_HOST: str = "127.0.0.1"
+    HEALTH_PORT: int = 8081
+    HEALTH_PROBE_INTERVAL_SECONDS: float = 2.0
+    HEALTH_PROBE_TIMEOUT_SECONDS: float = 1.5
     YOLO_MODEL_NAME: str = "/app/ai-model/models/yolov8n-pose.pt"
     YOLO_OBJECT_MODEL_NAME: str = "/app/ai-model/models/yolov8s.pt"
     LSTM_MODEL_PATH: str = "/app/ai-model/models/shoplifting_classifier.pt"

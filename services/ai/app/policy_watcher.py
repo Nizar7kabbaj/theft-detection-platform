@@ -70,6 +70,15 @@ class PolicyWatcher:
         except RedisError as exc:
             logger.warning("applied policy report failed version=%d: %s", version, exc)
 
+    async def _catch_up(self, client: redis.Redis) -> None:
+        raw = await client.get(CURRENT_KEY)
+        if raw is None:
+            return
+        try:
+            await self._apply(raw)
+        except (ValueError, KeyError, TypeError) as exc:
+            logger.error("stored detection policy rejected: %s", exc)
+
     async def prime(self) -> None:
         try:
             client = await self._connect()
@@ -89,6 +98,7 @@ class PolicyWatcher:
                 pubsub = client.pubsub()
                 await pubsub.subscribe(CHANNEL)
                 logger.info("detection policy watcher subscribed channel=%s", CHANNEL)
+                await self._catch_up(client)
                 async for message in pubsub.listen():
                     if self._stopping.is_set():
                         break

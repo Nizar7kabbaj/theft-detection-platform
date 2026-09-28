@@ -28,6 +28,8 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --chmod=u=rwX,go=rX app /app/app
 USER api
 EXPOSE 8000
+HEALTHCHECK --interval=10s --timeout=4s --start-period=60s --start-interval=2s --retries=3 \
+    CMD ["python", "-m", "app.healthcheck"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 FROM base AS test

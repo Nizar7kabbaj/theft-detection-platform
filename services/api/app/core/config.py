@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     FRAME_STREAM_MAX_VIEWERS: int = 4
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
+    HEALTH_HOST: str = "127.0.0.1"
+    HEALTH_PORT: int = 8081
+    HEALTH_PROBE_INTERVAL_SECONDS: float = 2.0
+    HEALTH_PROBE_TIMEOUT_SECONDS: float = 1.5
     DEBUG: bool = True
     SNAPSHOTS_DIR: str = "/app/snapshots"
     INFERENCE_TARGET: str = "ai:50051"
