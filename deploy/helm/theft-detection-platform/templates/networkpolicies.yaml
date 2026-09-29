@@ -1,0 +1,101 @@
+{{- $np := .Values.networkPolicy }}
+{{- if $np.enabled }}
+{{- $in := dict }}
+{{- range $src, $raw := .Values.components }}
+{{- if $raw.enabled }}
+{{- range $raw.egress }}
+{{- $dst := index $.Values.components .to }}
+{{- if and $dst $dst.enabled }}
+{{- $rules := get $in .to | default (dict) }}
+{{- $_ := set $rules (printf "%s|%v" $src .ports) (dict "from" $src "ports" .ports) }}
+{{- $_ := set $in .to $rules }}
+{{- end }}
+{{- end }}
+{{- range $raw.ingress }}
+{{- if include "theft.npOn" (dict "root" $ "name" .from) }}
+{{- $rules := get $in $src | default (dict) }}
+{{- $_ := set $rules (printf "%s|%v" .from .ports) (dict "from" .from "ports" .ports) }}
+{{- $_ := set $in $src $rules }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.global.gateway.enabled }}
+{{- range .Values.routes.rules }}
+{{- $dst := index $.Values.components .component }}
+{{- if and $dst $dst.enabled }}
+{{- $rules := get $in .component | default (dict) }}
+{{- $_ := set $rules (printf "gateway|%v" .port) (dict "from" "gateway" "ports" (list .port)) }}
+{{- $_ := set $in .component $rules }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range $name, $job := .Values.metrics.jobs }}
+{{- $dst := index $.Values.components $name }}
+{{- if and $dst $dst.enabled }}
+{{- range $dst.ports }}
+{{- if eq .name "metrics" }}
+{{- $rules := get $in $name | default (dict) }}
+{{- $_ := set $rules (printf "prometheus|%v" .containerPort) (dict "from" "prometheus" "ports" (list .containerPort)) }}
+{{- $_ := set $in $name $rules }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range $name, $raw := .Values.components }}
+{{- if $raw.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "theft.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- range $key, $r := (get $in $name | default (dict)) }}
+    - from:
+        {{- include "theft.npPeer" (dict "root" $ "name" $r.from) | trim | nindent 8 }}
+      ports:
+        {{- include "theft.npPorts" (dict "root" $ "name" $r.from "ports" $r.ports) | trim | nindent 8 }}
+    {{- end }}
+    {{- if $np.ambient.enabled }}
+    - from:
+        - ipBlock:
+            cidr: {{ $np.ambient.probeSource }}
+    {{- end }}
+  egress:
+    {{- include "theft.npDns" $ | trim | nindent 4 }}
+    {{- range $raw.egress }}
+    {{- if include "theft.npOn" (dict "root" $ "name" .to) }}
+    - to:
+        {{- include "theft.npPeer" (dict "root" $ "name" .to) | trim | nindent 8 }}
+      ports:
+        {{- include "theft.npPorts" (dict "root" $ "name" .to "ports" .ports) | trim | nindent 8 }}
+    {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- range $name, $m := .Values.migrations }}
+{{- $raw := index $.Values.components $m.component }}
+{{- if and $m.enabled $raw $raw.enabled }}
+{{- include "theft.npJob" (dict "root" $ "name" $name "hook" true) }}
+{{- end }}
+{{- end }}
+{{- with .Values.seed }}
+{{- $raw := index $.Values.components .component }}
+{{- if and .enabled $raw $raw.enabled }}
+{{- include "theft.npJob" (dict "root" $ "name" (printf "%s-seed" .component) "hook" false) }}
+{{- end }}
+{{- end }}
+{{- if .Values.auditOperator.run }}
+{{- include "theft.npJob" (dict "root" $ "name" "audit-operator" "hook" false) }}
+{{- end }}
+{{- end }}

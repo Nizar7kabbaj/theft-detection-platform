@@ -8,6 +8,9 @@ from app.core.config import get_settings
 
 _TRUSTED = '["127.0.0.0/8","::1/128","172.16.0.0/12"]'
 _USER_AGENT_LIMIT = 512
+_EDGE_PORT = 8001
+_INTERNAL_PORT = 8000
+_GATEWAY = "10.244.1.21"
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +25,7 @@ def _request(
     client_host: str | None = "127.0.0.1",
     forwarded: str | None = None,
     user_agent: str | None = None,
+    server_port: int | None = None,
 ) -> Request:
     headers: list[tuple[bytes, bytes]] = []
     if forwarded is not None:
@@ -36,7 +40,17 @@ def _request(
     }
     if client_host is not None:
         scope["client"] = (client_host, 51234)
+    if server_port is not None:
+        scope["server"] = ("10.244.1.12", server_port)
     return Request(scope)
+
+
+@pytest.fixture
+def edge_listener(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("AUTH_EDGE_HTTP_PORT", str(_EDGE_PORT))
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def test_missing_client_returns_empty():
@@ -144,3 +158,35 @@ def test_user_agent_is_truncated_to_column_width():
     request = _request(user_agent="a" * 900)
 
     assert len(_user_agent(request)) == _USER_AGENT_LIMIT
+
+
+def test_edge_listener_trusts_forwarded_header_from_any_peer(edge_listener):
+    request = _request(client_host=_GATEWAY, forwarded="203.0.113.9", server_port=_EDGE_PORT)
+
+    assert _client_ip(request) == "203.0.113.9"
+
+
+def test_edge_listener_skips_spoofed_leading_hops(edge_listener):
+    request = _request(
+        client_host=_GATEWAY, forwarded="1.1.1.1, 203.0.113.9", server_port=_EDGE_PORT
+    )
+
+    assert _client_ip(request) == "203.0.113.9"
+
+
+def test_edge_listener_without_forwarded_header_returns_peer(edge_listener):
+    request = _request(client_host=_GATEWAY, server_port=_EDGE_PORT)
+
+    assert _client_ip(request) == _GATEWAY
+
+
+def test_internal_listener_ignores_forwarded_header_from_untrusted_peer(edge_listener):
+    request = _request(client_host=_GATEWAY, forwarded="198.51.100.7", server_port=_INTERNAL_PORT)
+
+    assert _client_ip(request) == _GATEWAY
+
+
+def test_edge_port_is_not_trusted_when_edge_listener_is_off():
+    request = _request(client_host=_GATEWAY, forwarded="198.51.100.7", server_port=_EDGE_PORT)
+
+    assert _client_ip(request) == _GATEWAY

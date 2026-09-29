@@ -71,6 +71,12 @@ scrape_configs:
       - targets:
           - notification-worker:9465
 
+  - job_name: notification-beat
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - notification-beat:9466
+
   - job_name: ai
     metrics_path: /metrics
     static_configs:

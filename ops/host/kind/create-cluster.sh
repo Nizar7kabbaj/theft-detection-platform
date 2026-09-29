@@ -7,6 +7,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 readonly REPO_ROOT
 readonly CLUSTER_CONFIG="${REPO_ROOT}/infra/kind/cluster.yaml"
 readonly NAMESPACE_MANIFEST="${REPO_ROOT}/deploy/cluster/namespaces.yaml"
+readonly NETWORK_POLICY_MANIFEST="${REPO_ROOT}/deploy/cluster/network-policies.yaml"
 readonly ENCRYPTION_DIR="/etc/theft-kind"
 readonly ENCRYPTION_FILE="${ENCRYPTION_DIR}/encryption.yaml"
 readonly SNAPSHOT_DIR="/srv/theft/snapshots"
@@ -122,6 +123,8 @@ EOF
 apply_namespace() {
   kubectl --context "$KCTX" apply -f "$NAMESPACE_MANIFEST" >/dev/null
   log "namespace theft applied"
+  kubectl --context "$KCTX" apply --server-side -f "$NETWORK_POLICY_MANIFEST" >/dev/null
+  log "theft baseline network policy applied"
 }
 
 verify_encryption() {

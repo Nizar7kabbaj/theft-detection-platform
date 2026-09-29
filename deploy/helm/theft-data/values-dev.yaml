@@ -10,3 +10,7 @@ redis:
       extraArgs:
         - --maxmemory
         - 256mb
+
+networkPolicy:
+  apiServer:
+    cidr: 172.19.0.0/16

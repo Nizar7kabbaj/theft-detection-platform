@@ -25,6 +25,16 @@ server:
   global:
     scrape_interval: 15s
     evaluation_interval: 15s
+  strategy:
+    type: Recreate
+  readinessProbeInitialDelay: 0
+  readinessProbePeriodSeconds: 2
+  livenessProbeInitialDelay: 0
+  startupProbe:
+    enabled: true
+    periodSeconds: 2
+    timeoutSeconds: 2
+    failureThreshold: 150
   retention: 2d
   retentionSize: 1GB
   persistentVolume:

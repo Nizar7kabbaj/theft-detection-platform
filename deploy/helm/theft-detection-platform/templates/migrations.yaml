@@ -38,6 +38,7 @@ spec:
     metadata:
       labels:
         {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 8 }}
+        {{- include "theft.accessLabels" (dict "root" $ "egress" $.Values.networkPolicy.jobEgress) | trim | nindent 8 }}
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false

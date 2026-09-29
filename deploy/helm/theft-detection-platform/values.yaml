@@ -144,14 +144,14 @@ routes:
           value: /ws
     - name: auth-login
       component: auth
-      port: 8000
+      port: 8001
       headerSet: api
       matches:
         - type: Exact
           value: /auth/login
     - name: auth
       component: auth
-      port: 8000
+      port: 8001
       headerSet: api
       matches:
         - type: PathPrefix
@@ -215,12 +215,84 @@ auditOperator:
   args: []
   ttlSecondsAfterFinished: 3600
 
+networkPolicy:
+  enabled: true
+  accessLabelPrefix: access.theft-detection-platform
+  ambient:
+    enabled: false
+    hbonePort: 15008
+    probeSource: 169.254.7.127/32
+  dns:
+    namespace: kube-system
+    podLabels:
+      k8s-app: kube-dns
+    port: 53
+  peers:
+    postgres:
+      access: true
+      podLabels:
+        cnpg.io/cluster: postgres
+    mongo:
+      access: true
+      podLabels:
+        app.kubernetes.io/name: mongo
+        app.kubernetes.io/instance: theft-data
+    redis:
+      access: true
+      podLabels:
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/instance: theft-data
+    redis-broker:
+      access: true
+      podLabels:
+        app.kubernetes.io/name: redis-broker
+        app.kubernetes.io/instance: theft-data
+    redis-stream:
+      access: true
+      podLabels:
+        app.kubernetes.io/name: redis-stream
+        app.kubernetes.io/instance: theft-data
+    gateway:
+      namespace: edge
+      podLabels:
+        app.kubernetes.io/name: public-gateway
+    prometheus:
+      namespace: monitoring
+      podLabels:
+        app.kubernetes.io/name: prometheus
+        app.kubernetes.io/component: server
+    alertmanager:
+      enabled: false
+      namespace: monitoring
+      podLabels:
+        app.kubernetes.io/name: alertmanager
+    collector:
+      enabled: false
+      namespace: monitoring
+      podLabels:
+        app.kubernetes.io/name: alloy
+    telegram:
+      cidrs:
+        - 91.108.56.0/22
+        - 91.108.4.0/22
+        - 91.108.8.0/22
+        - 91.108.16.0/22
+        - 91.108.12.0/22
+        - 149.154.160.0/20
+        - 91.105.192.0/23
+        - 91.108.20.0/22
+        - 185.76.151.0/24
+  jobEgress:
+    - to: postgres
+      ports: [5432]
+
 metrics:
   path: /metrics
   jobs:
     backend: backend
     notification: notification-service
     notification-worker: notification-worker
+    notification-beat: notification-beat
     ai: ai
     camera: camera
     detect-gate: detect-gate
@@ -238,6 +310,25 @@ seed:
 components:
   backend:
     enabled: true
+    egress:
+      - to: collector
+        ports: [4318]
+      - to: mongo
+        ports: [27017]
+      - to: redis
+        ports: [6380]
+      - to: redis-stream
+        ports: [6380]
+      - to: ai
+        ports: [50051]
+      - to: notification
+        ports: [50052]
+      - to: auth
+        ports: [50053]
+      - to: audit
+        ports: [50054]
+      - to: prometheus
+        ports: [9090]
     image:
       repository: theft-backend
       tag: dev
@@ -297,6 +388,11 @@ components:
 
   web:
     enabled: true
+    egress:
+      - to: backend
+        ports: [8000]
+      - to: auth
+        ports: [8000]
     image:
       repository: theft-web
       tag: dev
@@ -356,6 +452,13 @@ components:
 
   auth:
     enabled: true
+    egress:
+      - to: postgres
+        ports: [5432]
+      - to: redis
+        ports: [6380]
+      - to: audit
+        ports: [50054]
     image:
       repository: theft-auth
       tag: dev
@@ -366,6 +469,8 @@ components:
     ports:
       - name: http
         containerPort: 8000
+      - name: edge
+        containerPort: 8001
       - name: grpc
         containerPort: 50053
       - name: health
@@ -376,6 +481,9 @@ components:
         - name: http
           port: 8000
           targetPort: http
+        - name: edge
+          port: 8001
+          targetPort: edge
         - name: grpc
           port: 50053
           targetPort: grpc
@@ -383,6 +491,7 @@ components:
       AUTH_SERVICE_NAME: auth
       AUTH_HTTP_HOST: 0.0.0.0
       AUTH_HTTP_PORT: "8000"
+      AUTH_EDGE_HTTP_PORT: "8001"
       AUTH_GRPC_HOST: 0.0.0.0
       AUTH_GRPC_PORT: "50053"
       AUTH_GRPC_MAX_WORKERS: "8"
@@ -395,7 +504,7 @@ components:
       AUTH_POSTGRES_OWNER_USER: auth_owner
       AUTH_REDIS_HOST: redis
       AUTH_AUDIT_TARGET: audit:50054
-      AUTH_TRUSTED_PROXIES: '["127.0.0.0/8","::1/128","10.244.0.0/16"]'
+      AUTH_TRUSTED_PROXIES: '["127.0.0.0/8","::1/128"]'
     secret:
       enabled: true
       name: auth-secrets
@@ -417,6 +526,13 @@ components:
 
   audit:
     enabled: true
+    egress:
+      - to: collector
+        ports: [4318]
+      - to: postgres
+        ports: [5432]
+      - to: redis
+        ports: [6380]
     image:
       repository: theft-audit
       tag: dev
@@ -493,6 +609,16 @@ components:
 
   notification:
     enabled: true
+    ingress:
+      - from: alertmanager
+        ports: [8000]
+    egress:
+      - to: collector
+        ports: [4318]
+      - to: mongo
+        ports: [27017]
+      - to: redis-broker
+        ports: [6380]
     image:
       repository: theft-notification-server
       tag: dev
@@ -551,6 +677,15 @@ components:
 
   notification-worker:
     enabled: true
+    egress:
+      - to: collector
+        ports: [4318]
+      - to: mongo
+        ports: [27017]
+      - to: redis-broker
+        ports: [6380]
+      - to: telegram
+        ports: [443]
     image:
       repository: theft-notification-worker
       tag: dev
@@ -630,6 +765,13 @@ components:
 
   notification-beat:
     enabled: true
+    egress:
+      - to: collector
+        ports: [4318]
+      - to: mongo
+        ports: [27017]
+      - to: redis-broker
+        ports: [6380]
     replicas: 1
     strategy:
       type: Recreate
@@ -707,6 +849,15 @@ components:
 
   ai:
     enabled: true
+    egress:
+      - to: collector
+        ports: [4318]
+      - to: redis-stream
+        ports: [6380]
+      - to: backend
+        ports: [8000]
+      - to: auth
+        ports: [8000]
     image:
       repository: theft-ai
       tag: dev
@@ -785,6 +936,13 @@ components:
 
   camera:
     enabled: false
+    egress:
+      - to: collector
+        ports: [4318]
+      - to: ai
+        ports: [50051]
+      - to: redis-stream
+        ports: [6380]
     image:
       repository: theft-camera
       tag: dev
@@ -864,6 +1022,13 @@ components:
 
   detect-gate:
     enabled: true
+    egress:
+      - to: collector
+        ports: [4318]
+      - to: ai
+        ports: [50051]
+      - to: redis-stream
+        ports: [6380]
     image:
       repository: theft-detect-gate
       tag: dev

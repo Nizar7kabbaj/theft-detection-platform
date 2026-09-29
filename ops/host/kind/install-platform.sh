@@ -8,6 +8,7 @@ readonly VALUES_DIR="${REPO_ROOT}/deploy/platform"
 readonly EDGE_DIR="${VALUES_DIR}/edge"
 readonly KEYRING="${VALUES_DIR}/keys/cert-manager-keyring.gpg"
 readonly NAMESPACES="${REPO_ROOT}/deploy/cluster/namespaces.yaml"
+readonly NETWORK_POLICIES="${REPO_ROOT}/deploy/cluster/network-policies.yaml"
 readonly ISSUER_MANIFEST="${VALUES_DIR}/cluster-issuer.yaml"
 readonly SERVICE_CA_DIR="${REPO_ROOT}/config/pki/ca"
 readonly EDGE_CA_DIR="${REPO_ROOT}/config/traefik/certs"
@@ -143,6 +144,8 @@ main() {
 
   kubectl --context "$KCTX" apply -f "$NAMESPACES" >/dev/null
   log "namespaces applied"
+  kubectl --context "$KCTX" apply --server-side -f "$NETWORK_POLICIES" >/dev/null
+  log "theft baseline network policy applied"
   install_gateway_api
 
   install_release cert-manager cert-manager "$(fetch_cert_manager)" "${VALUES_DIR}/cert-manager.yaml"

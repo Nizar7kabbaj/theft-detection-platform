@@ -524,8 +524,9 @@ services:
     image: notification-worker:dev
     container_name: notification-worker
     networks:
-      - data
-      - observability
+      data:
+      observability:
+        ipv4_address: 172.21.0.20
     user: "1000:1000"
     command: ["celery", "-A", "app.worker.bootstrap", "worker", "--loglevel=INFO", "--pool=solo", "--concurrency=1"]
     env_file:
@@ -1071,6 +1072,7 @@ networks:
       config:
         - subnet: 172.31.240.0/24
           gateway: 172.31.240.1
+          ip_range: 172.31.240.128/25
   data:
     driver: bridge
     internal: true
@@ -1080,6 +1082,7 @@ networks:
       config:
         - subnet: 172.21.0.0/24
           gateway: 172.21.0.1
+          ip_range: 172.21.0.128/25
 
 volumes:
   mongo_data:
