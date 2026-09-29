@@ -1,6 +1,6 @@
 import signal
 
-from celery.signals import worker_process_init
+from celery.signals import beat_init, worker_process_init
 
 from app.shared.celery_app import celery_app
 from app.shared.telegram_service import _token
@@ -22,3 +22,8 @@ def _reload_token(_signum: int, _frame: object) -> None:
 def _init_worker(**_kwargs: object) -> None:
     setup_worker_observability()
     signal.signal(signal.SIGHUP, _reload_token)
+
+
+@beat_init.connect(weak=False)
+def _init_beat(**_kwargs: object) -> None:
+    setup_worker_observability()

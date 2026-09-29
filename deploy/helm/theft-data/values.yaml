@@ -97,3 +97,23 @@ redis:
         limits:
           memory: 1792Mi
       extraArgs: []
+
+networkPolicy:
+  enabled: true
+  accessLabelPrefix: access.theft-detection-platform
+  ambient:
+    enabled: false
+    hbonePort: 15008
+    probeSource: 169.254.7.127/32
+  dns:
+    namespace: kube-system
+    podLabels:
+      k8s-app: kube-dns
+    port: 53
+  apiServer:
+    cidr: ""
+    port: 6443
+  cnpgOperator:
+    namespace: cnpg-system
+    podLabels:
+      app.kubernetes.io/name: cloudnative-pg

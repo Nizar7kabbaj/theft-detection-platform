@@ -63,6 +63,12 @@ _REFRESH_TOKEN_PARTS = 2
 _MAX_SUCCESSOR_HOPS = 3
 
 
+def _on_edge_listener(request: Request) -> bool:
+    edge_port = get_settings().edge_http_port
+    server = request.scope.get("server")
+    return edge_port is not None and server is not None and server[1] == edge_port
+
+
 def _client_ip(request: Request) -> str:
     peer = request.client.host if request.client is not None else ""
     if not peer:
@@ -72,7 +78,10 @@ def _client_ip(request: Request) -> str:
         peer_addr = ip_address(peer)
     except ValueError:
         return peer
-    if not any(peer_addr in net for net in settings.trusted_proxy_networks):
+    peer_trusted = _on_edge_listener(request) or any(
+        peer_addr in net for net in settings.trusted_proxy_networks
+    )
+    if not peer_trusted:
         return peer
     forwarded = request.headers.get("x-forwarded-for", "")
     if not forwarded:

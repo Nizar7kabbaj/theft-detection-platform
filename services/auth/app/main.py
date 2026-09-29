@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 import signal
+import socket
 from collections.abc import Mapping
 
 import grpc
@@ -124,12 +125,26 @@ async def _run_grpc(stop_event: asyncio.Event, probes: Mapping[str, Probe]) -> N
         logger.info("grpc server stopped")
 
 
+def _listen_socket(host: str, port: int) -> socket.socket:
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    sock = socket.socket(family, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((host, port))
+    return sock
+
+
+def _http_sockets() -> list[socket.socket]:
+    settings = get_settings()
+    ports = [settings.http_port]
+    if settings.edge_http_port is not None:
+        ports.append(settings.edge_http_port)
+    return [_listen_socket(settings.http_host, port) for port in ports]
+
+
 def _build_http_server() -> uvicorn.Server:
     settings = get_settings()
     config = uvicorn.Config(
         app=create_app(),
-        host=settings.http_host,
-        port=settings.http_port,
         log_level=settings.log_level.lower(),
         access_log=False,
         lifespan="off",
@@ -137,10 +152,13 @@ def _build_http_server() -> uvicorn.Server:
     return uvicorn.Server(config)
 
 
-async def _run_http(stop_event: asyncio.Event, server: uvicorn.Server) -> None:
-    settings = get_settings()
-    logger.info("http server listening on %s:%d", settings.http_host, settings.http_port)
-    serve_task = asyncio.create_task(server.serve())
+async def _run_http(
+    stop_event: asyncio.Event, server: uvicorn.Server, sockets: list[socket.socket]
+) -> None:
+    for sock in sockets:
+        host, port = sock.getsockname()[:2]
+        logger.info("http server listening on %s:%d", host, port)
+    serve_task = asyncio.create_task(server.serve(sockets=sockets))
     await stop_event.wait()
     server.should_exit = True
     await serve_task
@@ -163,13 +181,14 @@ async def _serve() -> None:
         loop.add_signal_handler(sig, _on_signal, sig.name)
 
     http_server = _build_http_server()
+    http_sockets = _http_sockets()
     probes: dict[str, Probe] = {
         "postgres": _postgres_ping,
         "redis": _redis_ping,
         "http": _http_started(http_server),
     }
     grpc_task = asyncio.create_task(_run_grpc(stop_event, probes))
-    http_task = asyncio.create_task(_run_http(stop_event, http_server))
+    http_task = asyncio.create_task(_run_http(stop_event, http_server, http_sockets))
     drain_task = asyncio.create_task(run_drain(stop_event))
     sweep_task = asyncio.create_task(run_session_sweep(stop_event))
     tasks = (grpc_task, http_task)
