@@ -191,3 +191,47 @@ async def test_idempotency_key_reuse_with_different_payload_conflicts(
 
     assert first.status_code == 201
     assert second.status_code == 409
+
+
+def _created_ids(messages: list[dict[str, Any]]) -> list[str]:
+    ids: list[str] = []
+    for msg in messages:
+        channel = msg["channel"]
+        if isinstance(channel, bytes):
+            channel = channel.decode()
+        if channel == "alerts:created":
+            ids.append(json.loads(msg["data"])["alert_id"])
+    return ids
+
+
+async def test_repeated_alert_id_is_stored_once(
+    client: httpx.AsyncClient,
+    test_db,
+    pubsub_listener,
+) -> None:
+    payload = _alert_payload("test-a-repeat")
+
+    first = await client.post("/api/v1/alerts", json=payload)
+    second = await client.post("/api/v1/alerts", json=payload)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json() == second.json()
+    assert await test_db.alerts.count_documents({"alert_id": "test-a-repeat"}) == 1
+    assert _created_ids(await _drain(pubsub_listener)).count("test-a-repeat") == 1
+
+
+async def test_racing_alert_posts_store_one_alert(
+    client: httpx.AsyncClient,
+    test_db,
+    pubsub_listener,
+) -> None:
+    payload = _alert_payload("test-a-race")
+
+    responses = await asyncio.gather(
+        *(client.post("/api/v1/alerts", json=payload) for _ in range(5))
+    )
+
+    assert {resp.status_code for resp in responses} == {201}
+    assert await test_db.alerts.count_documents({"alert_id": "test-a-race"}) == 1
+    assert _created_ids(await _drain(pubsub_listener)).count("test-a-race") == 1

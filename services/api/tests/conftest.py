@@ -17,6 +17,12 @@ class FakeAlertRepo:
         self.store[oid] = doc
         return doc
 
+    async def insert_once(self, data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        for doc in self.store.values():
+            if doc.get("alert_id") == data.get("alert_id"):
+                return doc, False
+        return await self.create(data), True
+
     async def list_page(
         self,
         severity: str | None = None,

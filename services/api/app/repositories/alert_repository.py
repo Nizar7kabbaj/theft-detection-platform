@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorCollection
+from pymongo.errors import DuplicateKeyError
 
 from app.repositories.base import BaseRepository
 
@@ -12,6 +13,16 @@ SORT_DECIDED = "decided_at"
 class AlertRepository(BaseRepository[dict[str, Any]]):
     def __init__(self, collection: AsyncIOMotorCollection) -> None:
         super().__init__(collection)
+
+    async def insert_once(self, data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        try:
+            created = await self.create(data)
+        except DuplicateKeyError:
+            existing = await self._col.find_one({"alert_id": data["alert_id"]})
+            if existing is None:
+                raise
+            return existing, False
+        return created, True
 
     async def list_page(
         self,

@@ -32,6 +32,7 @@ from app.core.errors import (
     ConflictError,
     InferenceUnavailableError,
     NotFoundError,
+    RequestInProgressError,
     ValidationError,
 )
 from app.core.health import HealthState, Probe, start_probe_server
@@ -205,6 +206,14 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ConflictError)
     async def _conflict(_: Request, exc: ConflictError) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.exception_handler(RequestInProgressError)
+    async def _in_progress(_: Request, exc: RequestInProgressError) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "request in progress"},
+            headers={"Retry-After": str(exc.retry_after)},
+        )
 
     @app.exception_handler(ValidationError)
     async def _validation(_: Request, exc: ValidationError) -> JSONResponse:

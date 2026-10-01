@@ -254,7 +254,10 @@ class AlertUseCase:
         doc["created_at"] = datetime.now(UTC)
         doc["acknowledged"] = False
         doc["decision"] = Decision.DECISION_UNSPECIFIED.value
-        created = await self._repo.create(doc)
+        created, inserted = await self._repo.insert_once(doc)
+        if not inserted:
+            logger.info("alert %s already recorded, returning stored copy", payload.alert_id)
+            return _to_response(created)
         await invalidate_prefix(self._redis, self.LIST_PREFIX)
         await invalidate(self._redis, self.CAMERA_FACET_KEY)
         await invalidate_prefix(self._redis, self.COUNT_PREFIX)

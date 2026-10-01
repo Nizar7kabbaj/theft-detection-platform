@@ -1,0 +1,21 @@
+providerRegex: ^theft-dev-(control-plane|worker)$
+providerIpPrefixes:
+  - 172.19.0.3/32
+  - 172.19.0.4/32
+bypassDnsResolution: true
+allowedDnsNames: 1
+replicas: 1
+leaderElection: false
+image:
+  repository: ghcr.io/postfinance/kubelet-csr-approver
+  tag: v1.2.15@sha256:6469ef517d2b6d3cb108fce8a913483533a48b1cd78b5d4af307fa09e04a7818
+metrics:
+  enable: false
+nodeSelector:
+  node-role.kubernetes.io/control-plane: ""
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 32Mi

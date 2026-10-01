@@ -23,4 +23,13 @@
 {{- end }}
 {{- end }}
 {{- end }}
+{{- range $name, $m := .Values.documentMigrations }}
+{{- $raw := index $.Values.components $m.component }}
+{{- if and $m.enabled $raw $raw.enabled }}
+{{- range $m.egress }}
+{{- $rules := dict (printf "%s|%v" $name .ports) (dict "sa" $name "ports" .ports) }}
+{{- include "theft.authz" (dict "root" $ "name" (printf "%s-%s" $name .to) "selector" (index $np.peers .to).podLabels "rules" $rules "hook" true) }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- end }}

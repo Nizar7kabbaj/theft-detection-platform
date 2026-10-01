@@ -200,6 +200,9 @@ async def _ensure_indexes(real_db: AsyncIOMotorDatabase, prefix: str) -> None:
     await cameras_col.create_index("name", unique=True)
     await detections_col.create_index([("session_id", 1), ("occurred_at", -1)])
     await alerts_col.create_index([("acknowledged", 1), ("created_at", -1)])
+    await alerts_col.create_index(
+        "alert_id", unique=True, partialFilterExpression={"alert_id": {"$type": "string"}}
+    )
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")

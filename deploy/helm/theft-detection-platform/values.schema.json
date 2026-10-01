@@ -176,6 +176,50 @@
         }
       }
     },
+    "documentMigrations": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["enabled", "component", "egress", "command"],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "component": {
+            "type": "string"
+          },
+          "egress": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["to", "ports"],
+              "properties": {
+                "to": {
+                  "type": "string"
+                },
+                "ports": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
+          "command": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
     "auditOperator": {
       "type": "object",
       "additionalProperties": false,
@@ -325,6 +369,29 @@
       "type": "object",
       "properties": {
         "replicas": { "type": "integer", "minimum": 0 },
+        "autoscaling": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "minReplicas": { "type": "integer", "minimum": 1 },
+            "maxReplicas": { "type": "integer", "minimum": 1 },
+            "cpuUtilization": { "type": "integer", "minimum": 10, "maximum": 100 },
+            "scaleUpStabilizationSeconds": { "type": "integer", "minimum": 0, "maximum": 3600 },
+            "scaleDownStabilizationSeconds": { "type": "integer", "minimum": 0, "maximum": 3600 }
+          },
+          "if": { "properties": { "enabled": { "const": true } } },
+          "then": {
+            "required": [
+              "minReplicas",
+              "maxReplicas",
+              "cpuUtilization",
+              "scaleUpStabilizationSeconds",
+              "scaleDownStabilizationSeconds"
+            ]
+          }
+        },
         "strategy": {
           "type": "object",
           "properties": {

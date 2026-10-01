@@ -13,6 +13,7 @@ readonly NETWORK_POLICIES="${REPO_ROOT}/deploy/cluster/network-policies.yaml"
 readonly MESH_POLICIES="${REPO_ROOT}/deploy/cluster/mesh-policies.yaml"
 readonly NODE_EXPORTER_ACCESS="${VALUES_DIR}/node-exporter-access.yaml"
 readonly CNPG_NETWORK_POLICIES="${VALUES_DIR}/cnpg-network-policies.yaml"
+readonly METRICS_NETWORK_POLICIES="${VALUES_DIR}/metrics-network-policies.yaml"
 readonly ISSUER_MANIFEST="${VALUES_DIR}/cluster-issuer.yaml"
 readonly SERVICE_CA_DIR="${REPO_ROOT}/config/pki/ca"
 readonly CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/theft-platform"
@@ -35,6 +36,12 @@ readonly PROMETHEUS_VERSION="29.34.0"
 readonly PROMETHEUS_SHA256="e0dc3d372c6db2f055578594eb78c96646671fec4b4e5d3613aa6f66556b4955"
 readonly NODE_EXPORTER_VERSION="4.58.0"
 readonly NODE_EXPORTER_SHA256="9781c208d90e95d67495fdc7985dc8d9c21a25996ae807a25b24fd191dedbeb4"
+readonly CSR_APPROVER_REPO="https://postfinance.github.io/kubelet-csr-approver"
+readonly CSR_APPROVER_VERSION="1.2.15"
+readonly CSR_APPROVER_SHA256="a8697589fadc4aedb68f01a66f2cf50a780d9648ad3f463d041722902091e32f"
+readonly METRICS_SERVER_REPO="https://kubernetes-sigs.github.io/metrics-server"
+readonly METRICS_SERVER_VERSION="3.14.0"
+readonly METRICS_SERVER_SHA256="c2ca1185c01e6e7f53dd1b7d131f0c9b3fa50e003ed068b784563a1b5a3422a1"
 
 WORK_DIR=""
 
@@ -197,6 +204,11 @@ main() {
   log "namespaces applied"
   kubectl --context "$KCTX" apply --server-side -f "$NETWORK_POLICIES" >/dev/null
   log "theft baseline network policy applied"
+  kubectl --context "$KCTX" apply --server-side --field-manager=platform -f "$METRICS_NETWORK_POLICIES" >/dev/null
+  log "metrics-server and csr-approver network policies applied"
+  install_release kubelet-csr-approver csr-approver \
+    "$(fetch_repo_chart "$CSR_APPROVER_REPO" kubelet-csr-approver "$CSR_APPROVER_VERSION" "$CSR_APPROVER_SHA256")" \
+    "${VALUES_DIR}/kubelet-csr-approver.yaml"
   install_gateway_api
 
   local charts
@@ -229,8 +241,12 @@ main() {
     "$(fetch_repo_chart "$PROMETHEUS_REPO" prometheus-node-exporter "$NODE_EXPORTER_VERSION" "$NODE_EXPORTER_SHA256")" \
     "${VALUES_DIR}/node-exporter.yaml"
 
+  install_release metrics-server metrics-server \
+    "$(fetch_repo_chart "$METRICS_SERVER_REPO" metrics-server "$METRICS_SERVER_VERSION" "$METRICS_SERVER_SHA256")" \
+    "${VALUES_DIR}/metrics-server.yaml"
+
   local ns
-  for ns in cert-manager cnpg-system reloader istio-system istio-dataplane edge monitoring node-exporter; do
+  for ns in csr-approver cert-manager cnpg-system reloader istio-system istio-dataplane edge monitoring node-exporter metrics-server; do
     kubectl --context "$KCTX" get pods -n "$ns"
   done
 }
