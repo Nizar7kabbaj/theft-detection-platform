@@ -185,7 +185,7 @@ spec:
     - Egress
   egress:
     {{- include "theft.npDns" .root | trim | nindent 4 }}
-    {{- range .root.Values.networkPolicy.jobEgress }}
+    {{- range (.egress | default .root.Values.networkPolicy.jobEgress) }}
     {{- if include "theft.npOn" (dict "root" $.root "name" .to) }}
     - to:
         {{- include "theft.npPeer" (dict "root" $.root "name" .to) | trim | nindent 8 }}

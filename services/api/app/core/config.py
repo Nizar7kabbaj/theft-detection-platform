@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
     RATE_LIMIT_BURST: int = 100
+    IDEMPOTENCY_PENDING_SECONDS: int = 60
     ACCESS_COOKIE_NAME: str = "__Host-access_token"
     CSRF_COOKIE_NAME: str = "__Host-csrf"
     CSRF_HEADER_NAME: str = "X-CSRF-Token"

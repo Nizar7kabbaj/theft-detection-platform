@@ -38,7 +38,9 @@ metadata:
   labels:
     {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 4 }}
 spec:
+  {{- if not (and $c.autoscaling $c.autoscaling.enabled) }}
   replicas: {{ $c.replicas }}
+  {{- end }}
   revisionHistoryLimit: 5
   strategy:
     type: {{ $c.strategy.type }}

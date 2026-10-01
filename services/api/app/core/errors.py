@@ -17,6 +17,12 @@ class ConflictError(AppError):
     """write would violate a uniqueness or state constraint."""
 
 
+class RequestInProgressError(AppError):
+    def __init__(self, retry_after: int) -> None:
+        super().__init__("request with this idempotency key is still in progress")
+        self.retry_after = retry_after
+
+
 class InferenceUnavailableError(AppError):
     """upstream inference service unreachable or timed out."""
 

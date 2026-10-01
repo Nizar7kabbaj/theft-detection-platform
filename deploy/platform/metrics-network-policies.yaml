@@ -1,0 +1,95 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: metrics-server
+  labels:
+    app.kubernetes.io/part-of: theft-detection-platform
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: metrics-server
+  namespace: metrics-server
+  labels:
+    app.kubernetes.io/part-of: theft-detection-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: metrics-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 172.19.0.3/32
+        - ipBlock:
+            cidr: 169.254.7.127/32
+      ports:
+        - port: 10250
+          protocol: TCP
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 172.19.0.3/32
+      ports:
+        - port: 6443
+          protocol: TCP
+        - port: 10250
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 172.19.0.4/32
+      ports:
+        - port: 10250
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: csr-approver
+  labels:
+    app.kubernetes.io/part-of: theft-detection-platform
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kubelet-csr-approver
+  namespace: csr-approver
+  labels:
+    app.kubernetes.io/part-of: theft-detection-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kubelet-csr-approver
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 172.19.0.3/32
+        - ipBlock:
+            cidr: 169.254.7.127/32
+      ports:
+        - port: 8081
+          protocol: TCP
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 172.19.0.3/32
+      ports:
+        - port: 6443
+          protocol: TCP

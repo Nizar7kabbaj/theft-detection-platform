@@ -38,6 +38,8 @@ global:
 
 defaults:
   replicas: 1
+  autoscaling:
+    enabled: false
   strategy:
     type: RollingUpdate
   terminationGracePeriodSeconds: 30
@@ -206,6 +208,19 @@ migrations:
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO audit_app;
     postSql: |
       REVOKE ALL ON alembic_version FROM audit_app;
+
+documentMigrations:
+  backend-migrate:
+    enabled: true
+    component: backend
+    egress:
+      - to: mongo
+        ports: [27017]
+    command:
+      - python
+      - -m
+      - app.migrations.runner
+      - up
 
 auditOperator:
   run: false
@@ -378,9 +393,16 @@ components:
       mount: true
       readOnly: true
       path: /app/snapshots
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 3
+      cpuUtilization: 60
+      scaleUpStabilizationSeconds: 30
+      scaleDownStabilizationSeconds: 120
     resources:
       requests:
-        cpu: 50m
+        cpu: 500m
         memory: 192Mi
       limits:
         memory: 192Mi

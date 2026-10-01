@@ -1,0 +1,89 @@
+{{- range $name, $m := .Values.documentMigrations }}
+{{- $raw := index $.Values.components $m.component }}
+{{- if and $m.enabled $raw $raw.enabled }}
+{{- $c := include "theft.component" (dict "root" $ "comp" $raw) | fromYaml }}
+{{- $mountPath := "/run/secrets" }}
+{{- if and $c.secret $c.secret.mountPath }}
+{{- $mountPath = $c.secret.mountPath }}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 8 }}
+        {{- include "theft.accessLabels" (dict "root" $ "egress" $m.egress) | trim | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $c.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "theft.image" (dict "root" $ "image" $c.image) }}
+          imagePullPolicy: {{ $.Values.global.image.pullPolicy }}
+          command:
+            {{- toYaml $m.command | nindent 12 }}
+          env:
+            {{- include "theft.envList" (dict "root" $ "env" ($c.env | default dict)) | nindent 12 }}
+            - name: OTEL_SDK_DISABLED
+              value: "true"
+          securityContext:
+            {{- toYaml $c.containerSecurityContext | nindent 12 }}
+          {{- with $c.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: secrets
+              mountPath: {{ $mountPath }}
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: secrets
+          projected:
+            defaultMode: 0440
+            sources:
+              {{- if and $c.secret $c.secret.enabled }}
+              - secret:
+                  name: {{ $c.secret.name }}
+              {{- end }}
+              {{- with $c.tls }}
+              - secret:
+                  name: {{ .identity }}-tls
+                  items:
+                    - key: tls.crt
+                      path: {{ .filePrefix }}_tls_cert
+                    - key: tls.key
+                      path: {{ .filePrefix }}_tls_key
+                    - key: ca.crt
+                      path: {{ .filePrefix }}_tls_ca
+                    {{- range .caAliases }}
+                    - key: ca.crt
+                      path: {{ . }}
+                    {{- end }}
+              {{- end }}
+{{- end }}
+{{- end }}

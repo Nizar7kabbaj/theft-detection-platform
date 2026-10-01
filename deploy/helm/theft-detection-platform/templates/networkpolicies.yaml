@@ -49,6 +49,12 @@ spec:
 {{- include "theft.npJob" (dict "root" $ "name" $name "hook" true) }}
 {{- end }}
 {{- end }}
+{{- range $name, $m := .Values.documentMigrations }}
+{{- $raw := index $.Values.components $m.component }}
+{{- if and $m.enabled $raw $raw.enabled }}
+{{- include "theft.npJob" (dict "root" $ "name" $name "hook" true "egress" $m.egress) }}
+{{- end }}
+{{- end }}
 {{- with .Values.seed }}
 {{- $raw := index $.Values.components .component }}
 {{- if and .enabled $raw $raw.enabled }}

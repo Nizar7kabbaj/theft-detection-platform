@@ -17,7 +17,12 @@ from app.schemas.policy import (
     PolicyRuntime,
 )
 from app.services.audit_service import AuditClient
-from app.services.policy_sync import POLICY_CHANNEL, POLICY_CURRENT_KEY, policy_message
+from app.services.policy_sync import (
+    POLICY_CHANNEL,
+    POLICY_CURRENT_KEY,
+    policy_message,
+    publish_policy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -145,8 +150,7 @@ class PolicyUseCase:
     async def _publish(self, version: int, policy: PolicyPayload) -> None:
         body = policy_message(version, policy)
         try:
-            await self._stream.set(self.CURRENT_KEY, body)
-            await self._stream.publish(self.CHANNEL, body)
+            await publish_policy(self._stream, version, body)
         except RedisError as exc:
             logger.warning("policy publish failed version=%s: %s", version, exc)
 

@@ -1,0 +1,63 @@
+{{- range $name, $raw := .Values.components }}
+{{- if $raw.enabled }}
+{{- $c := include "theft.component" (dict "root" $ "comp" $raw) | fromYaml }}
+{{- with $c.autoscaling }}
+{{- if .enabled }}
+{{- if not (dig "requests" "cpu" "" ($c.resources | default dict)) }}
+{{- fail (printf "%s enables autoscaling without a cpu request" $name) }}
+{{- end }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ .minReplicas }}
+  maxReplicas: {{ .maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .cpuUtilization }}
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: {{ .scaleUpStabilizationSeconds }}
+      selectPolicy: Max
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: {{ .scaleDownStabilizationSeconds }}
+      selectPolicy: Max
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      {{- include "theft.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

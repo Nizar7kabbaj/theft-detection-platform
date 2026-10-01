@@ -19,7 +19,7 @@ router = APIRouter(prefix="/detections", tags=["detections"])
 async def create_detection(
     payload: DetectionCreate,
     usecase: DetectionUseCase = Depends(get_detection_usecase),
-    idem: IdempotencyState = Depends(idempotency),
+    idem: IdempotencyState = Depends(idempotency, scope="function"),
 ) -> DetectionResponse:
     if idem.is_hit:
         return DetectionResponse.model_validate(idem.cached_response)

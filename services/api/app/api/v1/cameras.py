@@ -18,7 +18,7 @@ router = APIRouter(prefix="/cameras", tags=["cameras"])
 async def create_camera(
     payload: CameraCreate,
     usecase: CameraUseCase = Depends(get_camera_usecase),
-    idem: IdempotencyState = Depends(idempotency),
+    idem: IdempotencyState = Depends(idempotency, scope="function"),
 ) -> CameraResponse:
     if idem.is_hit:
         return CameraResponse.model_validate(idem.cached_response)

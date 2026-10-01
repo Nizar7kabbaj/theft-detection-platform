@@ -1,0 +1,26 @@
+image:
+  repository: registry.k8s.io/metrics-server/metrics-server
+  tag: v0.9.0@sha256:d9862115e7c7881280d3d75ca26bda8ffc0fc213315979575bf23ce9826205c0
+apiService:
+  insecureSkipTLSVerify: false
+tls:
+  type: cert-manager
+  certManager:
+    addInjectorAnnotations: true
+    existingIssuer:
+      enabled: true
+      kind: ClusterIssuer
+      name: theft-ca
+defaultArgs:
+  - --cert-dir=/tmp
+  - --kubelet-preferred-address-types=InternalIP
+  - --kubelet-use-node-status-port
+  - --metric-resolution=15s
+  - --kubelet-certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+  - --tls-min-version=VersionTLS13
+resources:
+  requests:
+    cpu: 20m
+    memory: 32Mi
+  limits:
+    memory: 64Mi

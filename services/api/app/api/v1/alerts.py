@@ -32,7 +32,7 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 async def create_alert(
     payload: AlertCreate,
     usecase: AlertUseCase = Depends(get_alert_usecase),
-    idem: IdempotencyState = Depends(idempotency),
+    idem: IdempotencyState = Depends(idempotency, scope="function"),
 ) -> AlertResponse:
     if idem.is_hit:
         return AlertResponse.model_validate(idem.cached_response)

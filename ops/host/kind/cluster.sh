@@ -94,6 +94,18 @@ function ensure_attached() {
     echo "${name} reattached to ${NETWORK} at ${ip}"
 }
 
+function release_moved() {
+    local name ip
+    for name in "$CONTROL_PLANE" "$WORKER" "$REGISTRY"; do
+        [[ -s "${STATE_DIR}/${name}.ip" && -n "$(attached "$name")" ]] || continue
+        ip=$(<"${STATE_DIR}/${name}.ip")
+        [[ "$(pinned_ip "$name")" == "$ip" ]] && continue
+        docker stop -t "$STOP_GRACE" "$name" >/dev/null
+        docker network disconnect "$NETWORK" "$name" >/dev/null
+        echo "${name} released, its address differs from the pin ${ip}"
+    done
+}
+
 function started_at() {
     local ts
     ts=$(docker inspect -f '{{.State.StartedAt}}' "$1")
@@ -175,10 +187,27 @@ function wait_for_pods() {
     done
 }
 
+function wait_for_cni_range() {
+    local node=$1 want conf have
+    want=$(k get node "$node" -o jsonpath='{.spec.podCIDR}')
+    for _ in $(seq 1 60); do
+        conf=$(docker exec "$node" sh -c 'cat /etc/cni/net.d/*.conflist' 2>/dev/null || true)
+        have=$(grep -m1 -oE '"subnet": *"[^"]+"' <<<"$conf" | cut -d'"' -f4 || true)
+        if [[ -n "$want" && "$have" == "$want" ]]; then
+            echo "${node} cni range ${want}"
+            return
+        fi
+        sleep 2
+    done
+    echo "${node} cni range is ${have:-missing}, node expects ${want:-unknown}" >&2
+    exit 1
+}
+
 function wait_for_node_network() {
     local node=$1 since=$2
     wait_for_pods kube-system k8s-app=kube-proxy "$since" "$node"
     wait_for_pods kube-system app=kindnet "$since" "$node"
+    wait_for_cni_range "$node"
 }
 
 function mesh_installed() {
@@ -257,6 +286,7 @@ function disable_autorestart() {
 function start() {
     local since
     disable_autorestart
+    release_moved
     record_pins
     ensure_attached "$CONTROL_PLANE"
     ensure_attached "$WORKER"
@@ -284,6 +314,11 @@ function start() {
     wait_for_mesh_proxy "$WORKER" "$since"
     k uncordon "$WORKER" >/dev/null
     wait_for_pods theft "" "$since"
+    if k -n metrics-server get deployment metrics-server >/dev/null 2>&1; then
+        wait_for_pods metrics-server app.kubernetes.io/name=metrics-server "$since"
+        k wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=120s >/dev/null
+        echo "metrics api available"
+    fi
     echo "cluster ready"
 }
 

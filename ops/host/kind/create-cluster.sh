@@ -127,6 +127,70 @@ apply_namespace() {
   log "theft baseline network policy applied"
 }
 
+readonly REGISTRY_IP=172.19.0.2
+readonly CONTROL_PLANE_IP=172.19.0.3
+readonly WORKER_IP=172.19.0.4
+
+node_ip() {
+  docker inspect -f '{{with index .NetworkSettings.Networks "kind"}}{{.IPAddress}}{{end}}' "$1"
+}
+
+node_pin() {
+  docker inspect -f '{{with index .NetworkSettings.Networks "kind"}}{{with .IPAMConfig}}{{.IPv4Address}}{{end}}{{end}}' "$1"
+}
+
+pin_addresses() {
+  local pair name want pinned=1
+  for pair in "${REGISTRY_NAME}=${REGISTRY_IP}" \
+    "${CLUSTER_NAME}-control-plane=${CONTROL_PLANE_IP}" \
+    "${CLUSTER_NAME}-worker=${WORKER_IP}"; do
+    name="${pair%%=*}"
+    want="${pair#*=}"
+    [[ "$(node_ip "$name")" == "$want" ]] \
+      || die "${name} came up at $(node_ip "$name"), the network policies expect ${want}"
+    [[ "$(node_pin "$name")" == "$want" ]] || pinned=0
+  done
+  if (( pinned )); then
+    log "node addresses already pinned"
+    return
+  fi
+  "$(dirname "${BASH_SOURCE[0]}")/cluster.sh" stop
+  "$(dirname "${BASH_SOURCE[0]}")/cluster.sh" start
+  log "node addresses pinned and auto restart disabled"
+}
+
+csr_sans() {
+  base64 -d | openssl req -noout -text \
+    | awk '/Subject Alternative Name/ { getline; gsub(/ /, ""); print }'
+}
+
+approve_kubelet_serving() {
+  local node ip expected listing name user cond sans
+  for node in "${CLUSTER_NAME}-control-plane" "${CLUSTER_NAME}-worker"; do
+    ip="$(kubectl --context "$KCTX" get node "$node" \
+      -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')"
+    [[ -n "$ip" ]] || die "node ${node} has no internal ip"
+    expected="DNS:${node},IPAddress:${ip}"
+    for _ in $(seq 1 60); do
+      listing="$(kubectl --context "$KCTX" get csr \
+        --field-selector spec.signerName=kubernetes.io/kubelet-serving \
+        -o jsonpath='{range .items[*]}{.metadata.name} {.spec.username} {.status.conditions[*].type}{"\n"}{end}')"
+      while read -r name user cond; do
+        [[ -n "$name" && "$user" == "system:node:${node}" && -z "$cond" ]] || continue
+        sans="$(kubectl --context "$KCTX" get csr "$name" -o jsonpath='{.spec.request}' | csr_sans)"
+        [[ "$sans" == "$expected" ]] \
+          || die "serving request ${name} for ${node} asks for ${sans}, expected ${expected}"
+        kubectl --context "$KCTX" certificate approve "$name" >/dev/null
+      done <<<"$listing"
+      kubectl --context "$KCTX" get --raw "/api/v1/nodes/${node}/proxy/healthz" >/dev/null 2>&1 && break
+      sleep 2
+    done
+    kubectl --context "$KCTX" get --raw "/api/v1/nodes/${node}/proxy/healthz" >/dev/null 2>&1 \
+      || die "kubelet on ${node} has no serving certificate"
+    log "kubelet serving certificate issued for ${node} (${ip})"
+  done
+}
+
 verify_encryption() {
   local probe="encryption-probe" prefix
   kubectl --context "$KCTX" -n theft create secret generic "$probe" \
@@ -145,14 +209,16 @@ verify_encryption() {
 
 main() {
   [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 0; }
-  require docker kind kubectl sudo
+  require docker kind kubectl sudo openssl base64
   ensure_encryption_config
   ensure_snapshot_dir
   ensure_registry
   create_cluster
   connect_registry
   apply_namespace
+  approve_kubelet_serving
   verify_encryption
+  pin_addresses
   log "cluster ${CLUSTER_NAME} ready"
 }
 
