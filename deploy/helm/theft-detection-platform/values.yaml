@@ -219,9 +219,10 @@ networkPolicy:
   enabled: true
   accessLabelPrefix: access.theft-detection-platform
   ambient:
-    enabled: false
+    enabled: true
     hbonePort: 15008
     probeSource: 169.254.7.127/32
+    trustDomain: mesh.theft-detection-platform
   dns:
     namespace: kube-system
     podLabels:
@@ -254,10 +255,12 @@ networkPolicy:
         app.kubernetes.io/instance: theft-data
     gateway:
       namespace: edge
+      serviceAccount: public-gateway
       podLabels:
         app.kubernetes.io/name: public-gateway
     prometheus:
       namespace: monitoring
+      serviceAccount: prometheus-server
       podLabels:
         app.kubernetes.io/name: prometheus
         app.kubernetes.io/component: server

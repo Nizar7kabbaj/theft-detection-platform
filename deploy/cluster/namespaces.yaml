@@ -3,12 +3,20 @@ kind: Namespace
 metadata:
   name: theft
   labels:
+    istio.io/dataplane-mode: ambient
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/warn: restricted
     pod-security.kubernetes.io/warn-version: latest
     pod-security.kubernetes.io/audit: restricted
     pod-security.kubernetes.io/audit-version: latest
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: theft
+automountServiceAccountToken: false
 ---
 apiVersion: v1
 kind: Namespace
@@ -27,6 +35,7 @@ kind: Namespace
 metadata:
   name: cnpg-system
   labels:
+    istio.io/dataplane-mode: ambient
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/warn: restricted
@@ -75,6 +84,7 @@ kind: Namespace
 metadata:
   name: monitoring
   labels:
+    istio.io/dataplane-mode: ambient
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/warn: restricted
@@ -86,6 +96,18 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: node-exporter
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: privileged
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-dataplane
   labels:
     pod-security.kubernetes.io/enforce: privileged
     pod-security.kubernetes.io/enforce-version: latest

@@ -1,0 +1,53 @@
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: theft
+  labels:
+    app.kubernetes.io/part-of: theft-detection-platform
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: default-deny
+  namespace: theft
+  labels:
+    app.kubernetes.io/part-of: theft-detection-platform
+spec: {}
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: theft-detection-platform
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: prometheus-server
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: theft-detection-platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+      app.kubernetes.io/component: server
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - mesh.theft-detection-platform/ns/theft/sa/backend
+      to:
+        - operation:
+            ports:
+              - "9090"

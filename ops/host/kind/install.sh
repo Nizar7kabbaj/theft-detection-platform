@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEPENDENCIES=(curl gpg awk sha256sum sysctl apt-get apt-mark dpkg install)
+DEPENDENCIES=(curl gpg awk sha256sum sysctl apt-get apt-mark dpkg install tar)
 SCRIPT_NAME=$(basename "$0")
 KIND_VERSION=v0.33.0
 KIND_SHA256=aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
 KIND_URL="https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
 KIND_BIN=/usr/local/bin/kind
+ISTIO_VERSION=1.31.1
+ISTIO_SHA256=cb4af2e8a099acfc51368c1d15d4deab8321ae628554d4ee5c74f62ebe775857
+ISTIO_URL="https://github.com/istio/istio/releases/download/${ISTIO_VERSION}/istio-${ISTIO_VERSION}-linux-amd64.tar.gz"
+ISTIOCTL_BIN=/usr/local/bin/istioctl
 KUBE_MINOR=v1.37
 KUBE_REPO="https://pkgs.k8s.io/core:/stable:/${KUBE_MINOR}/deb/"
 KUBE_REPO_FINGERPRINT=DE15B14486CD377B9E876E1A234654DA9A296436
@@ -20,14 +24,14 @@ TMP_DIR=""
 
 function usage() {
     cat <<EOM
-install kubectl and kind for the local kubernetes cluster.
+install kubectl, kind and istioctl for the local kubernetes cluster.
 
 usage: sudo ${SCRIPT_NAME} [options]
 
 options:
     -h|--help    show this help
 
-runs idempotently. pins the kind binary hash and the kubernetes apt key fingerprint.
+runs idempotently. pins the kind binary hash, the istio release hash and the kubernetes apt key fingerprint.
 EOM
     exit 1
 }
@@ -50,6 +54,7 @@ function main() {
     set_inotify
     install_kubectl
     install_kind
+    install_istioctl
     verify
 }
 
@@ -120,8 +125,19 @@ function install_kind() {
     install -o root -g root -m 755 "${file}" "${KIND_BIN}"
 }
 
+function install_istioctl() {
+    local tarball="${TMP_DIR}/istio.tar.gz"
+    curl -fsSL "${ISTIO_URL}" -o "${tarball}"
+    if ! echo "${ISTIO_SHA256}  ${tarball}" | sha256sum --check --status; then
+        echo "istio checksum mismatch, refusing to install" >&2
+        exit 1
+    fi
+    tar -xzf "${tarball}" -C "${TMP_DIR}" "istio-${ISTIO_VERSION}/bin/istioctl"
+    install -o root -g root -m 755 "${TMP_DIR}/istio-${ISTIO_VERSION}/bin/istioctl" "${ISTIOCTL_BIN}"
+}
+
 function verify() {
-    local kind_version kubectl_version
+    local kind_version kubectl_version istioctl_version
     kind_version=$("${KIND_BIN}" version)
     if [[ "${kind_version}" != "kind ${KIND_VERSION} "* ]]; then
         echo "unexpected kind version: ${kind_version}" >&2
@@ -136,7 +152,12 @@ function verify() {
         echo "inotify limit not applied" >&2
         exit 1
     fi
-    echo "installed kind ${KIND_VERSION} and kubectl ${kubectl_version}"
+    istioctl_version=$("${ISTIOCTL_BIN}" version --remote=false 2>/dev/null | awk '/client version/ { print $3 }')
+    if [[ "${istioctl_version}" != "${ISTIO_VERSION}" ]]; then
+        echo "unexpected istioctl version: ${istioctl_version:-none}" >&2
+        exit 1
+    fi
+    echo "installed kind ${KIND_VERSION}, kubectl ${kubectl_version} and istioctl ${istioctl_version}"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

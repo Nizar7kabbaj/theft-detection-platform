@@ -12,7 +12,9 @@ from pydantic import ValidationError
 
 from app.core.database import get_collection
 from app.repositories.delivery_intent import DeliveryIntentRepository
-from app.server.grpc_gen import alert_pb2, alert_pb2_grpc
+from app.server.grpc_gen import alert_pb2, alert_pb2_grpc, common_pb2
+from app.server.identity import service_name
+from app.server.interceptors import peer_service
 from app.shared.celery_app import celery_app
 from app.shared.config import settings
 from app.shared.observability import inject_context
@@ -30,6 +32,8 @@ logger = logging.getLogger(__name__)
 tracer = trace.get_tracer("alert.servicer")
 
 _BATCH_LIMIT = 200
+
+_TRUSTED_CALLERS = frozenset({common_pb2.SOURCE_SERVICE_API})
 
 _DELIVERY_STATES = {
     DeliveryStatus.PENDING: alert_pb2.DELIVERY_STATE_PENDING,
@@ -70,12 +74,20 @@ def _to_record(intent: DeliveryIntent) -> alert_pb2.DeliveryRecord:
     return record
 
 
+async def _require_trusted_caller(context: grpc.aio.ServicerContext, rpc: str) -> None:
+    caller = peer_service()
+    if caller not in _TRUSTED_CALLERS:
+        logger.warning("%s refused for caller %s", rpc, service_name(caller))
+        await context.abort(grpc.StatusCode.PERMISSION_DENIED, "caller is not allowed")
+
+
 class AlertServicer(alert_pb2_grpc.AlertServiceServicer):
     async def SendAlert(
         self,
         request: alert_pb2.Alert,
         context: grpc.aio.ServicerContext,
     ) -> alert_pb2.SendAlertReply:
+        await _require_trusted_caller(context, "send alert")
         alert_id = request.alert_id or "unknown"
         with tracer.start_as_current_span("alert.enqueue") as span:
             span.set_attribute("alert.id", alert_id)
@@ -155,6 +167,7 @@ class AlertServicer(alert_pb2_grpc.AlertServiceServicer):
         request: alert_pb2.DeliveryStatusRequest,
         context: grpc.aio.ServicerContext,
     ) -> alert_pb2.DeliveryStatusReply:
+        await _require_trusted_caller(context, "delivery status")
         alert_id = request.alert_id.strip()
         if not alert_id:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "alert_id required")
@@ -182,6 +195,7 @@ class AlertServicer(alert_pb2_grpc.AlertServiceServicer):
         request: alert_pb2.DeliveryStatusBatchRequest,
         context: grpc.aio.ServicerContext,
     ) -> alert_pb2.DeliveryStatusBatchReply:
+        await _require_trusted_caller(context, "delivery status batch")
         wanted = [value.strip() for value in request.alert_ids if value.strip()]
         if len(wanted) > _BATCH_LIMIT:
             await context.abort(

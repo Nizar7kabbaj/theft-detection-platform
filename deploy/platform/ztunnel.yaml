@@ -1,0 +1,7 @@
+profile: ambient
+image: docker.io/istio/ztunnel:1.31.1-distroless@sha256:b06c67b895d6a49cecbdea6f100f59a29e52bf58205e0f69034ca17131182f4d
+logAsJson: true
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi

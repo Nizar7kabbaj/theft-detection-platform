@@ -1,0 +1,26 @@
+{{- $np := .Values.networkPolicy }}
+{{- if and $np.enabled $np.ambient.enabled }}
+{{- $in := dict }}
+{{- include "theft.flows" (dict "root" $ "out" $in) }}
+{{- $data := dict }}
+{{- include "theft.dataFlows" (dict "root" $ "out" $data) }}
+{{- range $name, $raw := .Values.components }}
+{{- if $raw.enabled }}
+{{- with get $in $name }}
+{{- include "theft.authz" (dict "root" $ "name" $name "selector" (include "theft.selectorLabels" (dict "root" $ "name" $name) | fromYaml) "rules" .) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range $peer, $rules := $data }}
+{{- include "theft.authz" (dict "root" $ "name" (printf "%s-clients" $peer) "selector" (index $np.peers $peer).podLabels "rules" $rules) }}
+{{- end }}
+{{- range $name, $m := .Values.migrations }}
+{{- $raw := index $.Values.components $m.component }}
+{{- if and $m.enabled $raw $raw.enabled }}
+{{- range $np.jobEgress }}
+{{- $rules := dict (printf "%s|%v" $name .ports) (dict "sa" $name "ports" .ports) }}
+{{- include "theft.authz" (dict "root" $ "name" (printf "%s-%s" $name .to) "selector" (index $np.peers .to).podLabels "rules" $rules "hook" true) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -121,7 +121,7 @@ EOF
 }
 
 apply_namespace() {
-  kubectl --context "$KCTX" apply -f "$NAMESPACE_MANIFEST" >/dev/null
+  kubectl --context "$KCTX" apply --server-side --force-conflicts --field-manager=platform -f "$NAMESPACE_MANIFEST" >/dev/null
   log "namespace theft applied"
   kubectl --context "$KCTX" apply --server-side -f "$NETWORK_POLICY_MANIFEST" >/dev/null
   log "theft baseline network policy applied"

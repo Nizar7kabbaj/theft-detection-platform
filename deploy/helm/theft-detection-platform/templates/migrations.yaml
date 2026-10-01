@@ -41,6 +41,7 @@ spec:
         {{- include "theft.accessLabels" (dict "root" $ "egress" $.Values.networkPolicy.jobEgress) | trim | nindent 8 }}
     spec:
       restartPolicy: Never
+      serviceAccountName: {{ $name }}
       automountServiceAccountToken: false
       enableServiceLinks: false
       securityContext:

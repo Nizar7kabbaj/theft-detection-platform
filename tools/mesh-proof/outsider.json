@@ -1,0 +1,17 @@
+{
+  "apiVersion": "v1",
+  "kind": "Pod",
+  "metadata": {"name": "outsider", "namespace": "np-test", "labels": {"app.kubernetes.io/name": "outsider"}},
+  "spec": {
+    "automountServiceAccountToken": false,
+    "enableServiceLinks": false,
+    "securityContext": {"runAsNonRoot": true, "runAsUser": 1000, "runAsGroup": 1000, "seccompProfile": {"type": "RuntimeDefault"}},
+    "containers": [{
+      "name": "probe",
+      "image": "IMAGE",
+      "command": ["python", "-c", "import time; time.sleep(10 ** 9)"],
+      "securityContext": {"allowPrivilegeEscalation": false, "readOnlyRootFilesystem": true, "capabilities": {"drop": ["ALL"]}},
+      "resources": {"requests": {"cpu": "10m", "memory": "64Mi"}, "limits": {"memory": "64Mi"}}
+    }]
+  }
+}

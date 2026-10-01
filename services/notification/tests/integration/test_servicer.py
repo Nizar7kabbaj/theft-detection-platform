@@ -2,21 +2,31 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
+import grpc
 import pytest
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import ValidationError
 
 from app.core.database import close_mongodb_connection, connect_to_mongodb
 from app.server import servicer as servicer_mod
-from app.server.grpc_gen import alert_pb2
+from app.server.grpc_gen import alert_pb2, common_pb2
 from app.server.servicer import AlertServicer
 from app.shared.config import settings
 
 pytestmark = pytest.mark.integration
 
 COLL = settings.DELIVERY_INTENT_COLLECTION
+
+
+class _AbortedError(Exception):
+    pass
+
+
+@pytest.fixture(autouse=True)
+def caller_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(servicer_mod, "peer_service", lambda: common_pb2.SOURCE_SERVICE_API)
 
 
 def _alert(alert_id: str = "a-1") -> alert_pb2.Alert:
@@ -52,6 +62,7 @@ def _context() -> MagicMock:
     ctx = MagicMock()
     ctx.set_code = MagicMock()
     ctx.set_details = MagicMock()
+    ctx.abort = AsyncMock(side_effect=_AbortedError)
     return ctx
 
 
@@ -94,3 +105,40 @@ async def test_duplicate_alert_is_idempotent(
     assert first.status == alert_pb2.STATUS_ACCEPTED
     assert second.status == alert_pb2.STATUS_ACCEPTED
     assert await test_db[COLL].count_documents({"source": "alert"}) == 1
+
+
+@pytest.mark.parametrize(
+    "caller",
+    [
+        common_pb2.SOURCE_SERVICE_NOTIFICATION,
+        common_pb2.SOURCE_SERVICE_AI,
+        0,
+    ],
+)
+async def test_untrusted_caller_cannot_send(
+    wired: MagicMock,
+    test_db: AsyncIOMotorDatabase,
+    monkeypatch: pytest.MonkeyPatch,
+    caller: int,
+) -> None:
+    monkeypatch.setattr(servicer_mod, "peer_service", lambda: caller)
+    ctx = _context()
+    with pytest.raises(_AbortedError):
+        await AlertServicer().SendAlert(_alert(), ctx)
+    assert ctx.abort.await_args.args[0] == grpc.StatusCode.PERMISSION_DENIED
+    assert await test_db[COLL].count_documents({}) == 0
+    wired.assert_not_called()
+
+
+async def test_untrusted_caller_cannot_read_delivery_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        servicer_mod, "peer_service", lambda: common_pb2.SOURCE_SERVICE_NOTIFICATION
+    )
+    ctx = _context()
+    with pytest.raises(_AbortedError):
+        await AlertServicer().GetDeliveryStatus(
+            alert_pb2.DeliveryStatusRequest(alert_id="a-1"), ctx
+        )
+    assert ctx.abort.await_args.args[0] == grpc.StatusCode.PERMISSION_DENIED
