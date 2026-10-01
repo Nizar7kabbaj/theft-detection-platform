@@ -102,9 +102,10 @@ networkPolicy:
   enabled: true
   accessLabelPrefix: access.theft-detection-platform
   ambient:
-    enabled: false
+    enabled: true
     hbonePort: 15008
     probeSource: 169.254.7.127/32
+    trustDomain: mesh.theft-detection-platform
   dns:
     namespace: kube-system
     podLabels:
@@ -115,5 +116,6 @@ networkPolicy:
     port: 6443
   cnpgOperator:
     namespace: cnpg-system
+    serviceAccount: cnpg-cloudnative-pg
     podLabels:
       app.kubernetes.io/name: cloudnative-pg

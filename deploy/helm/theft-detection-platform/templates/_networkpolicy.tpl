@@ -38,6 +38,87 @@
 {{- end }}
 {{- end -}}
 
+{{- define "theft.flows" -}}
+{{- $root := .root -}}
+{{- $in := .out -}}
+{{- range $src, $raw := $root.Values.components }}
+{{- if $raw.enabled }}
+{{- range $raw.egress }}
+{{- $dst := index $root.Values.components .to }}
+{{- if and $dst $dst.enabled }}
+{{- $rules := get $in .to | default (dict) }}
+{{- $_ := set $rules (printf "%s|%v" $src .ports) (dict "from" $src "ports" .ports) }}
+{{- $_ := set $in .to $rules }}
+{{- end }}
+{{- end }}
+{{- range $raw.ingress }}
+{{- if include "theft.npOn" (dict "root" $root "name" .from) }}
+{{- $rules := get $in $src | default (dict) }}
+{{- $_ := set $rules (printf "%s|%v" .from .ports) (dict "from" .from "ports" .ports) }}
+{{- $_ := set $in $src $rules }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if $root.Values.global.gateway.enabled }}
+{{- range $root.Values.routes.rules }}
+{{- $dst := index $root.Values.components .component }}
+{{- if and $dst $dst.enabled }}
+{{- $rules := get $in .component | default (dict) }}
+{{- $_ := set $rules (printf "gateway|%v" .port) (dict "from" "gateway" "ports" (list .port)) }}
+{{- $_ := set $in .component $rules }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range $name, $job := $root.Values.metrics.jobs }}
+{{- $dst := index $root.Values.components $name }}
+{{- if and $dst $dst.enabled }}
+{{- range $dst.ports }}
+{{- if eq .name "metrics" }}
+{{- $rules := get $in $name | default (dict) }}
+{{- $_ := set $rules (printf "prometheus|%v" .containerPort) (dict "from" "prometheus" "ports" (list .containerPort)) }}
+{{- $_ := set $in $name $rules }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "theft.dataFlows" -}}
+{{- $root := .root -}}
+{{- $out := .out -}}
+{{- $np := $root.Values.networkPolicy -}}
+{{- range $src, $raw := $root.Values.components }}
+{{- if $raw.enabled }}
+{{- range $raw.egress }}
+{{- $peer := index $np.peers .to }}
+{{- if and $peer $peer.access (ne (toString $peer.enabled) "false") }}
+{{- $rules := get $out .to | default (dict) }}
+{{- $_ := set $rules (printf "%s|%v" $src .ports) (dict "sa" $src "ports" .ports) }}
+{{- $_ := set $out .to $rules }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- $jobs := list }}
+{{- with $root.Values.seed }}
+{{- $raw := index $root.Values.components .component }}
+{{- if and .enabled $raw $raw.enabled }}
+{{- $jobs = append $jobs (printf "%s-seed" .component) }}
+{{- end }}
+{{- end }}
+{{- if $root.Values.auditOperator.run }}
+{{- $jobs = append $jobs "audit-operator" }}
+{{- end }}
+{{- range $job := $jobs }}
+{{- range $np.jobEgress }}
+{{- $rules := get $out .to | default (dict) }}
+{{- $_ := set $rules (printf "%s|%v" $job .ports) (dict "sa" $job "ports" .ports) }}
+{{- $_ := set $out .to $rules }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
 {{- define "theft.npDns" -}}
 {{- with .Values.networkPolicy.dns }}
 - to:

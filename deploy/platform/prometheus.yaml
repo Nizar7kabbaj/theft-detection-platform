@@ -35,6 +35,12 @@ server:
     periodSeconds: 2
     timeoutSeconds: 2
     failureThreshold: 150
+  extraConfigmapMounts:
+    - name: theft-ca
+      mountPath: /etc/prometheus/theft-ca
+      subPath: ""
+      configMap: theft-ca
+      readOnly: true
   retention: 2d
   retentionSize: 1GB
   persistentVolume:
@@ -83,6 +89,13 @@ scrapeConfigs:
   node:
     enabled: true
     job_name: node
+    scheme: https
+    authorization:
+      credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tls_config:
+      ca_file: /etc/prometheus/theft-ca/ca.crt
+      server_name: node-exporter.node-exporter.svc
+      min_version: TLS13
     kubernetes_sd_configs:
       - role: endpointslice
         namespaces:
@@ -90,6 +103,9 @@ scrapeConfigs:
     relabel_configs:
       - source_labels: [__meta_kubernetes_service_name]
         regex: node-exporter
+        action: keep
+      - source_labels: [__meta_kubernetes_endpointslice_port_name]
+        regex: metrics
         action: keep
       - source_labels: [__meta_kubernetes_pod_node_name]
         target_label: instance

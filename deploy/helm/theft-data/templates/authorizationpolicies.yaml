@@ -1,0 +1,35 @@
+{{- $np := .Values.networkPolicy }}
+{{- if and $np.enabled $np.ambient.enabled .Values.postgres.enabled }}
+{{- $td := $np.ambient.trustDomain }}
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: postgres-cluster
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "data.labels" (dict "root" $ "name" "postgres" "component" "mesh") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      cnpg.io/cluster: postgres
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - {{ printf "%s/ns/%s/sa/%s" $td $np.cnpgOperator.namespace $np.cnpgOperator.serviceAccount | quote }}
+      to:
+        - operation:
+            ports:
+              - "8000"
+    - from:
+        - source:
+            principals:
+              - {{ printf "%s/ns/%s/sa/postgres" $td .Release.Namespace | quote }}
+      to:
+        - operation:
+            ports:
+              - "5432"
+              - "8000"
+{{- end }}

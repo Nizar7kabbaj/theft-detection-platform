@@ -20,7 +20,7 @@ start or stop the local kind cluster in dependency order.
 
 usage: ${SCRIPT_NAME} <start|stop|status>
 
-    start    boot each node, check its address, wait for its network pods, then let workloads schedule on it
+    start    boot each node, check its address, wait for its network and mesh pods, then let workloads schedule on it
     stop     drain the worker, then the control-plane, power them off and pin their network addresses
     status   node containers with addresses, node scheduling state and pods that are not ready
 EOM
@@ -181,6 +181,31 @@ function wait_for_node_network() {
     wait_for_pods kube-system app=kindnet "$since" "$node"
 }
 
+function mesh_installed() {
+    k -n istio-dataplane get daemonset ztunnel >/dev/null 2>&1
+}
+
+function wait_for_mesh_agent() {
+    local node=$1 since=$2
+    if mesh_installed; then
+        wait_for_pods istio-dataplane k8s-app=istio-cni-node "$since" "$node"
+    fi
+}
+
+function wait_for_mesh_control() {
+    local since=$1
+    if mesh_installed; then
+        wait_for_pods istio-system app=istiod "$since"
+    fi
+}
+
+function wait_for_mesh_proxy() {
+    local node=$1 since=$2
+    if mesh_installed; then
+        wait_for_pods istio-dataplane app=ztunnel "$since" "$node"
+    fi
+}
+
 function heal_pod_addresses() {
     local stale ns name
     stale=$(
@@ -243,8 +268,11 @@ function start() {
     wait_for_node_ip "$CONTROL_PLANE"
     wait_for_node_network "$CONTROL_PLANE" "$since"
     heal_pod_addresses
+    wait_for_mesh_agent "$CONTROL_PLANE" "$since"
     k uncordon "$CONTROL_PLANE" >/dev/null
     wait_for_pods kube-system k8s-app=kube-dns "$since"
+    wait_for_mesh_control "$since"
+    wait_for_mesh_proxy "$CONTROL_PLANE" "$since"
     ensure_running "$WORKER"
     ensure_running "$REGISTRY"
     since=$(started_at "$WORKER")
@@ -252,6 +280,8 @@ function start() {
     wait_for_node_ip "$WORKER"
     wait_for_node_network "$WORKER" "$since"
     heal_pod_addresses
+    wait_for_mesh_agent "$WORKER" "$since"
+    wait_for_mesh_proxy "$WORKER" "$since"
     k uncordon "$WORKER" >/dev/null
     wait_for_pods theft "" "$since"
     echo "cluster ready"

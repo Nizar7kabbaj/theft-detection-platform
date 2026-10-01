@@ -10,3 +10,28 @@ resources:
     memory: 48Mi
   limits:
     memory: 48Mi
+kubeRBACProxy:
+  enabled: true
+  image:
+    sha: a6075902738eaf1780390561ea998a53a056ef1d2b312bcbf0e2e81fec084b3c
+  extraArgs:
+    - --tls-min-version=VersionTLS13
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    capabilities:
+      drop:
+        - ALL
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 64Mi
+  tls:
+    enabled: true
+tlsSecret:
+  enabled: true
+  secretName: node-exporter-tls
+  volumeName: node-exporter-tls

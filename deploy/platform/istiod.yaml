@@ -1,11 +1,22 @@
+profile: ambient
 global:
   logAsJson: true
+  nativeNftables: true
   proxy:
+    image: docker.io/istio/proxyv2:1.31.1-distroless@sha256:15e6087b4033bc6cfbcddc4b47d93cb0c2ec6f1a4730c349ee1f3308108e4acf
     seccompProfile:
       type: RuntimeDefault
 pilot:
   autoscaleEnabled: false
   replicaCount: 1
+  image: docker.io/istio/pilot:1.31.1-distroless@sha256:e46fd278250c4877df1e7c3d47cc2e66492e39ab79c58e3e62bb3487307526dc
+  trustedZtunnelNamespace: istio-dataplane
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
   seccompProfile:
     type: RuntimeDefault
   resources:
@@ -15,6 +26,7 @@ pilot:
     limits:
       memory: 256Mi
 meshConfig:
+  trustDomain: mesh.theft-detection-platform
   accessLogFile: /dev/stdout
   accessLogEncoding: JSON
   tlsDefaults:

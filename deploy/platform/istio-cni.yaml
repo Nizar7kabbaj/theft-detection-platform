@@ -1,0 +1,11 @@
+profile: ambient
+image: docker.io/istio/install-cni:1.31.1-distroless@sha256:5b4b7a9a6188cbb6a65d2c700df793b50484e87d009f26be5e22d46dfbbc3c62
+global:
+  logAsJson: true
+  nativeNftables: true
+ambient:
+  ipv6: false
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi

@@ -1,47 +1,7 @@
 {{- $np := .Values.networkPolicy }}
 {{- if $np.enabled }}
 {{- $in := dict }}
-{{- range $src, $raw := .Values.components }}
-{{- if $raw.enabled }}
-{{- range $raw.egress }}
-{{- $dst := index $.Values.components .to }}
-{{- if and $dst $dst.enabled }}
-{{- $rules := get $in .to | default (dict) }}
-{{- $_ := set $rules (printf "%s|%v" $src .ports) (dict "from" $src "ports" .ports) }}
-{{- $_ := set $in .to $rules }}
-{{- end }}
-{{- end }}
-{{- range $raw.ingress }}
-{{- if include "theft.npOn" (dict "root" $ "name" .from) }}
-{{- $rules := get $in $src | default (dict) }}
-{{- $_ := set $rules (printf "%s|%v" .from .ports) (dict "from" .from "ports" .ports) }}
-{{- $_ := set $in $src $rules }}
-{{- end }}
-{{- end }}
-{{- end }}
-{{- end }}
-{{- if .Values.global.gateway.enabled }}
-{{- range .Values.routes.rules }}
-{{- $dst := index $.Values.components .component }}
-{{- if and $dst $dst.enabled }}
-{{- $rules := get $in .component | default (dict) }}
-{{- $_ := set $rules (printf "gateway|%v" .port) (dict "from" "gateway" "ports" (list .port)) }}
-{{- $_ := set $in .component $rules }}
-{{- end }}
-{{- end }}
-{{- end }}
-{{- range $name, $job := .Values.metrics.jobs }}
-{{- $dst := index $.Values.components $name }}
-{{- if and $dst $dst.enabled }}
-{{- range $dst.ports }}
-{{- if eq .name "metrics" }}
-{{- $rules := get $in $name | default (dict) }}
-{{- $_ := set $rules (printf "prometheus|%v" .containerPort) (dict "from" "prometheus" "ports" (list .containerPort)) }}
-{{- $_ := set $in $name $rules }}
-{{- end }}
-{{- end }}
-{{- end }}
-{{- end }}
+{{- include "theft.flows" (dict "root" $ "out" $in) }}
 {{- range $name, $raw := .Values.components }}
 {{- if $raw.enabled }}
 ---

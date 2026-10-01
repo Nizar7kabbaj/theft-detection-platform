@@ -13,6 +13,24 @@ app.kubernetes.io/name: {{ .name }}
 app.kubernetes.io/instance: {{ .root.Release.Name }}
 {{- end -}}
 
+{{- define "theft.serviceAccount" }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .name }}
+  namespace: {{ .root.Release.Namespace }}
+  labels:
+    {{- include "theft.labels" (dict "root" .root "name" .name) | nindent 4 }}
+  {{- if .hook }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-20"
+    helm.sh/hook-delete-policy: before-hook-creation
+  {{- end }}
+automountServiceAccountToken: false
+{{- end -}}
+
 {{- define "theft.component" -}}
 {{- $out := deepCopy .comp -}}
 {{- range $k, $v := deepCopy .root.Values.defaults -}}
