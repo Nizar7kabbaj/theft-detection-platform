@@ -5,6 +5,7 @@ import json
 import sys
 import time
 import urllib.request
+from http import HTTPStatus
 from http.cookies import SimpleCookie
 from pathlib import Path
 
@@ -31,7 +32,7 @@ def login() -> dict[str, str]:
         method="POST",
     )
     with urllib.request.urlopen(request) as response:
-        if response.status != 200:
+        if response.status != HTTPStatus.OK:
             raise SystemExit(f"login failed status={response.status}")
         jar = SimpleCookie()
         for header in response.headers.get_all("Set-Cookie") or []:

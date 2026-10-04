@@ -196,7 +196,7 @@ main() {
   apply_configmap mongo-config mongod.conf=mongodb/mongod.conf
   apply_configmap mongo-init 001-create-service-users.sh=mongodb/init/001-create-service-users.sh
   apply_seed_secret auth-seed-secrets auth/seed detector-ai=auth/detector_password
-  apply_env_secret notification-env telegram_chat_id services/api/.env TELEGRAM_CHAT_ID
+  apply_env_secret notification-env telegram_chat_id services/notification/.env TELEGRAM_CHAT_ID
   log "secrets applied to ${NAMESPACE}"
 }
 

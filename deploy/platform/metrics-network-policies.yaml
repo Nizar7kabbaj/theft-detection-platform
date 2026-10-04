@@ -28,7 +28,7 @@ spec:
   ingress:
     - from:
         - ipBlock:
-            cidr: 172.19.0.3/32
+            cidr: __CONTROL_PLANE_IP__/32
         - ipBlock:
             cidr: 169.254.7.127/32
       ports:
@@ -37,7 +37,7 @@ spec:
   egress:
     - to:
         - ipBlock:
-            cidr: 172.19.0.3/32
+            cidr: __CONTROL_PLANE_IP__/32
       ports:
         - port: 6443
           protocol: TCP
@@ -45,7 +45,7 @@ spec:
           protocol: TCP
     - to:
         - ipBlock:
-            cidr: 172.19.0.4/32
+            cidr: __WORKER_IP__/32
       ports:
         - port: 10250
           protocol: TCP
@@ -80,7 +80,7 @@ spec:
   ingress:
     - from:
         - ipBlock:
-            cidr: 172.19.0.3/32
+            cidr: __CONTROL_PLANE_IP__/32
         - ipBlock:
             cidr: 169.254.7.127/32
       ports:
@@ -89,7 +89,7 @@ spec:
   egress:
     - to:
         - ipBlock:
-            cidr: 172.19.0.3/32
+            cidr: __CONTROL_PLANE_IP__/32
       ports:
         - port: 6443
           protocol: TCP

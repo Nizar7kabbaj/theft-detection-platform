@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     REDIS_USER: str = "api"
     REDIS_PASSWORD_FILE: Path = Path("/run/secrets/api_redis_password")
+    REDIS_CONNECT_TIMEOUT_SECONDS: float = 2.0
+    REDIS_SOCKET_TIMEOUT_SECONDS: float = 5.0
+    SHUTDOWN_TASK_TIMEOUT_SECONDS: float = 3.0
     STREAM_REDIS_HOST: str = "theft-redis-stream"
     STREAM_REDIS_PORT: int = 6380
     STREAM_REDIS_DB: int = 2

@@ -80,6 +80,17 @@ async def test_create_alert_persists_and_returns_201(
     assert "created_at" in stored
 
 
+async def test_create_alert_dispatches_through_alert_service(
+    client: httpx.AsyncClient,
+    sent_alerts: list,
+) -> None:
+    resp = await client.post("/api/v1/alerts", json=_alert_payload(alert_id="test-dispatch-1"))
+
+    assert resp.status_code == 201
+    assert resp.json()["dispatch_failed"] is False
+    assert [alert.alert_id for alert in sent_alerts] == ["test-dispatch-1"]
+
+
 async def test_create_alert_publishes_to_pubsub(
     client: httpx.AsyncClient,
     pubsub_listener,

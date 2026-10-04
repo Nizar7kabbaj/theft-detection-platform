@@ -4,11 +4,14 @@ import argparse
 import asyncio
 import json
 import os
-import random
+import secrets
 import ssl
 import sys
 import time
+from collections.abc import Callable, Coroutine
+from http import HTTPStatus
 from pathlib import Path
+from typing import Any
 
 import httpx
 import websockets
@@ -28,6 +31,8 @@ PASSWORD_FILE = Path("config/auth/test_users_password")
 BASE_DELAY_MS = 500
 MAX_DELAY_MS = 30_000
 MIN_DELAY_MS = 1_000
+PUBSUB_CLOSE_MAX_SECONDS = 5
+_JITTER = secrets.SystemRandom()
 GLOBAL_SPACING_MS = 2_000
 POLICY = 1008
 HEARTBEAT_TIMEOUT = 35.0
@@ -53,7 +58,7 @@ def login(username: str, context: ssl.SSLContext) -> dict[str, str]:
             f"{EDGE}/auth/login",
             json={"username": username, "password": _password()},
         )
-        if resp.status_code != 200:
+        if resp.status_code != HTTPStatus.OK:
             raise RuntimeError(f"login failed for {username}: http {resp.status_code}")
         access = resp.cookies.get(ACCESS_COOKIE)
         if not access:
@@ -86,7 +91,7 @@ def refresh(session: dict[str, str], context: ssl.SSLContext) -> dict[str, str]:
             f"{EDGE}/auth/refresh",
             headers={CSRF_HEADER: session["csrf"], "Origin": ORIGIN},
         )
-        if resp.status_code != 200:
+        if resp.status_code != HTTPStatus.OK:
             raise RuntimeError(f"refresh failed: http {resp.status_code}")
         return {
             "access": resp.cookies.get(ACCESS_COOKIE) or session["access"],
@@ -101,7 +106,7 @@ def _headers(session: dict[str, str]) -> dict[str, str]:
 
 def backoff_delay(attempt: int) -> float:
     exponential = min(MAX_DELAY_MS, BASE_DELAY_MS * 2**attempt)
-    return max(MIN_DELAY_MS, round(random.random() * exponential)) / 1000
+    return max(MIN_DELAY_MS, round(_JITTER.random() * exponential)) / 1000
 
 
 async def case_accepted(session: dict[str, str], context: ssl.SSLContext) -> int:
@@ -138,7 +143,7 @@ async def case_revoked(session: dict[str, str], context: ssl.SSLContext) -> int:
     ) as ws:
         print("socket open, revoking session")
         status = logout(session, context)
-        if status != 200:
+        if status != HTTPStatus.OK:
             print(f"FAIL logout returned http {status}")
             return 1
         started = time.monotonic()
@@ -151,7 +156,7 @@ async def case_revoked(session: dict[str, str], context: ssl.SSLContext) -> int:
             if exc.code != POLICY:
                 print(f"FAIL expected close {POLICY}")
                 return 1
-            path = "pub/sub" if elapsed < 5 else "recheck poll"
+            path = "pub/sub" if elapsed < PUBSUB_CLOSE_MAX_SECONDS else "recheck poll"
             print(f"close arrived via {path}")
             return 0
         except TimeoutError:
@@ -257,30 +262,36 @@ async def case_hold(session: dict[str, str], context: ssl.SSLContext, seconds: i
     return 0
 
 
+def _case(
+    args: argparse.Namespace, session: dict[str, str], context: ssl.SSLContext
+) -> Coroutine[Any, Any, int]:
+    cases: dict[str, Callable[[], Coroutine[Any, Any, int]]] = {
+        "accepted": lambda: case_accepted(session, context),
+        "revoked": lambda: case_revoked(session, context),
+        "flood": lambda: case_flood(session, context, args.rounds),
+        "hold": lambda: case_hold(session, context, args.seconds),
+        "paced": lambda: case_paced(session, context, args.rounds),
+    }
+    return cases[args.case]()
+
+
 async def run(args: argparse.Namespace) -> int:
-    ca = _ca_path()
-    if not ca.is_file():
-        print(f"ca certificate not found at {ca}", file=sys.stderr)
-        return 2
-    if not PASSWORD_FILE.is_file():
-        print(f"password file not found at {PASSWORD_FILE}", file=sys.stderr)
-        return 2
     context = _ssl_context()
     try:
         session = login(args.user, context)
     except RuntimeError as exc:
         print(f"ERROR {exc}", file=sys.stderr)
         return 2
+    return await _case(args, session, context)
 
-    if args.case == "accepted":
-        return await case_accepted(session, context)
-    if args.case == "revoked":
-        return await case_revoked(session, context)
-    if args.case == "flood":
-        return await case_flood(session, context, args.rounds)
-    if args.case == "hold":
-        return await case_hold(session, context, args.seconds)
-    return await case_paced(session, context, args.rounds)
+
+def _preflight() -> str | None:
+    ca = _ca_path()
+    if not ca.is_file():
+        return f"ca certificate not found at {ca}"
+    if not PASSWORD_FILE.is_file():
+        return f"password file not found at {PASSWORD_FILE}"
+    return None
 
 
 def main() -> int:
@@ -289,7 +300,12 @@ def main() -> int:
     parser.add_argument("--user", default="ws-viewer")
     parser.add_argument("--rounds", type=int, default=20)
     parser.add_argument("--seconds", type=int, default=960)
-    return asyncio.run(run(parser.parse_args()))
+    args = parser.parse_args()
+    problem = _preflight()
+    if problem is not None:
+        print(problem, file=sys.stderr)
+        return 2
+    return asyncio.run(run(args))
 
 
 if __name__ == "__main__":

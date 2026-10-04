@@ -11,6 +11,7 @@ import grpc
 import httpx
 import pytest
 import pytest_asyncio
+import trustme
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -20,6 +21,7 @@ from motor.motor_asyncio import (
     AsyncIOMotorDatabase,
 )
 from redis.asyncio import Redis
+from typing_extensions import override
 
 from app.api.v1 import alerts, cameras, detections, stats, streams
 from app.core.authz import get_current_user
@@ -34,8 +36,9 @@ from app.core.errors import (
 )
 from app.core.redis import get_redis
 from app.dependencies import get_db
-from app.grpc_gen.alert_pb2_grpc import AlertServiceStub
+from app.grpc_gen import alert_pb2, alert_pb2_grpc
 from app.grpc_gen.inference_pb2_grpc import InferenceServiceStub
+from app.migrations.runner import discover_versions
 from app.schemas.identity import CurrentUser
 from app.services.broadcast_service import BroadcastService
 from app.services.revocation_service import RevocationService
@@ -48,6 +51,32 @@ TEST_USER = CurrentUser(
     roles=frozenset({"admin"}),
     session_id="integration-session",
 )
+ALERT_TEST_HOST = "alert.integration.test"
+ALERT_TEST_CLIENT = "api.integration.test"
+
+
+class RecordingAlertServicer(alert_pb2_grpc.AlertServiceServicer):
+    def __init__(self) -> None:
+        self.sent: list[alert_pb2.Alert] = []
+
+    @override
+    async def SendAlert(
+        self, request: alert_pb2.Alert, context: grpc.aio.ServicerContext
+    ) -> alert_pb2.SendAlertReply:
+        self.sent.append(request)
+        return alert_pb2.SendAlertReply(status=alert_pb2.STATUS_ACCEPTED)
+
+    @override
+    async def GetDeliveryStatus(
+        self, request: alert_pb2.DeliveryStatusRequest, context: grpc.aio.ServicerContext
+    ) -> alert_pb2.DeliveryStatusReply:
+        return alert_pb2.DeliveryStatusReply(known=False)
+
+    @override
+    async def GetDeliveryStatusBatch(
+        self, request: alert_pb2.DeliveryStatusBatchRequest, context: grpc.aio.ServicerContext
+    ) -> alert_pb2.DeliveryStatusBatchReply:
+        return alert_pb2.DeliveryStatusBatchReply()
 
 
 def _mongo_url() -> str:
@@ -149,17 +178,49 @@ async def inference_stub(
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def alert_channel(
-    channel_credentials: grpc.ChannelCredentials,
-) -> AsyncIterator[grpc.aio.Channel]:
-    channel = grpc.aio.secure_channel(settings.NOTIFICATION_TARGET, channel_credentials)
-    yield channel
-    await channel.close()
+async def alert_service() -> AsyncIterator[tuple[RecordingAlertServicer, grpc.aio.Channel]]:
+    ca = trustme.CA()
+    server_cert = ca.issue_cert(ALERT_TEST_HOST)
+    client_cert = ca.issue_cert(ALERT_TEST_CLIENT)
+    servicer = RecordingAlertServicer()
+    server = grpc.aio.server()
+    alert_pb2_grpc.add_AlertServiceServicer_to_server(servicer, server)
+    server_credentials = grpc.ssl_server_credentials(
+        [(server_cert.private_key_pem.bytes(), server_cert.cert_chain_pems[0].bytes())],
+        root_certificates=ca.cert_pem.bytes(),
+        require_client_auth=True,
+    )
+    port = server.add_secure_port("127.0.0.1:0", server_credentials)
+    await server.start()
+    channel = grpc.aio.secure_channel(
+        f"127.0.0.1:{port}",
+        grpc.ssl_channel_credentials(
+            root_certificates=ca.cert_pem.bytes(),
+            private_key=client_cert.private_key_pem.bytes(),
+            certificate_chain=client_cert.cert_chain_pems[0].bytes(),
+        ),
+        options=[("grpc.ssl_target_name_override", ALERT_TEST_HOST)],
+    )
+    try:
+        yield servicer, channel
+    finally:
+        await channel.close()
+        await server.stop(grace=None)
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def alert_stub(alert_channel: grpc.aio.Channel) -> AlertServiceStub:
-    return AlertServiceStub(alert_channel)
+async def alert_stub(
+    alert_service: tuple[RecordingAlertServicer, grpc.aio.Channel],
+) -> alert_pb2_grpc.AlertServiceStub:
+    return alert_pb2_grpc.AlertServiceStub(alert_service[1])
+
+
+@pytest.fixture
+def sent_alerts(
+    alert_service: tuple[RecordingAlertServicer, grpc.aio.Channel],
+) -> list[alert_pb2.Alert]:
+    alert_service[0].sent.clear()
+    return alert_service[0].sent
 
 
 def _register_error_handlers(app: FastAPI) -> None:
@@ -189,20 +250,12 @@ def _register_error_handlers(app: FastAPI) -> None:
 
 
 async def _ensure_indexes(real_db: AsyncIOMotorDatabase, prefix: str) -> None:
-    cameras_col = real_db[f"{prefix}cameras"]
-    detections_col = real_db[f"{prefix}detections"]
-    alerts_col = real_db[f"{prefix}alerts"]
-    for col in (cameras_col, detections_col, alerts_col):
-        try:
-            await col.drop_indexes()
-        except Exception:
-            pass
-    await cameras_col.create_index("name", unique=True)
-    await detections_col.create_index([("session_id", 1), ("occurred_at", -1)])
-    await alerts_col.create_index([("acknowledged", 1), ("created_at", -1)])
-    await alerts_col.create_index(
-        "alert_id", unique=True, partialFilterExpression={"alert_id": {"$type": "string"}}
-    )
+    for name in await real_db.list_collection_names():
+        if name.startswith(prefix):
+            await real_db[name].drop()
+    schema = _PrefixedDatabase(real_db, prefix)
+    for _, _, module in discover_versions():
+        await module.up(schema)
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
@@ -212,7 +265,7 @@ async def test_app(
     redis_client: Redis,
     stream_redis_client: Redis,
     inference_stub: InferenceServiceStub,
-    alert_stub: AlertServiceStub,
+    alert_stub: alert_pb2_grpc.AlertServiceStub,
 ) -> FastAPI:
     await _ensure_indexes(real_db, TEST_COLLECTION_PREFIX)
     app = FastAPI()

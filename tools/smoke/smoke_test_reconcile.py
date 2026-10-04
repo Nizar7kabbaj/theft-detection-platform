@@ -113,9 +113,7 @@ async def _cleanup(alert_id: str) -> int:
     await connect_to_mongodb()
     try:
         intents = get_collection(settings.DELIVERY_INTENT_COLLECTION)
-        result = await intents.delete_many(
-            {"source": "alert", "source_ref": alert_id}
-        )
+        result = await intents.delete_many({"source": "alert", "source_ref": alert_id})
         print(f"deleted {result.deleted_count}")
         return 0
     finally:
@@ -124,18 +122,17 @@ async def _cleanup(alert_id: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--insert", action="store_true")
-    parser.add_argument("--verify", action="store_true")
-    parser.add_argument("--cleanup", action="store_true")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--insert", action="store_true")
+    mode.add_argument("--verify", action="store_true")
+    mode.add_argument("--cleanup", action="store_true")
     parser.add_argument("--alert-id", default=f"reconcile-{int(time.time())}")
     args = parser.parse_args()
     if args.insert:
         return asyncio.run(_insert(args.alert_id))
     if args.verify:
         return asyncio.run(_verify(args.alert_id))
-    if args.cleanup:
-        return asyncio.run(_cleanup(args.alert_id))
-    parser.error("pass --insert, --verify, or --cleanup")
+    return asyncio.run(_cleanup(args.alert_id))
 
 
 if __name__ == "__main__":

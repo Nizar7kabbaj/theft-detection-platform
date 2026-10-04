@@ -45,6 +45,9 @@ dev = [
     "pytest-mock==3.14.0",
     "grpcio-tools==1.71.2",
     "ruff==0.16.2",
+    "pytest-timeout>=2.4.0",
+    "trustme>=1.2.1",
+    "typing-extensions>=4.16.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -54,6 +57,7 @@ packages = ["app"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+timeout = 60
 addopts = [
     "--strict-markers",
     "--cov=app",

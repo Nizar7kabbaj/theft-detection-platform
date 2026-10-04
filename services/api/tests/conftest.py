@@ -1,4 +1,4 @@
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +68,13 @@ class FakeAlertRepo:
     async def get(self, id_: str) -> dict[str, Any] | None:
         return self.store.get(id_)
 
+    async def update(self, id_: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        doc = self.store.get(id_)
+        if doc is None:
+            return None
+        doc.update(changes)
+        return doc
+
     async def delete(self, id_: str) -> bool:
         return self.store.pop(id_, None) is not None
 
@@ -84,12 +91,19 @@ def mock_redis(mocker):
 
 @pytest.fixture
 def mock_alert_client(mocker):
-    return mocker.AsyncMock()
+    from app.services.alert_service import AlertClient
+
+    client = mocker.create_autospec(AlertClient, instance=True)
+    client.delivery_status_batch.return_value = {}
+    client.delivery_status.return_value = None
+    return client
 
 
 @pytest.fixture
 def mock_audit_client(mocker):
-    return mocker.AsyncMock()
+    from app.services.audit_service import AuditClient
+
+    return mocker.create_autospec(AuditClient, instance=True)
 
 
 @pytest.fixture
@@ -132,7 +146,18 @@ class FakeCameraRepo:
 
         name = data.get("name")
         if name in self._names:
-            raise DuplicateKeyError(f"duplicate name {name}")
+            raise DuplicateKeyError(
+                f"duplicate name {name}",
+                11000,
+                {"keyPattern": {"name": 1}, "keyValue": {"name": name}},
+            )
+        camera_id = data.get("camera_id")
+        if any(doc.get("camera_id") == camera_id for doc in self.store.values()):
+            raise DuplicateKeyError(
+                f"duplicate camera_id {camera_id}",
+                11000,
+                {"keyPattern": {"camera_id": 1}, "keyValue": {"camera_id": camera_id}},
+            )
         oid = f"oid-{self._next_id}"
         self._next_id += 1
         doc = {**data, "_id": oid}
@@ -200,6 +225,7 @@ class FakeStatsRepo:
             "SEVERITY_NOTICE": 0,
         }
         self.top: list[dict[str, Any]] = []
+        self.severity_windows: list[datetime | None] = []
 
     async def count_alerts(self) -> int:
         return self.counts["alerts"]
@@ -213,7 +239,8 @@ class FakeStatsRepo:
     async def count_alerts_today(self) -> int:
         return self.counts["alerts_today"]
 
-    async def count_by_severity(self, severities: list[str]) -> int:
+    async def count_by_severity(self, severities: list[str], since: datetime | None = None) -> int:
+        self.severity_windows.append(since)
         return sum(self.counts.get(name, 0) for name in severities)
 
     async def top_objects(self, limit: int = 5) -> list[dict[str, Any]]:

@@ -8,12 +8,52 @@ x-otel-env: &otel-env
   OTEL_PYTHON_LOG_FORMAT: "%(asctime)s %(levelname)s [%(name)s] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] %(message)s"
 
 services:
+  backend-migrate:
+    build:
+      context: ./services/api
+      target: runtime
+    image: theft-backend:dev
+    container_name: theft-backend-migrate
+    command: ["python", "-m", "app.migrations.runner", "up"]
+    networks:
+      - data
+    environment:
+      DATABASE_NAME: ${DATABASE_NAME:-theft_detection_db}
+      OTEL_SDK_DISABLED: "true"
+    volumes:
+      - type: bind
+        source: ./config/mongodb/tls/ca.crt
+        target: /run/secrets/mongo_ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/secrets/mongo_api_password
+        target: /run/secrets/mongo_password
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      disable: true
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     build:
       context: ./services/api
       target: runtime
     image: theft-backend:dev
     container_name: theft-backend
+    stop_grace_period: 15s
     networks:
       - edge
       - data
@@ -31,7 +71,11 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+      backend-migrate:
+        condition: service_completed_successfully
       redis:
+        condition: service_healthy
+      redis-stream:
         condition: service_healthy
       notification-service:
         condition: service_healthy
@@ -49,22 +93,63 @@ services:
       - "traefik.http.routers.backend.priority=100"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
     volumes:
-      - ./services/api/tests:/app/tests
-      - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
-      - ./config/mongodb/secrets/mongo_api_password:/run/secrets/mongo_password:ro
-      - ./config/redis/api_redis_password:/run/secrets/api_redis_password:ro
-      - ./config/redis/stream_reader_redis_password:/run/secrets/stream_reader_redis_password:ro
-      - ./config/pki/api/tls.crt:/run/secrets/api_tls_cert:ro
-      - ./config/pki/api/tls.key:/run/secrets/api_tls_key:ro
-      - ./config/pki/ca/ca.crt:/run/secrets/api_tls_ca:ro
+      - type: bind
+        source: ./config/mongodb/tls/ca.crt
+        target: /run/secrets/mongo_ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/secrets/mongo_api_password
+        target: /run/secrets/mongo_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/api_redis_password
+        target: /run/secrets/api_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/stream_reader_redis_password
+        target: /run/secrets/stream_reader_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/api/tls.crt
+        target: /run/secrets/api_tls_cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/api/tls.key
+        target: /run/secrets/api_tls_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /run/secrets/api_tls_ca
+        read_only: true
+        bind:
+          create_host_path: false
       - ai_snapshots:/app/snapshots:ro
-    restart: unless-stopped
+    restart: "no"
 
   backend-test:
     build:
       context: ./services/api
       target: test
     image: theft-backend-test:dev
+    depends_on:
+      backend-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      redis-stream:
+        condition: service_healthy
     container_name: theft-backend-test
     profiles:
       - test
@@ -75,14 +160,53 @@ services:
     env_file:
       - ./services/api/.env
     volumes:
-      - ./services/api/tests:/app/tests
-      - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
-      - ./config/mongodb/secrets/mongo_api_password:/run/secrets/mongo_password:ro
-      - ./config/redis/api_redis_password:/run/secrets/api_redis_password:ro
-      - ./config/redis/stream_reader_redis_password:/run/secrets/stream_reader_redis_password:ro
-      - ./config/pki/api/tls.crt:/run/secrets/api_tls_cert:ro
-      - ./config/pki/api/tls.key:/run/secrets/api_tls_key:ro
-      - ./config/pki/ca/ca.crt:/run/secrets/api_tls_ca:ro
+      - type: bind
+        source: ./services/api/tests
+        target: /app/tests
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/tls/ca.crt
+        target: /run/secrets/mongo_ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/secrets/mongo_api_password
+        target: /run/secrets/mongo_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/api_redis_password
+        target: /run/secrets/api_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/stream_reader_redis_password
+        target: /run/secrets/stream_reader_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/api/tls.crt
+        target: /run/secrets/api_tls_cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/api/tls.key
+        target: /run/secrets/api_tls_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /run/secrets/api_tls_ca
+        read_only: true
+        bind:
+          create_host_path: false
       - ai_snapshots:/app/snapshots:ro
 
   web:
@@ -92,7 +216,7 @@ services:
       target: runtime
     image: theft-web:dev
     container_name: theft-web
-    restart: unless-stopped
+    restart: "no"
     networks:
       - edge
     environment:
@@ -128,10 +252,30 @@ services:
       - "127.0.0.1:80:80"
       - "127.0.0.1:443:443"
     volumes:
-      - ./config/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-      - ./config/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
-      - ./config/traefik/certs:/etc/traefik/certs:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - type: bind
+        source: ./config/traefik/traefik.yml
+        target: /etc/traefik/traefik.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/traefik/dynamic.yml
+        target: /etc/traefik/dynamic.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/traefik/certs
+        target: /etc/traefik/certs
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       backend:
         condition: service_healthy
@@ -141,7 +285,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    restart: unless-stopped
+    restart: "no"
 
   ai-models:
     build:
@@ -170,12 +314,42 @@ services:
       - type: image
         source: theft-ai-models:dev
         target: /app/ai-model/models
-      - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
-      - ./config/redis/ai_redis_password:/run/secrets/ai_redis_password:ro
-      - ./config/pki/ai/tls.crt:/run/secrets/ai_tls_cert:ro
-      - ./config/pki/ai/tls.key:/run/secrets/ai_tls_key:ro
-      - ./config/pki/ca/ca.crt:/run/secrets/ai_tls_ca:ro
-      - ./config/auth/detector_password:/run/secrets/alert_password:ro
+      - type: bind
+        source: ./config/alertmanager/webhook_token
+        target: /run/secrets/webhook_token
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/ai_redis_password
+        target: /run/secrets/ai_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ai/tls.crt
+        target: /run/secrets/ai_tls_cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ai/tls.key
+        target: /run/secrets/ai_tls_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /run/secrets/ai_tls_ca
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/auth/detector_password
+        target: /run/secrets/alert_password
+        read_only: true
+        bind:
+          create_host_path: false
       - ai_snapshots:/app/snapshots
     deploy:
       resources:
@@ -185,7 +359,7 @@ services:
               count: 1
               capabilities: [gpu]
     profiles: ["ai"]
-    restart: unless-stopped
+    restart: "no"
 
   camera:
     build: ./services/camera
@@ -202,11 +376,35 @@ services:
     device_cgroup_rules:
       - "c 81:* rmw"
     volumes:
-      - ./config/redis/camera_redis_password:/run/secrets/camera_redis_password:ro
-      - ./config/pki/camera/tls.crt:/run/secrets/camera_tls_cert:ro
-      - ./config/pki/camera/tls.key:/run/secrets/camera_tls_key:ro
-      - ./config/pki/ca/ca.crt:/run/secrets/camera_tls_ca:ro
-      - /dev:/dev
+      - type: bind
+        source: ./config/redis/camera_redis_password
+        target: /run/secrets/camera_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/camera/tls.crt
+        target: /run/secrets/camera_tls_cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/camera/tls.key
+        target: /run/secrets/camera_tls_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /run/secrets/camera_tls_ca
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /dev
+        target: /dev
+        bind:
+          create_host_path: false
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: "theft-camera"
@@ -222,7 +420,7 @@ services:
       ai:
         condition: service_healthy
     profiles: ["ai"]
-    restart: unless-stopped
+    restart: "no"
 
   detect-gate:
     build: ./services/detect-gate
@@ -244,13 +442,33 @@ services:
       AI_HOST: "ai"
       AI_PORT: "50051"
     volumes:
-      - ./config/redis/gate_redis_password:/run/secrets/gate_redis_password:ro
+      - type: bind
+        source: ./config/redis/gate_redis_password
+        target: /run/secrets/gate_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
       - type: image
         source: theft-ai-models:dev
         target: /app/ai-model/models
-      - ./config/pki/detect-gate/tls.crt:/run/secrets/gate_tls_cert:ro
-      - ./config/pki/detect-gate/tls.key:/run/secrets/gate_tls_key:ro
-      - ./config/pki/ca/ca.crt:/run/secrets/gate_tls_ca:ro
+      - type: bind
+        source: ./config/pki/detect-gate/tls.crt
+        target: /run/secrets/gate_tls_cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/detect-gate/tls.key
+        target: /run/secrets/gate_tls_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /run/secrets/gate_tls_ca
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       ai:
         condition: service_healthy
@@ -264,7 +482,7 @@ services:
               count: 1
               capabilities: [gpu]
     profiles: ["ai"]
-    restart: unless-stopped
+    restart: "no"
 
   auth-service:
       build:
@@ -286,14 +504,54 @@ services:
       ports:
         - "127.0.0.1:8002:8000"
       volumes:
-        - ./config/postgres/auth_app_postgres_password:/run/secrets/postgres_password:ro
-        - ./config/redis/auth_redis_password:/run/secrets/auth_redis_password:ro
-        - ./config/auth/jwt_private.pem:/run/secrets/jwt_private_key:ro
-        - ./config/auth/jwt_public.pem:/run/secrets/jwt_public_key:ro
-        - ./config/pki/auth/tls.crt:/run/secrets/auth_tls_cert:ro
-        - ./config/pki/auth/tls.key:/run/secrets/auth_tls_key:ro
-        - ./config/pki/ca/ca.crt:/run/secrets/auth_tls_ca:ro
-        - ./config/audit/pseudonym_key:/run/secrets/auth_pseudonym_key:ro
+        - type: bind
+          source: ./config/postgres/auth_app_postgres_password
+          target: /run/secrets/postgres_password
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: ./config/redis/auth_redis_password
+          target: /run/secrets/auth_redis_password
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: ./config/auth/jwt_private.pem
+          target: /run/secrets/jwt_private_key
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: ./config/auth/jwt_public.pem
+          target: /run/secrets/jwt_public_key
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: ./config/pki/auth/tls.crt
+          target: /run/secrets/auth_tls_cert
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: ./config/pki/auth/tls.key
+          target: /run/secrets/auth_tls_key
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: ./config/pki/ca/ca.crt
+          target: /run/secrets/auth_tls_ca
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: ./config/audit/pseudonym_key
+          target: /run/secrets/auth_pseudonym_key
+          read_only: true
+          bind:
+            create_host_path: false
       depends_on:
         postgres:
           condition: service_healthy
@@ -316,7 +574,7 @@ services:
         - "traefik.http.routers.authlogin.middlewares=login-chain@file"
         - "traefik.http.routers.authlogin.service=auth"
         - "traefik.http.services.auth.loadbalancer.server.port=8000"
-      restart: unless-stopped
+      restart: "no"
       stop_grace_period: 20s
 
   audit-service:
@@ -339,20 +597,60 @@ services:
         ports:
           - "127.0.0.1:50054:50054"
         volumes:
-          - ./config/postgres/audit_app_postgres_password:/run/secrets/audit_app_postgres_password:ro
-          - ./config/redis/audit_redis_password:/run/secrets/audit_redis_password:ro
-          - ./config/audit/pseudonym_key:/run/secrets/audit_pseudonym_key:ro
-          - ./config/audit/checkpoint_private.pem:/run/secrets/audit_checkpoint_private_key:ro
-          - ./config/audit/checkpoint_public.pem:/run/secrets/audit_checkpoint_public_key:ro
-          - ./config/pki/audit/tls.crt:/run/secrets/audit_tls_cert:ro
-          - ./config/pki/audit/tls.key:/run/secrets/audit_tls_key:ro
-          - ./config/pki/ca/ca.crt:/run/secrets/audit_tls_ca:ro
+          - type: bind
+            source: ./config/postgres/audit_app_postgres_password
+            target: /run/secrets/audit_app_postgres_password
+            read_only: true
+            bind:
+              create_host_path: false
+          - type: bind
+            source: ./config/redis/audit_redis_password
+            target: /run/secrets/audit_redis_password
+            read_only: true
+            bind:
+              create_host_path: false
+          - type: bind
+            source: ./config/audit/pseudonym_key
+            target: /run/secrets/audit_pseudonym_key
+            read_only: true
+            bind:
+              create_host_path: false
+          - type: bind
+            source: ./config/audit/checkpoint_private.pem
+            target: /run/secrets/audit_checkpoint_private_key
+            read_only: true
+            bind:
+              create_host_path: false
+          - type: bind
+            source: ./config/audit/checkpoint_public.pem
+            target: /run/secrets/audit_checkpoint_public_key
+            read_only: true
+            bind:
+              create_host_path: false
+          - type: bind
+            source: ./config/pki/audit/tls.crt
+            target: /run/secrets/audit_tls_cert
+            read_only: true
+            bind:
+              create_host_path: false
+          - type: bind
+            source: ./config/pki/audit/tls.key
+            target: /run/secrets/audit_tls_key
+            read_only: true
+            bind:
+              create_host_path: false
+          - type: bind
+            source: ./config/pki/ca/ca.crt
+            target: /run/secrets/audit_tls_ca
+            read_only: true
+            bind:
+              create_host_path: false
         depends_on:
           postgres:
             condition: service_healthy
           redis:
             condition: service_started
-        restart: unless-stopped
+        restart: "no"
 
   audit-operator:
       build:
@@ -370,10 +668,30 @@ services:
         AUDIT_POSTGRES_HOST: "postgres"
         AUDIT_POSTGRES_SSL_MODE: disable
       volumes:
-        - ./config/postgres/audit_owner_postgres_password:/run/secrets/audit_owner_postgres_password:ro
-        - ./config/postgres/audit_app_postgres_password:/run/secrets/audit_app_postgres_password:ro
-        - ./config/audit/pseudonym_key:/run/secrets/audit_pseudonym_key:ro
-        - ./config/audit/checkpoint_public.pem:/run/secrets/audit_checkpoint_public_key:ro
+        - type: bind
+          source: ./config/postgres/audit_owner_postgres_password
+          target: /run/secrets/audit_owner_postgres_password
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: ./config/postgres/audit_app_postgres_password
+          target: /run/secrets/audit_app_postgres_password
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: ./config/audit/pseudonym_key
+          target: /run/secrets/audit_pseudonym_key
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: ./config/audit/checkpoint_public.pem
+          target: /run/secrets/audit_checkpoint_public_key
+          read_only: true
+          bind:
+            create_host_path: false
       depends_on:
         postgres:
           condition: service_healthy
@@ -396,10 +714,30 @@ services:
       AUTH_POSTGRES_HOST: "postgres"
       AUTH_POSTGRES_SSL_MODE: disable
     volumes:
-      - ./config/postgres/auth_owner_postgres_password:/run/secrets/auth_owner_postgres_password:ro
-      - ./config/postgres/auth_app_postgres_password:/run/secrets/postgres_password:ro
-      - ./config/auth/jwt_public.pem:/run/secrets/jwt_public_key:ro
-      - ./config/audit/pseudonym_key:/run/secrets/auth_pseudonym_key:ro
+      - type: bind
+        source: ./config/postgres/auth_owner_postgres_password
+        target: /run/secrets/auth_owner_postgres_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/postgres/auth_app_postgres_password
+        target: /run/secrets/postgres_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/auth/jwt_public.pem
+        target: /run/secrets/jwt_public_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/audit/pseudonym_key
+        target: /run/secrets/auth_pseudonym_key
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       postgres:
         condition: service_healthy
@@ -423,11 +761,36 @@ services:
       AUDIT_POSTGRES_HOST: "postgres-harness"
       AUDIT_POSTGRES_SSL_MODE: disable
     volumes:
-      - ./config/postgres/harness_postgres_password:/run/secrets/audit_owner_postgres_password:ro
-      - ./config/postgres/harness_postgres_password:/run/secrets/audit_app_postgres_password:ro
-      - ./config/audit/checkpoint_private.pem:/run/secrets/audit_checkpoint_private_key:ro
-      - ./config/audit/checkpoint_public.pem:/run/secrets/audit_checkpoint_public_key:ro
-      - ./config/audit/pseudonym_key:/run/secrets/audit_pseudonym_key:ro
+      - type: bind
+        source: ./config/postgres/harness_postgres_password
+        target: /run/secrets/audit_owner_postgres_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/postgres/harness_postgres_password
+        target: /run/secrets/audit_app_postgres_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/audit/checkpoint_private.pem
+        target: /run/secrets/audit_checkpoint_private_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/audit/checkpoint_public.pem
+        target: /run/secrets/audit_checkpoint_public_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/audit/pseudonym_key
+        target: /run/secrets/audit_pseudonym_key
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       postgres-harness:
         condition: service_healthy
@@ -445,18 +808,43 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./config/postgres/auth_postgres_password:/run/secrets/postgres_password:ro
-      - ./config/postgres/auth_owner_postgres_password:/run/secrets/auth_owner_password:ro
-      - ./config/postgres/auth_app_postgres_password:/run/secrets/auth_app_password:ro
-      - ./config/postgres/auth_bootstrap.sql:/bootstrap/auth_bootstrap.sql:ro
-      - ./config/postgres/cluster_bootstrap.sql:/bootstrap/cluster_bootstrap.sql:ro
+      - type: bind
+        source: ./config/postgres/auth_postgres_password
+        target: /run/secrets/postgres_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/postgres/auth_owner_postgres_password
+        target: /run/secrets/auth_owner_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/postgres/auth_app_postgres_password
+        target: /run/secrets/auth_app_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/postgres/auth_bootstrap.sql
+        target: /bootstrap/auth_bootstrap.sql
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/postgres/cluster_bootstrap.sql
+        target: /bootstrap/cluster_bootstrap.sql
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U auth -d authdb"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 10s
-    restart: unless-stopped
+    restart: "no"
 
   postgres-harness:
       image: postgres:17-alpine
@@ -472,8 +860,18 @@ services:
         POSTGRES_INITDB_ARGS: "--data-checksums"
         PGDATA: /var/lib/postgresql/data/pgdata
       volumes:
-        - ./config/postgres/harness_postgres_password:/run/secrets/postgres_password:ro
-        - ./config/postgres/audit_bootstrap.sql:/bootstrap/audit_bootstrap.sql:ro
+        - type: bind
+          source: ./config/postgres/harness_postgres_password
+          target: /run/secrets/postgres_password
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: ./config/postgres/audit_bootstrap.sql
+          target: /bootstrap/audit_bootstrap.sql
+          read_only: true
+          bind:
+            create_host_path: false
       tmpfs:
         - /var/lib/postgresql/data:mode=0700,uid=70,gid=70
       healthcheck:
@@ -495,27 +893,67 @@ services:
       - observability
     user: "1000:1000"
     env_file:
-      - ./services/api/.env
+      - ./services/notification/.env
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: "notification"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification"
       PROMETHEUS_EXPORTER_PORT: "9464"
     volumes:
-      - ./config/alertmanager/webhook_token:/run/secrets/webhook_token:ro
-      - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
-      - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
-      - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
-      - ./config/redis/notify_redis_password:/run/secrets/notify_redis_password:ro
-      - ./config/pki/notification/tls.crt:/run/secrets/notification_tls_cert:ro
-      - ./config/pki/notification/tls.key:/run/secrets/notification_tls_key:ro
-      - ./config/pki/ca/ca.crt:/run/secrets/notification_tls_ca:ro
+      - type: bind
+        source: ./config/alertmanager/webhook_token
+        target: /run/secrets/webhook_token
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/tls/ca.crt
+        target: /run/secrets/mongo_ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/secrets/mongo_notification_password
+        target: /run/secrets/mongo_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/broker_redis_password
+        target: /run/secrets/broker_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/notify_redis_password
+        target: /run/secrets/notify_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/notification/tls.crt
+        target: /run/secrets/notification_tls_cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/notification/tls.key
+        target: /run/secrets/notification_tls_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /run/secrets/notification_tls_ca
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       redis-broker:
         condition: service_healthy
       mongo:
         condition: service_healthy
-    restart: unless-stopped
+    restart: "no"
 
   notification-worker:
     build:
@@ -530,28 +968,68 @@ services:
     user: "1000:1000"
     command: ["celery", "-A", "app.worker.bootstrap", "worker", "--loglevel=INFO", "--pool=solo", "--concurrency=1"]
     env_file:
-      - ./services/api/.env
+      - ./services/notification/.env
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: "notification-worker"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification-worker"
       PROMETHEUS_EXPORTER_PORT: "9465"
     volumes:
-      - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
-      - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
-      - ./config/telegram/bot_token:/run/secrets/telegram_bot_token:ro
-      - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
-      - ./config/redis/notify_redis_password:/run/secrets/notify_redis_password:ro
-      - ./config/pki/notification/tls.crt:/run/secrets/notification_tls_cert:ro
-      - ./config/pki/notification/tls.key:/run/secrets/notification_tls_key:ro
-      - ./config/pki/ca/ca.crt:/run/secrets/notification_tls_ca:ro
+      - type: bind
+        source: ./config/mongodb/tls/ca.crt
+        target: /run/secrets/mongo_ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/secrets/mongo_notification_password
+        target: /run/secrets/mongo_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/telegram/bot_token
+        target: /run/secrets/telegram_bot_token
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/broker_redis_password
+        target: /run/secrets/broker_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/notify_redis_password
+        target: /run/secrets/notify_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/notification/tls.crt
+        target: /run/secrets/notification_tls_cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/notification/tls.key
+        target: /run/secrets/notification_tls_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /run/secrets/notification_tls_ca
+        read_only: true
+        bind:
+          create_host_path: false
       - ai_snapshots:/app/snapshots:ro
     depends_on:
       redis-broker:
         condition: service_healthy
       notification-service:
         condition: service_healthy
-    restart: unless-stopped
+    restart: "no"
 
   notification-beat:
     build:
@@ -565,24 +1043,59 @@ services:
     user: "1000:1000"
     command: ["celery", "-A", "app.worker.bootstrap", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule", "--pidfile=/tmp/celerybeat.pid"]
     env_file:
-      - ./services/api/.env
+      - ./services/notification/.env
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: "notification-beat"
       OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification-beat"
       PROMETHEUS_EXPORTER_PORT: "9466"
     volumes:
-      - ./config/mongodb/tls/ca.crt:/run/secrets/mongo_ca.crt:ro
-      - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_password:ro
-      - ./config/redis/broker_redis_password:/run/secrets/broker_redis_password:ro
-      - ./config/redis/notify_redis_password:/run/secrets/notify_redis_password:ro
-      - ./config/pki/notification/tls.crt:/run/secrets/notification_tls_cert:ro
-      - ./config/pki/notification/tls.key:/run/secrets/notification_tls_key:ro
-      - ./config/pki/ca/ca.crt:/run/secrets/notification_tls_ca:ro
+      - type: bind
+        source: ./config/mongodb/tls/ca.crt
+        target: /run/secrets/mongo_ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/secrets/mongo_notification_password
+        target: /run/secrets/mongo_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/broker_redis_password
+        target: /run/secrets/broker_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/notify_redis_password
+        target: /run/secrets/notify_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/notification/tls.crt
+        target: /run/secrets/notification_tls_cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/notification/tls.key
+        target: /run/secrets/notification_tls_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /run/secrets/notification_tls_ca
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       redis-broker:
         condition: service_healthy
-    restart: unless-stopped
+    restart: "no"
 
   mongo:
     image: mongo:7.0
@@ -598,14 +1111,54 @@ services:
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
     volumes:
       - mongo_data:/data/db
-      - ./config/mongodb/mongod.conf:/etc/mongo/mongod.conf:ro
-      - ./config/mongodb/tls/mongod.pem:/etc/mongo/tls/mongod.pem:ro
-      - ./config/mongodb/tls/ca.crt:/etc/mongo/tls/ca.crt:ro
-      - ./config/mongodb/init:/docker-entrypoint-initdb.d:ro
-      - ./config/mongodb/secrets/mongo_root_password:/run/secrets/mongo_root_password:ro
-      - ./config/mongodb/secrets/mongo_api_password:/run/secrets/mongo_api_password:ro
-      - ./config/mongodb/secrets/mongo_notification_password:/run/secrets/mongo_notification_password:ro
-      - ./config/mongodb/secrets/mongo_monitor_password:/run/secrets/mongo_monitor_password:ro
+      - type: bind
+        source: ./config/mongodb/mongod.conf
+        target: /etc/mongo/mongod.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/tls/mongod.pem
+        target: /etc/mongo/tls/mongod.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/tls/ca.crt
+        target: /etc/mongo/tls/ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/init
+        target: /docker-entrypoint-initdb.d
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/secrets/mongo_root_password
+        target: /run/secrets/mongo_root_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/secrets/mongo_api_password
+        target: /run/secrets/mongo_api_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/secrets/mongo_notification_password
+        target: /run/secrets/mongo_notification_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/secrets/mongo_monitor_password
+        target: /run/secrets/mongo_monitor_password
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/27017"]
       interval: 10s
@@ -613,7 +1166,7 @@ services:
       retries: 3
       start_period: 60s
       start_interval: 2s
-    restart: unless-stopped
+    restart: "no"
 
   redis:
     image: redis:7.2-alpine
@@ -626,11 +1179,36 @@ services:
     command: ["redis-server", "/etc/redis/redis.conf"]
     volumes:
       - redis_data:/data
-      - ./config/redis/redis.conf:/etc/redis/redis.conf:ro
-      - ./config/redis/redis.acl:/etc/redis/redis.acl:ro
-      - ./config/pki/redis/tls.crt:/etc/redis/tls/tls.crt:ro
-      - ./config/pki/redis/tls.key:/etc/redis/tls/tls.key:ro
-      - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
+      - type: bind
+        source: ./config/redis/redis.conf
+        target: /etc/redis/redis.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/redis.acl
+        target: /etc/redis/redis.acl
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/redis/tls.crt
+        target: /etc/redis/tls/tls.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/redis/tls.key
+        target: /etc/redis/tls/tls.key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /etc/redis/tls/ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test:
         - CMD-SHELL
@@ -644,7 +1222,7 @@ services:
       retries: 3
       start_period: 60s
       start_interval: 2s
-    restart: unless-stopped
+    restart: "no"
 
   redis-broker:
     image: redis:7.2-alpine
@@ -657,11 +1235,36 @@ services:
     command: ["redis-server", "/etc/redis/redis-broker.conf"]
     volumes:
       - redis_broker_data:/data
-      - ./config/redis/redis-broker.conf:/etc/redis/redis-broker.conf:ro
-      - ./config/redis/redis-broker.acl:/etc/redis/redis-broker.acl:ro
-      - ./config/pki/redis-broker/tls.crt:/etc/redis/tls/tls.crt:ro
-      - ./config/pki/redis-broker/tls.key:/etc/redis/tls/tls.key:ro
-      - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
+      - type: bind
+        source: ./config/redis/redis-broker.conf
+        target: /etc/redis/redis-broker.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/redis-broker.acl
+        target: /etc/redis/redis-broker.acl
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/redis-broker/tls.crt
+        target: /etc/redis/tls/tls.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/redis-broker/tls.key
+        target: /etc/redis/tls/tls.key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /etc/redis/tls/ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test:
         - CMD-SHELL
@@ -675,12 +1278,12 @@ services:
       retries: 3
       start_period: 60s
       start_interval: 2s
-    restart: unless-stopped
+    restart: "no"
 
   redis-stream:
     image: redis:7.2-alpine
     container_name: theft-redis-stream
-    restart: unless-stopped
+    restart: "no"
     networks:
       - data
     user: "999:999"
@@ -688,11 +1291,36 @@ services:
       - "971"
     command: ["redis-server", "/etc/redis/redis-stream.conf"]
     volumes:
-      - ./config/redis/redis-stream.conf:/etc/redis/redis-stream.conf:ro
-      - ./config/redis/redis-stream.acl:/etc/redis/redis-stream.acl:ro
-      - ./config/pki/redis-stream/tls.crt:/etc/redis/tls/tls.crt:ro
-      - ./config/pki/redis-stream/tls.key:/etc/redis/tls/tls.key:ro
-      - ./config/pki/ca/ca.crt:/etc/redis/tls/ca.crt:ro
+      - type: bind
+        source: ./config/redis/redis-stream.conf
+        target: /etc/redis/redis-stream.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/redis-stream.acl
+        target: /etc/redis/redis-stream.acl
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/redis-stream/tls.crt
+        target: /etc/redis/tls/tls.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/redis-stream/tls.key
+        target: /etc/redis/tls/tls.key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /etc/redis/tls/ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test:
         - CMD-SHELL
@@ -727,8 +1355,18 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - prometheus_data:/prometheus
-      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./config/prometheus/rules:/etc/prometheus/rules:ro
+      - type: bind
+        source: ./config/prometheus/prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/prometheus/rules
+        target: /etc/prometheus/rules
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"]
       interval: 30s
@@ -742,7 +1380,7 @@ services:
         condition: service_started
       redis-exporter:
         condition: service_started
-    restart: unless-stopped
+    restart: "no"
 
   node-exporter:
     profiles: ["observability"]
@@ -758,17 +1396,38 @@ services:
       - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
       - "--collector.netdev.device-exclude=^(veth|br-|docker|lo|virbr).*$$"
     volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /run/udev/data:/host/run/udev/data:ro
-      - /:/rootfs:ro,rslave
+      - type: bind
+        source: /proc
+        target: /host/proc
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /sys
+        target: /host/sys
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /run/udev/data
+        target: /host/run/udev/data
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /
+        target: /rootfs
+        read_only: true
+        bind:
+          propagation: rslave
+          create_host_path: false
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://172.21.0.1:9100/metrics"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 5s
-    restart: unless-stopped
+    restart: "no"
 
   mongodb-exporter:
     profiles: ["observability"]
@@ -777,14 +1436,24 @@ services:
     networks:
       - data
       - observability
+    env_file:
+      - path: ./config/mongodb/secrets/mongo_exporter.env
+        required: true
     command:
-      - "--mongodb.uri=mongodb://${MONGO_EXPORTER_USERNAME}:${MONGO_EXPORTER_PASSWORD}@theft-mongo:27017/admin?tls=true&tlsInsecure=true"
+      - "--mongodb.uri=mongodb://mongo:27017/admin?tls=true&tlsCAFile=/etc/mongo/ca.crt"
       - "--collect-all"
       - "--compatible-mode"
+    volumes:
+      - type: bind
+        source: ./config/mongodb/tls/ca.crt
+        target: /etc/mongo/ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       mongo:
         condition: service_healthy
-    restart: unless-stopped
+    restart: "no"
 
   redis-exporter:
     profiles: ["observability"]
@@ -801,14 +1470,34 @@ services:
       REDIS_EXPORTER_TLS_CLIENT_KEY_FILE: "/run/secrets/exporter_tls_key"
       REDIS_EXPORTER_TLS_CA_CERT_FILE: "/run/secrets/exporter_tls_ca"
     volumes:
-      - ./config/redis/exporter_redis_password:/run/secrets/exporter_pw:ro
-      - ./config/pki/exporter/tls.crt:/run/secrets/exporter_tls_cert:ro
-      - ./config/pki/exporter/tls.key:/run/secrets/exporter_tls_key:ro
-      - ./config/pki/ca/ca.crt:/run/secrets/exporter_tls_ca:ro
+      - type: bind
+        source: ./config/redis/exporter_redis_password
+        target: /run/secrets/exporter_pw
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/exporter/tls.crt
+        target: /run/secrets/exporter_tls_cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/exporter/tls.key
+        target: /run/secrets/exporter_tls_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /run/secrets/exporter_tls_ca
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       redis:
         condition: service_healthy
-    restart: unless-stopped
+    restart: "no"
 
   redis-broker-exporter:
     profiles: ["observability"]
@@ -825,14 +1514,34 @@ services:
       REDIS_EXPORTER_TLS_CLIENT_KEY_FILE: "/run/secrets/exporter_tls_key"
       REDIS_EXPORTER_TLS_CA_CERT_FILE: "/run/secrets/exporter_tls_ca"
     volumes:
-      - ./config/redis/broker_exporter_redis_password:/run/secrets/broker_exporter_pw:ro
-      - ./config/pki/exporter/tls.crt:/run/secrets/exporter_tls_cert:ro
-      - ./config/pki/exporter/tls.key:/run/secrets/exporter_tls_key:ro
-      - ./config/pki/ca/ca.crt:/run/secrets/exporter_tls_ca:ro
+      - type: bind
+        source: ./config/redis/broker_exporter_redis_password
+        target: /run/secrets/broker_exporter_pw
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/exporter/tls.crt
+        target: /run/secrets/exporter_tls_cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/exporter/tls.key
+        target: /run/secrets/exporter_tls_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /run/secrets/exporter_tls_ca
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       redis-broker:
         condition: service_healthy
-    restart: unless-stopped
+    restart: "no"
 
   redis-stream-exporter:
     profiles: ["observability"]
@@ -849,14 +1558,34 @@ services:
       REDIS_EXPORTER_TLS_CLIENT_KEY_FILE: "/run/secrets/exporter_tls_key"
       REDIS_EXPORTER_TLS_CA_CERT_FILE: "/run/secrets/exporter_tls_ca"
     volumes:
-      - ./config/redis/stream_exporter_redis_password:/run/secrets/stream_exporter_pw:ro
-      - ./config/pki/exporter/tls.crt:/run/secrets/exporter_tls_cert:ro
-      - ./config/pki/exporter/tls.key:/run/secrets/exporter_tls_key:ro
-      - ./config/pki/ca/ca.crt:/run/secrets/exporter_tls_ca:ro
+      - type: bind
+        source: ./config/redis/stream_exporter_redis_password
+        target: /run/secrets/stream_exporter_pw
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/exporter/tls.crt
+        target: /run/secrets/exporter_tls_cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/exporter/tls.key
+        target: /run/secrets/exporter_tls_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /run/secrets/exporter_tls_ca
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       redis-stream:
         condition: service_healthy
-    restart: unless-stopped
+    restart: "no"
 
   nvidia-gpu-exporter:
     profiles: ["observability"]
@@ -879,7 +1608,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-    restart: unless-stopped
+    restart: "no"
 
   netdata:
       profiles: ["observability"]
@@ -899,14 +1628,54 @@ services:
         - netdata_config:/etc/netdata
         - netdata_lib:/var/lib/netdata
         - netdata_cache:/var/cache/netdata
-        - /etc/passwd:/host/etc/passwd:ro
-        - /etc/group:/host/etc/group:ro
-        - /etc/localtime:/etc/localtime:ro
-        - /proc:/host/proc:ro
-        - /sys:/host/sys:ro
-        - /etc/os-release:/host/etc/os-release:ro
-        - /var/log:/host/var/log:ro
-        - /var/run/docker.sock:/var/run/docker.sock:ro
+        - type: bind
+          source: /etc/passwd
+          target: /host/etc/passwd
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: /etc/group
+          target: /host/etc/group
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: /etc/localtime
+          target: /etc/localtime
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: /proc
+          target: /host/proc
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: /sys
+          target: /host/sys
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: /etc/os-release
+          target: /host/etc/os-release
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: /var/log
+          target: /host/var/log
+          read_only: true
+          bind:
+            create_host_path: false
+        - type: bind
+          source: /var/run/docker.sock
+          target: /var/run/docker.sock
+          read_only: true
+          bind:
+            create_host_path: false
       deploy:
         resources:
           reservations:
@@ -920,7 +1689,7 @@ services:
         timeout: 5s
         retries: 3
         start_period: 60s
-      restart: unless-stopped
+      restart: "no"
 
   portainer:
     profiles: ["observability"]
@@ -928,12 +1697,16 @@ services:
     container_name: theft-portainer
     networks:
       - observability
-    restart: unless-stopped
+    restart: "no"
     command: -H unix:///var/run/docker.sock
     ports:
       - "127.0.0.1:9443:9443"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        bind:
+          create_host_path: false
       - portainer_data:/data
 
   grafana:
@@ -947,7 +1720,7 @@ services:
       - "1972"
     environment:
       GF_SECURITY_ADMIN_USER: "admin"
-      GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD}"
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
@@ -957,8 +1730,24 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./config/grafana/dashboards:/etc/grafana/dashboards:ro
+      - type: bind
+        source: ./config/grafana/provisioning
+        target: /etc/grafana/provisioning
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/grafana/dashboards
+        target: /etc/grafana/dashboards
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/grafana/admin_password
+        target: /run/secrets/grafana_admin_password
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/health || exit 1"]
       interval: 30s
@@ -972,7 +1761,7 @@ services:
         condition: service_healthy
       tempo:
         condition: service_healthy
-    restart: unless-stopped
+    restart: "no"
 
   loki:
     profiles: ["observability"]
@@ -986,14 +1775,19 @@ services:
       - "127.0.0.1:3100:3100"
     volumes:
       - loki_data:/loki
-      - ./config/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - type: bind
+        source: ./config/loki/loki-config.yml
+        target: /etc/loki/loki-config.yml
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3100/ready || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 30s
-    restart: unless-stopped
+    restart: "no"
 
   alertmanager:
     profiles: ["observability"]
@@ -1002,6 +1796,8 @@ services:
     networks:
       - observability
     user: "65534:65534"
+    group_add:
+      - "1974"
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
       - "--storage.path=/alertmanager"
@@ -1010,15 +1806,25 @@ services:
       - "127.0.0.1:9093:9093"
     volumes:
       - alertmanager_data:/alertmanager
-      - ./config/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - ./config/alertmanager/webhook_token:/etc/alertmanager/webhook_token:ro
+      - type: bind
+        source: ./config/alertmanager/alertmanager.yml
+        target: /etc/alertmanager/alertmanager.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/alertmanager/webhook_token
+        target: /etc/alertmanager/webhook_token
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9093/-/ready"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 10s
-    restart: unless-stopped
+    restart: "no"
 
   alloy:
     profiles: ["observability"]
@@ -1036,13 +1842,28 @@ services:
       - "127.0.0.1:12345:12345"
     volumes:
       - alloy_data:/var/lib/alloy/data
-      - ./config/alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - type: bind
+        source: ./config/alloy/config.alloy
+        target: /etc/alloy/config.alloy
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /var/lib/docker/containers
+        target: /var/lib/docker/containers
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       loki:
         condition: service_healthy
-    restart: unless-stopped
+    restart: "no"
 
   tempo:
     profiles: ["observability"]
@@ -1056,14 +1877,19 @@ services:
     command: ["-config.file=/etc/tempo/tempo.yml"]
     volumes:
       - tempo_data:/var/tempo
-      - ./config/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - type: bind
+        source: ./config/tempo/tempo.yml
+        target: /etc/tempo/tempo.yml
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3200/ready || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 30s
-    restart: unless-stopped
+    restart: "no"
 
 networks:
   edge:

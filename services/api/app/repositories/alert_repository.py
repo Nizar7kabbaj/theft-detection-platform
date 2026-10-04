@@ -26,6 +26,7 @@ class AlertRepository(BaseRepository[dict[str, Any]]):
 
     async def list_page(
         self,
+        *,
         severity: str | None = None,
         acknowledged: bool | None = None,
         decision: str | None = None,
@@ -89,6 +90,7 @@ class AlertRepository(BaseRepository[dict[str, Any]]):
 
     async def count(
         self,
+        *,
         severity: str | None = None,
         acknowledged: bool | None = None,
         decision: str | None = None,

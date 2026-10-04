@@ -185,11 +185,20 @@ class TestCreate:
         await alert_usecase.create(payload)
         mock_alert_client.send.assert_awaited_once()
 
-    async def test_swallows_alert_unavailable(self, alert_usecase, mock_alert_client):
+    async def test_swallows_alert_unavailable(
+        self, alert_usecase, mock_alert_client, fake_alert_repo, mock_redis, mocker
+    ):
+        mocker.patch.object(alert_usecase, "DISPATCH_BACKOFF_SECONDS", 0)
         mock_alert_client.send.side_effect = AlertUnavailableError("downstream down")
         payload = AlertCreate(**VALID_PAYLOAD)
         resp = await alert_usecase.create(payload)
         assert resp.alert_id == "a1"
+        assert resp.dispatch_failed is True
+        assert mock_alert_client.send.await_count == alert_usecase.DISPATCH_ATTEMPTS
+        stored = next(iter(fake_alert_repo.store.values()))
+        assert stored["dispatch_failed"] is True
+        channels = [call.args[0] for call in mock_redis.publish.await_args_list]
+        assert channels == ["alerts:created", "alerts:updated"]
 
     async def test_publishes_created_event(self, alert_usecase, mock_redis):
         payload = AlertCreate(**VALID_PAYLOAD)

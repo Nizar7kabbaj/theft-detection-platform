@@ -8,13 +8,16 @@ from typing import Protocol
 import cv2
 import numpy as np
 from ultralytics import YOLO
+from ultralytics.trackers.track import on_predict_start
 
 from app.annotator import draw_annotated
+from app.camera_trackers import CameraTrackers
 from app.clip_buffer import ClipBuffer
 from app.clip_writer import write_clip
 from app.concealment import ConcealmentTracker, ConcealmentVerdict
 from app.core.config import settings
 from app.grpc_gen.inference_pb2 import InferenceState
+from app.ids import new_alert_id
 from app.predictor import ShoplifterPredictor
 from app.tracker_store import TrackerStore
 
@@ -48,6 +51,7 @@ class DetectionResult:
     concealments: list[ConcealmentVerdict]
     snapshots: dict[int, str]
     clips: dict[int, str]
+    alert_ids: dict[int, str]
     frame_width: int
     frame_height: int
 
@@ -115,6 +119,7 @@ class LSTMDetector:
         self._predictor: ShoplifterPredictor | None = None
         self._store: TrackerStore | None = None
         self._analyze_lock = threading.Lock()
+        self._person_trackers = CameraTrackers(fresh=on_predict_start)
 
     def load(self) -> None:
         self._store = TrackerStore(
@@ -246,8 +251,10 @@ class LSTMDetector:
             ]
             snapshots: dict[int, str] = {}
             clips: dict[int, str] = {}
+            alert_ids: dict[int, str] = {}
             for verdict in concealments:
-                alert_id = f"{camera_id}-{session_id}-{frame_index}-{verdict.object_track_id}"
+                alert_id = new_alert_id()
+                alert_ids[verdict.object_track_id] = alert_id
                 written = self.write_snapshot(frame, alert_id)
                 if written is not None:
                     snapshots[verdict.object_track_id] = written
@@ -282,6 +289,7 @@ class LSTMDetector:
                 concealments=concealments,
                 snapshots=snapshots,
                 clips=clips,
+                alert_ids=alert_ids,
                 frame_width=width,
                 frame_height=height,
             )
@@ -294,9 +302,10 @@ class LSTMDetector:
     ) -> list[TrackedPersonResult]:
         if self._yolo is None or self._predictor is None:
             raise RuntimeError("models not loaded")
-        results = self._yolo.track(
+        results = self._person_trackers.track(
+            self._yolo,
+            camera_id,
             frame,
-            persist=True,
             classes=[self._person_class],
             conf=self._person_confidence,
             verbose=False,
@@ -361,46 +370,6 @@ class LSTMDetector:
                 )
             )
         out.sort(key=lambda person: person.score, reverse=True)
-        return out
-
-    def _track_objects(self, frame: np.ndarray) -> list[TrackedObjectResult]:
-        if self._objects is None:
-            raise RuntimeError("models not loaded")
-        results = self._objects.track(
-            frame,
-            persist=True,
-            classes=self._object_classes,
-            conf=self._object_confidence,
-            verbose=False,
-        )
-        if not results:
-            return []
-        result = results[0]
-        if result.boxes is None or len(result.boxes) == 0 or result.boxes.id is None:
-            return []
-        boxes = result.boxes
-        xyxy = boxes.xyxy.cpu().numpy()
-        track_ids = boxes.id.int().cpu().numpy()
-        confs = boxes.conf.cpu().numpy() if boxes.conf is not None else None
-        class_ids = boxes.cls.int().cpu().numpy() if boxes.cls is not None else None
-        names = result.names
-        out: list[TrackedObjectResult] = []
-        for index in range(len(xyxy)):
-            coords = xyxy[index].astype(float)
-            class_id = int(class_ids[index]) if class_ids is not None else -1
-            out.append(
-                TrackedObjectResult(
-                    track_id=int(track_ids[index]),
-                    class_name=str(names.get(class_id, "unknown")),
-                    bbox=(
-                        float(coords[0]),
-                        float(coords[1]),
-                        float(coords[2]),
-                        float(coords[3]),
-                    ),
-                    confidence=float(confs[index]) if confs is not None else 0.0,
-                )
-            )
         return out
 
     def _detect_objects(

@@ -38,6 +38,7 @@ from app.core.errors import (
 from app.core.health import HealthState, Probe, start_probe_server
 from app.core.rate_limit import RateLimitedError, rate_limit
 from app.core.redis import close_redis, open_pubsub_redis, open_redis, open_stream_redis
+from app.core.shutdown import stop_task
 from app.grpc_gen.alert_pb2_grpc import AlertServiceStub
 from app.grpc_gen.audit_pb2_grpc import AuditServiceStub
 from app.grpc_gen.auth_pb2_grpc import AuthServiceStub
@@ -174,14 +175,19 @@ async def _services(app: FastAPI):
     yield
     app.state.started = False
     app.state.reconcile_stop.set()
-    await app.state.reconcile_task
-    await app.state.policy_sync_task
     app.state.audit_drain_stop.set()
-    await app.state.audit_drain_task
-    await app.state.audit_channel.close(grace=2)
-    await app.state.auth_channel.close(grace=2)
-    await app.state.alert_channel.close(grace=2)
-    await app.state.inference_channel.close(grace=2)
+    budget = settings.SHUTDOWN_TASK_TIMEOUT_SECONDS
+    await asyncio.gather(
+        stop_task(app.state.reconcile_task, "health reconcile", budget),
+        stop_task(app.state.policy_sync_task, "policy sync", budget),
+        stop_task(app.state.audit_drain_task, "audit drain", budget),
+    )
+    await asyncio.gather(
+        app.state.audit_channel.close(grace=2),
+        app.state.auth_channel.close(grace=2),
+        app.state.alert_channel.close(grace=2),
+        app.state.inference_channel.close(grace=2),
+    )
     await app.state.broadcaster.stop()
     await app.state.revocations.stop()
     await close_redis(app.state.revocation_redis)

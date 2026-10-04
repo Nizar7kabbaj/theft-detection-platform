@@ -213,6 +213,12 @@ documentMigrations:
   backend-migrate:
     enabled: true
     component: backend
+    secretItems:
+      - mongo_password
+    caFrom:
+      secret: mongo-tls
+      key: ca.crt
+      path: mongo_ca.crt
     egress:
       - to: mongo
         ports: [27017]

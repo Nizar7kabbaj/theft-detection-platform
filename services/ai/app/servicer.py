@@ -62,10 +62,7 @@ class InferenceServicer(inference_pb2_grpc.InferenceServiceServicer):
         persons = {person.track_id: person for person in result.persons}
         for verdict in result.concealments:
             person = persons.get(verdict.person_track_id)
-            alert_id = (
-                f"{frame.camera_id}-{frame.session_id}-"
-                f"{frame.frame_index}-{verdict.object_track_id}"
-            )
+            alert_id = result.alert_ids[verdict.object_track_id]
             severity = _DEFAULT_SEVERITY
             classifier_state = None
             classifier_score = None
