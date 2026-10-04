@@ -5,6 +5,7 @@ import json
 import time
 import urllib.error
 import urllib.request
+from http import HTTPStatus
 from http.cookies import SimpleCookie
 from pathlib import Path
 
@@ -75,9 +76,9 @@ async def run() -> None:
         print("websocket open")
         await asyncio.sleep(1.0)
 
-        status, rotated = refresh(dict(original))
+        status, _ = refresh(dict(original))
         print(f"first refresh status={status}")
-        if status != 200:
+        if status != HTTPStatus.OK:
             raise SystemExit("rotation failed, cannot test reuse")
 
         started = time.monotonic()

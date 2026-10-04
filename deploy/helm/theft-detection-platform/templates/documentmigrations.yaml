@@ -15,7 +15,7 @@ metadata:
   labels:
     {{- include "theft.labels" (dict "root" $ "name" $name) | nindent 4 }}
   annotations:
-    helm.sh/hook: post-install,pre-upgrade
+    helm.sh/hook: pre-install,pre-upgrade
     helm.sh/hook-weight: "-5"
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
@@ -66,24 +66,17 @@ spec:
           projected:
             defaultMode: 0440
             sources:
-              {{- if and $c.secret $c.secret.enabled }}
               - secret:
-                  name: {{ $c.secret.name }}
-              {{- end }}
-              {{- with $c.tls }}
-              - secret:
-                  name: {{ .identity }}-tls
+                  name: {{ required "document migrations need the component secret" $c.secret.name }}
                   items:
-                    - key: tls.crt
-                      path: {{ .filePrefix }}_tls_cert
-                    - key: tls.key
-                      path: {{ .filePrefix }}_tls_key
-                    - key: ca.crt
-                      path: {{ .filePrefix }}_tls_ca
-                    {{- range .caAliases }}
-                    - key: ca.crt
+                    {{- range required (printf "%s needs secretItems" $name) $m.secretItems }}
+                    - key: {{ . }}
                       path: {{ . }}
                     {{- end }}
-              {{- end }}
+              - secret:
+                  name: {{ required (printf "%s needs caFrom.secret" $name) $m.caFrom.secret }}
+                  items:
+                    - key: {{ $m.caFrom.key | default "ca.crt" }}
+                      path: {{ required (printf "%s needs caFrom.path" $name) $m.caFrom.path }}
 {{- end }}
 {{- end }}

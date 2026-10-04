@@ -139,8 +139,12 @@ class TestCount:
 
     async def test_with_query(self, repo, mock_collection):
         mock_collection.count_documents.return_value = 3
-        await repo.count({"severity": "SEVERITY_WARNING"})
+        await repo.count(severity="SEVERITY_WARNING")
         mock_collection.count_documents.assert_awaited_once_with({"severity": "SEVERITY_WARNING"})
+
+    async def test_rejects_positional_filter(self, repo):
+        with pytest.raises(TypeError):
+            await repo.count({"severity": "SEVERITY_WARNING"})
 
 
 class TestListPage:

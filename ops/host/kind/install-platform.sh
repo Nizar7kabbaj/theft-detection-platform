@@ -44,6 +44,8 @@ readonly METRICS_SERVER_VERSION="3.14.0"
 readonly METRICS_SERVER_SHA256="c2ca1185c01e6e7f53dd1b7d131f0c9b3fa50e003ed068b784563a1b5a3422a1"
 
 WORK_DIR=""
+CONTROL_PLANE_IP=""
+WORKER_IP=""
 
 usage() {
   cat <<EOF
@@ -90,11 +92,20 @@ download() {
 }
 
 fetch_cert_manager() {
-  helm pull oci://quay.io/jetstack/charts/cert-manager \
+  local out="${CACHE_DIR}/cert-manager-${CERT_MANAGER_VERSION}.tgz"
+  local pulled="${WORK_DIR}/cert-manager-${CERT_MANAGER_VERSION}.tgz" output
+  mkdir -p "$CACHE_DIR"
+  if [[ -f "$out" && "$(sha256sum "$out" | cut -d' ' -f1)" == "$CERT_MANAGER_SHA256" ]]; then
+    log "using cached $(basename "$out")"
+    printf '%s' "$out"
+    return
+  fi
+  output="$(helm pull oci://quay.io/jetstack/charts/cert-manager \
     --version "$CERT_MANAGER_VERSION" --verify --keyring "$KEYRING" \
-    --destination "$WORK_DIR" >/dev/null 2>&1 || die "cert-manager chart signature check failed"
-  check_sha "${WORK_DIR}/cert-manager-${CERT_MANAGER_VERSION}.tgz" "$CERT_MANAGER_SHA256"
-  printf '%s' "${WORK_DIR}/cert-manager-${CERT_MANAGER_VERSION}.tgz"
+    --destination "$WORK_DIR" 2>&1)" || die "cert-manager chart pull or signature check failed: ${output}"
+  check_sha "$pulled" "$CERT_MANAGER_SHA256"
+  mv "$pulled" "$out"
+  printf '%s' "$out"
 }
 
 fetch_repo_chart() {
@@ -128,10 +139,31 @@ install_gateway_api() {
   log "gateway api ${GATEWAY_API_VERSION} crds applied"
 }
 
+node_address() {
+  local selector="$1" address
+  address="$(kubectl --context "$KCTX" get nodes -l "$selector" \
+    -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}')"
+  [[ "$address" =~ ^[0-9.]+$ ]] || die "expected exactly one node for ${selector}, got '${address}'"
+  printf '%s' "$address"
+}
+
+apply_fences() {
+  local file="$1" rendered
+  rendered="$(sed -e "s|__CONTROL_PLANE_IP__|${CONTROL_PLANE_IP}|g" -e "s|__WORKER_IP__|${WORKER_IP}|g" "$file")"
+  if grep -q '__[A-Z_]*_IP__' <<<"$rendered"; then
+    die "unrendered address token in ${file}"
+  fi
+  kubectl --context "$KCTX" apply --server-side --field-manager=platform -f - <<<"$rendered" >/dev/null
+}
+
 install_release() {
-  local release="$1" namespace="$2" chart="$3" values="$4" out
+  local release="$1" namespace="$2" chart="$3" values="$4" out kube_version api_versions
   [[ -n "$chart" && -e "$chart" ]] || die "no chart for ${release}, the fetch before it failed"
+  kube_version="$(kubectl --context "$KCTX" get --raw /version | sed -n 's/.*"gitVersion": *"\([^"]*\)".*/\1/p')"
+  api_versions="$(kubectl --context "$KCTX" api-versions | paste -sd, -)"
+  [[ -n "$kube_version" && -n "$api_versions" ]] || die "cannot read cluster capabilities for ${release}"
   out="$(helm template "$release" "$chart" --namespace "$namespace" -f "$values" \
+    --skip-tests --kube-version "$kube_version" --api-versions "$api_versions" \
     | kubectl --context "$KCTX" apply --server-side --force-conflicts --field-manager=platform-check --dry-run=server -f - 2>&1)" \
     || die "dry run failed for ${release}: ${out}"
   if grep -qi 'would violate PodSecurity' <<<"$out"; then
@@ -199,12 +231,15 @@ main() {
   [[ -f "$KEYRING" ]] || die "missing keyring: ${KEYRING}"
   WORK_DIR="$(mktemp -d)"
   trap cleanup EXIT
+  CONTROL_PLANE_IP="$(node_address node-role.kubernetes.io/control-plane)"
+  WORKER_IP="$(node_address '!node-role.kubernetes.io/control-plane')"
+  log "fences bound to control plane ${CONTROL_PLANE_IP} and worker ${WORKER_IP}"
 
   kubectl --context "$KCTX" apply --server-side --force-conflicts --field-manager=platform -f "$NAMESPACES" >/dev/null
   log "namespaces applied"
   kubectl --context "$KCTX" apply --server-side -f "$NETWORK_POLICIES" >/dev/null
   log "theft baseline network policy applied"
-  kubectl --context "$KCTX" apply --server-side --field-manager=platform -f "$METRICS_NETWORK_POLICIES" >/dev/null
+  apply_fences "$METRICS_NETWORK_POLICIES"
   log "metrics-server and csr-approver network policies applied"
   install_release kubelet-csr-approver csr-approver \
     "$(fetch_repo_chart "$CSR_APPROVER_REPO" kubelet-csr-approver "$CSR_APPROVER_VERSION" "$CSR_APPROVER_SHA256")" \
@@ -221,7 +256,7 @@ main() {
   apply_mesh_policies
 
   install_release cert-manager cert-manager "$(fetch_cert_manager)" "${VALUES_DIR}/cert-manager.yaml"
-  kubectl --context "$KCTX" apply --server-side --field-manager=platform -f "$CNPG_NETWORK_POLICIES" >/dev/null
+  apply_fences "$CNPG_NETWORK_POLICIES"
   log "cnpg-system network policies applied"
   install_release cnpg cnpg-system \
     "$(fetch_repo_chart https://cloudnative-pg.github.io/charts cloudnative-pg "$CNPG_VERSION" "$CNPG_SHA256")" \

@@ -4,10 +4,12 @@ import json
 from datetime import datetime
 
 import pytest
+from pymongo.errors import DuplicateKeyError
 
 from app.core.errors import ConflictError, NotFoundError
 from app.schemas.camera import CameraCreate, CameraResponse
 from app.services.camera_health import HealthState
+from app.usecases.camera_usecase import _conflict_message
 
 
 def _camera_create() -> CameraCreate:
@@ -47,9 +49,22 @@ class TestCreate:
 
     async def test_raises_conflict_on_duplicate_name(self, camera_usecase):
         await camera_usecase.create(_camera_create())
+        clash = _camera_create().model_copy(update={"camera_id": "cam-b"})
 
-        with pytest.raises(ConflictError, match="already exists"):
-            await camera_usecase.create(_camera_create())
+        with pytest.raises(ConflictError, match="camera with name front-door already exists"):
+            await camera_usecase.create(clash)
+
+    async def test_raises_conflict_on_duplicate_camera_id(self, camera_usecase):
+        await camera_usecase.create(_camera_create())
+        clash = _camera_create().model_copy(update={"name": "back-door"})
+
+        with pytest.raises(ConflictError, match="camera with camera_id cam-a already exists"):
+            await camera_usecase.create(clash)
+
+    async def test_unknown_unique_index_gets_neutral_message(self):
+        error = DuplicateKeyError("dup", 11000, {"keyPattern": {"stream_url": 1}})
+
+        assert _conflict_message(_camera_create(), error) == "camera already exists"
 
     async def test_invalidates_list_cache(self, camera_usecase, mock_redis):
         await camera_usecase.create(_camera_create())

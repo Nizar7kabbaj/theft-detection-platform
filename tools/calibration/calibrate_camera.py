@@ -12,6 +12,7 @@ HEIGHT = 1080
 PATTERN_SIZE = (9, 6)
 SQUARE_SIZE_MM = 25.0
 TARGET_CAPTURES = 25
+MIN_CAPTURES = 10
 ERROR_GATE_PX = 0.5
 
 CAPTURE_DIR = Path(__file__).parent / "output" / "captures"
@@ -39,9 +40,7 @@ def run_capture() -> int:
     print(f"starting at {counter} existing captures, target {TARGET_CAPTURES}")
 
     detect_flags = (
-        cv2.CALIB_CB_ADAPTIVE_THRESH
-        + cv2.CALIB_CB_NORMALIZE_IMAGE
-        + cv2.CALIB_CB_FAST_CHECK
+        cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE + cv2.CALIB_CB_FAST_CHECK
     )
 
     try:
@@ -59,7 +58,8 @@ def run_capture() -> int:
                 cv2.drawChessboardCorners(preview, PATTERN_SIZE, corners, found)
 
             color = (0, 200, 0) if found else (0, 0, 200)
-            status = f"captures {counter}/{TARGET_CAPTURES}  board {'detected' if found else 'not found'}"
+            board = "detected" if found else "not found"
+            status = f"captures {counter}/{TARGET_CAPTURES}  board {board}"
             cv2.putText(preview, status, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
             cv2.imshow("calibration capture", preview)
@@ -82,12 +82,12 @@ def run_capture() -> int:
 
 def run_calibrate() -> int:
     images = sorted(CAPTURE_DIR.glob("*.png"))
-    if len(images) < 10:
-        print(f"need at least 10 captures, found {len(images)}", file=sys.stderr)
+    if len(images) < MIN_CAPTURES:
+        print(f"need at least {MIN_CAPTURES} captures, found {len(images)}", file=sys.stderr)
         return 1
 
     object_template = np.zeros((PATTERN_SIZE[0] * PATTERN_SIZE[1], 3), np.float32)
-    object_template[:, :2] = np.mgrid[0:PATTERN_SIZE[0], 0:PATTERN_SIZE[1]].T.reshape(-1, 2)
+    object_template[:, :2] = np.mgrid[0 : PATTERN_SIZE[0], 0 : PATTERN_SIZE[1]].T.reshape(-1, 2)
     object_template *= SQUARE_SIZE_MM
 
     refine_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
@@ -108,8 +108,11 @@ def run_calibrate() -> int:
         image_points.append(refined)
         used.append(path.name)
 
-    if len(object_points) < 10:
-        print(f"only {len(object_points)} usable captures, need 10 or more", file=sys.stderr)
+    if len(object_points) < MIN_CAPTURES:
+        print(
+            f"only {len(object_points)} usable captures, need {MIN_CAPTURES} or more",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"calibrating on {len(object_points)} images")

@@ -181,7 +181,7 @@
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["enabled", "component", "egress", "command"],
+        "required": ["enabled", "component", "egress", "command", "secretItems", "caFrom"],
         "properties": {
           "enabled": {
             "type": "boolean"
@@ -215,6 +215,34 @@
             "minItems": 1,
             "items": {
               "type": "string"
+            }
+          },
+          "secretItems": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "caFrom": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["secret", "path"],
+            "properties": {
+              "secret": {
+                "type": "string",
+                "minLength": 1
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         }

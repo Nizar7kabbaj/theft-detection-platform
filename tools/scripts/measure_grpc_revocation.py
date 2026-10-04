@@ -3,10 +3,13 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import re
+import shutil
 import subprocess
 import sys
 import time
 import urllib.request
+from http import HTTPStatus
 from http.cookies import SimpleCookie
 from pathlib import Path
 
@@ -20,8 +23,11 @@ PASSWORD_FILE = Path("config/auth/test_users_password")
 ACCESS_COOKIE = "__Host-access_token"
 CSRF_COOKIE = "__Host-csrf"
 AUTH_TARGET = "auth:50053"
+SID_PATTERN = re.compile(r"[A-Za-z0-9_-]{8,128}")
 
 REVOKE_SNIPPET = """
+import os
+
 import grpc
 from app.grpc_gen import auth_pb2, auth_pb2_grpc
 
@@ -33,11 +39,11 @@ with open("/run/secrets/api_tls_key", "rb") as handle:
     key = handle.read()
 
 credentials = grpc.ssl_channel_credentials(ca, key, cert)
-with grpc.secure_channel("{target}", credentials) as channel:
+with grpc.secure_channel(os.environ["REVOKE_TARGET"], credentials) as channel:
     stub = auth_pb2_grpc.AuthServiceStub(channel)
     reply = stub.RevokeSession(
         auth_pb2.RevokeSessionRequest(
-            session_id="{sid}",
+            session_id=os.environ["REVOKE_SID"],
             reason="operator revocation drill",
             revoked_by="measure-grpc-revocation",
         ),
@@ -57,7 +63,7 @@ def login() -> dict[str, str]:
         method="POST",
     )
     with urllib.request.urlopen(request) as response:
-        if response.status != 200:
+        if response.status != HTTPStatus.OK:
             raise SystemExit(f"login failed status={response.status}")
         jar = SimpleCookie()
         for header in response.headers.get_all("Set-Cookie") or []:
@@ -79,12 +85,30 @@ def session_id_from(token: str) -> str:
 
 
 def revoke(sid: str) -> str:
-    snippet = REVOKE_SNIPPET.format(target=AUTH_TARGET, sid=sid)
+    if not SID_PATTERN.fullmatch(sid):
+        raise SystemExit("session id has an unexpected shape, refusing to send it")
+    docker = shutil.which("docker")
+    if docker is None:
+        raise SystemExit("docker not found on PATH")
     result = subprocess.run(
-        ["docker", "compose", "exec", "-T", "backend", "python", "-c", snippet],
+        [
+            docker,
+            "compose",
+            "exec",
+            "-T",
+            "-e",
+            f"REVOKE_SID={sid}",
+            "-e",
+            f"REVOKE_TARGET={AUTH_TARGET}",
+            "backend",
+            "python",
+            "-c",
+            REVOKE_SNIPPET,
+        ],
         capture_output=True,
         text=True,
         timeout=30,
+        check=False,
     )
     if result.returncode != 0:
         raise SystemExit(f"revoke call failed: {result.stderr.strip()}")

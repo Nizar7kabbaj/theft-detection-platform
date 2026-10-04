@@ -280,7 +280,7 @@ function stop_control_plane() {
 }
 
 function disable_autorestart() {
-    docker update --restart=no "$CONTROL_PLANE" "$WORKER" >/dev/null
+    docker update --restart=no "$CONTROL_PLANE" "$WORKER" "$REGISTRY" >/dev/null
 }
 
 function start() {
@@ -291,6 +291,7 @@ function start() {
     ensure_attached "$CONTROL_PLANE"
     ensure_attached "$WORKER"
     ensure_attached "$REGISTRY"
+    ensure_running "$REGISTRY"
     ensure_running "$CONTROL_PLANE"
     since=$(started_at "$CONTROL_PLANE")
     wait_for_api
@@ -304,7 +305,6 @@ function start() {
     wait_for_mesh_control "$since"
     wait_for_mesh_proxy "$CONTROL_PLANE" "$since"
     ensure_running "$WORKER"
-    ensure_running "$REGISTRY"
     since=$(started_at "$WORKER")
     wait_for_lease "$WORKER" "$since"
     wait_for_node_ip "$WORKER"
@@ -313,7 +313,9 @@ function start() {
     wait_for_mesh_agent "$WORKER" "$since"
     wait_for_mesh_proxy "$WORKER" "$since"
     k uncordon "$WORKER" >/dev/null
-    wait_for_pods theft "" "$since"
+    if [[ -n "$(k -n theft get pods -o name 2>/dev/null)" ]]; then
+        wait_for_pods theft "" "$since"
+    fi
     if k -n metrics-server get deployment metrics-server >/dev/null 2>&1; then
         wait_for_pods metrics-server app.kubernetes.io/name=metrics-server "$since"
         k wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=120s >/dev/null

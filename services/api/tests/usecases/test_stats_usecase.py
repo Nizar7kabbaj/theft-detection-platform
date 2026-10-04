@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 from app.schemas.stats import StatsResponse
 
@@ -30,6 +31,17 @@ class TestOverview:
         assert result.total_alerts == 10
         assert result.top_objects[0].object == "phone"
         assert result.top_objects[1].object is None
+
+    async def test_severity_counts_cover_store_day(
+        self, stats_usecase, mock_redis, fake_stats_repo, mocker
+    ):
+        day_start = datetime(2026, 10, 3, 0, 0, tzinfo=UTC)
+        mocker.patch("app.usecases.stats_usecase.store_day_start", return_value=day_start)
+        mock_redis.get.return_value = None
+
+        await stats_usecase.overview()
+
+        assert fake_stats_repo.severity_windows == [day_start, day_start]
 
     async def test_cache_miss_pulls_from_repo(self, stats_usecase, mock_redis, fake_stats_repo):
         mock_redis.get.return_value = None

@@ -1,3 +1,5 @@
 services:
   backend:
     runtime: runc
+  backend-migrate:
+    runtime: runc

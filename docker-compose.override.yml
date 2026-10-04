@@ -1,10 +1,27 @@
 services:
   backend:
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --timeout-graceful-shutdown 3
     volumes:
-      - ./services/api/app:/app/app
+      - type: bind
+        source: ./services/api/app
+        target: /app/app
+        bind:
+          create_host_path: false
     environment:
       - DEBUG=True
+  backend-migrate:
+    volumes:
+      - type: bind
+        source: ./services/api/app
+        target: /app/app
+        read_only: true
+        bind:
+          create_host_path: false
   ai:
     volumes:
-      - ./ml/outputs/webcam-validation:/app/ai-model/outputs/webcam-validation:ro
+      - type: bind
+        source: ./ml/outputs/webcam-validation
+        target: /app/ai-model/outputs/webcam-validation
+        read_only: true
+        bind:
+          create_host_path: false

@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import sys
 import time
+from http import HTTPStatus
 from pathlib import Path
 
 sys.path.insert(0, "/app")
@@ -56,12 +57,10 @@ def _send(group_key: str) -> int:
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
-    resp = requests.post(
-        TARGET_URL, json=_payload(group_key), headers=headers, timeout=5.0
-    )
+    resp = requests.post(TARGET_URL, json=_payload(group_key), headers=headers, timeout=5.0)
     print(f"status code: {resp.status_code}")
     print(f"group_key: {group_key}")
-    if resp.status_code != 202:
+    if resp.status_code != HTTPStatus.ACCEPTED:
         print(f"body: {resp.text}")
         print("send not accepted")
         return 1
@@ -80,9 +79,7 @@ async def _verify(group_key: str) -> int:
     await connect_to_mongodb()
     try:
         intents = get_collection(settings.DELIVERY_INTENT_COLLECTION)
-        doc = await intents.find_one(
-            {"source": "alertmanager", "source_ref": group_key}
-        )
+        doc = await intents.find_one({"source": "alertmanager", "source_ref": group_key})
         if doc is None:
             print(f"no intent for group_key {group_key}")
             return 1
@@ -104,15 +101,14 @@ async def _verify(group_key: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--send", action="store_true")
-    parser.add_argument("--verify", action="store_true")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--send", action="store_true")
+    mode.add_argument("--verify", action="store_true")
     parser.add_argument("--group-key", default=f"smoke-{int(time.time())}")
     args = parser.parse_args()
     if args.send:
         return _send(args.group_key)
-    if args.verify:
-        return asyncio.run(_verify(args.group_key))
-    parser.error("pass --send or --verify")
+    return asyncio.run(_verify(args.group_key))
 
 
 if __name__ == "__main__":

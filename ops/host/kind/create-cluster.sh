@@ -14,6 +14,11 @@ readonly SNAPSHOT_DIR="/srv/theft/snapshots"
 readonly REGISTRY_NAME="kind-registry"
 readonly REGISTRY_PORT="5001"
 readonly REGISTRY_IMAGE="registry@sha256:852b3e4d378c426dda6b318fe9d9bfe8e92a0eccb9926671ec3d3ea17a196696"
+readonly REGISTRY_CONFIG="${REPO_ROOT}/ops/host/kind/registry-config.yml"
+readonly NETWORK_NAME="kind"
+readonly NETWORK_SUBNET="172.19.0.0/16"
+readonly NETWORK_GATEWAY="172.19.0.1"
+readonly NETWORK_SUBNET6="fc00:f853:ccd:e793::/64"
 readonly READY_TIMEOUT_SECONDS=180
 
 usage() {
@@ -61,19 +66,50 @@ ensure_snapshot_dir() {
   log "snapshot dir ready"
 }
 
+ensure_network() {
+  if docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
+    log "network ${NETWORK_NAME} present"
+    return
+  fi
+  docker network create "$NETWORK_NAME" \
+    --driver bridge \
+    --subnet "$NETWORK_SUBNET" --gateway "$NETWORK_GATEWAY" \
+    --ipv6 --subnet "$NETWORK_SUBNET6" \
+    --opt com.docker.network.bridge.enable_ip_masquerade=true \
+    --opt com.docker.network.driver.mtu=1500 >/dev/null
+  log "network ${NETWORK_NAME} created before the registry so node addresses stay in order"
+}
+
+registry_spec() {
+  printf '%s\n' "$REGISTRY_IMAGE" "$REGISTRY_IP" "restart=no" "log=10m*3" \
+    "$(sha256sum "$REGISTRY_CONFIG" | cut -d' ' -f1)" | sha256sum | cut -c1-16
+}
+
 ensure_registry() {
+  local spec
+  [[ -f "$REGISTRY_CONFIG" ]] || die "missing ${REGISTRY_CONFIG}"
+  spec="$(registry_spec)"
+  if docker container inspect "$REGISTRY_NAME" >/dev/null 2>&1 \
+    && [[ "$(docker inspect -f '{{index .Config.Labels "theft.registry.spec"}}' "$REGISTRY_NAME")" != "$spec" ]]; then
+    docker rm -f "$REGISTRY_NAME" >/dev/null
+    log "registry settings changed, container replaced, data volume kept"
+  fi
   if ! docker container inspect "$REGISTRY_NAME" >/dev/null 2>&1; then
     docker run -d \
       --name "$REGISTRY_NAME" \
-      --restart unless-stopped \
+      --label "theft.registry.spec=${spec}" \
+      --restart no \
+      --network "$NETWORK_NAME" --ip "$REGISTRY_IP" \
       --read-only \
       --tmpfs /tmp \
       --cap-drop ALL \
       --security-opt no-new-privileges:true \
+      --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \
       -p "127.0.0.1:${REGISTRY_PORT}:5000" \
       -v kind-registry-data:/var/lib/registry \
+      --mount "type=bind,source=${REGISTRY_CONFIG},target=/etc/distribution/config.yml,readonly" \
       "$REGISTRY_IMAGE" >/dev/null
-    log "registry started"
+    log "registry started at ${REGISTRY_IP}"
   elif [[ "$(docker inspect -f '{{.State.Running}}' "$REGISTRY_NAME")" != "true" ]]; then
     docker start "$REGISTRY_NAME" >/dev/null
     log "registry restarted"
@@ -128,8 +164,7 @@ apply_namespace() {
 }
 
 readonly REGISTRY_IP=172.19.0.2
-readonly CONTROL_PLANE_IP=172.19.0.3
-readonly WORKER_IP=172.19.0.4
+readonly NODE_IPS="172.19.0.3 172.19.0.4"
 
 node_ip() {
   docker inspect -f '{{with index .NetworkSettings.Networks "kind"}}{{.IPAddress}}{{end}}' "$1"
@@ -140,15 +175,13 @@ node_pin() {
 }
 
 pin_addresses() {
-  local pair name want pinned=1
-  for pair in "${REGISTRY_NAME}=${REGISTRY_IP}" \
-    "${CLUSTER_NAME}-control-plane=${CONTROL_PLANE_IP}" \
-    "${CLUSTER_NAME}-worker=${WORKER_IP}"; do
-    name="${pair%%=*}"
-    want="${pair#*=}"
-    [[ "$(node_ip "$name")" == "$want" ]] \
-      || die "${name} came up at $(node_ip "$name"), the network policies expect ${want}"
-    [[ "$(node_pin "$name")" == "$want" ]] || pinned=0
+  local name nodes pinned=1
+  [[ "$(node_ip "$REGISTRY_NAME")" == "$REGISTRY_IP" ]] \
+    || die "${REGISTRY_NAME} came up at $(node_ip "$REGISTRY_NAME"), expected ${REGISTRY_IP}"
+  nodes="$(printf '%s\n' "$(node_ip "${CLUSTER_NAME}-control-plane")" "$(node_ip "${CLUSTER_NAME}-worker")" | sort | paste -sd' ')"
+  [[ "$nodes" == "$NODE_IPS" ]] || die "nodes came up at ${nodes}, the address plan expects ${NODE_IPS}"
+  for name in "$REGISTRY_NAME" "${CLUSTER_NAME}-control-plane" "${CLUSTER_NAME}-worker"; do
+    [[ "$(node_pin "$name")" == "$(node_ip "$name")" ]] || pinned=0
   done
   if (( pinned )); then
     log "node addresses already pinned"
@@ -212,6 +245,7 @@ main() {
   require docker kind kubectl sudo openssl base64
   ensure_encryption_config
   ensure_snapshot_dir
+  ensure_network
   ensure_registry
   create_cluster
   connect_registry

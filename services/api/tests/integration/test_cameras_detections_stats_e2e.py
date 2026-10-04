@@ -225,7 +225,9 @@ async def test_stats_on_empty_db_returns_zeros(client: httpx.AsyncClient) -> Non
 
 
 async def test_stats_counts_reflect_seeded_data(client: httpx.AsyncClient, test_db) -> None:
-    await test_db.cameras.insert_many([{"name": "c1"}, {"name": "c2"}])
+    await test_db.cameras.insert_many(
+        [{"name": "c1", "camera_id": "cam-c1"}, {"name": "c2", "camera_id": "cam-c2"}]
+    )
     await test_db.detections.insert_many([{"session_id": i} for i in range(3)])
     today = datetime.now(UTC)
     await test_db.alerts.insert_many(

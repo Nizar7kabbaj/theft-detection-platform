@@ -69,6 +69,13 @@ def _tls_options() -> dict[str, object]:
     }
 
 
+def _timeouts() -> dict[str, float]:
+    return {
+        "socket_connect_timeout": settings.REDIS_CONNECT_TIMEOUT_SECONDS,
+        "socket_timeout": settings.REDIS_SOCKET_TIMEOUT_SECONDS,
+    }
+
+
 async def _ping_until_ready(client: Redis, name: str) -> None:
     delay = 0.5
     while True:
@@ -89,6 +96,9 @@ async def open_redis() -> Redis:
         _resolve_redis_url(),
         encoding="utf-8",
         decode_responses=True,
+        health_check_interval=30,
+        socket_keepalive=True,
+        **_timeouts(),
         **_tls_options(),
     )
     await _ping_until_ready(client, "redis")
@@ -103,6 +113,7 @@ async def open_pubsub_redis() -> Redis:
         decode_responses=True,
         health_check_interval=30,
         socket_keepalive=True,
+        **_timeouts(),
         **_tls_options(),
     )
     await _ping_until_ready(client, "pubsub redis")
@@ -127,6 +138,7 @@ async def open_stream_redis() -> Redis:
         decode_responses=False,
         health_check_interval=30,
         socket_keepalive=True,
+        **_timeouts(),
         **_tls_options(),
     )
     await _ping_until_ready(client, "stream redis")

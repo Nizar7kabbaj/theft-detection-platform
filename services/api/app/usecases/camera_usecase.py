@@ -14,6 +14,16 @@ from app.services.camera_health import read_health
 
 logger = logging.getLogger(__name__)
 
+_UNIQUE_FIELDS = ("name", "camera_id")
+
+
+def _conflict_message(payload: CameraCreate, exc: DuplicateKeyError) -> str:
+    pattern = (exc.details or {}).get("keyPattern") or {}
+    for field in _UNIQUE_FIELDS:
+        if field in pattern:
+            return f"camera with {field} {getattr(payload, field)} already exists"
+    return "camera already exists"
+
 
 class CameraUseCase:
     LIST_KEY = "cache:cameras:list"
@@ -55,7 +65,7 @@ class CameraUseCase:
         try:
             created = await self._repo.create(doc)
         except DuplicateKeyError as exc:
-            raise ConflictError(f"camera with name {payload.name} already exists") from exc
+            raise ConflictError(_conflict_message(payload, exc)) from exc
         await invalidate(self._redis, self.LIST_KEY)
         response = CameraResponse.model_validate(created)
         await self._publish("created", response)
