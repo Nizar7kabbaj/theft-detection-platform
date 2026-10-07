@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import html
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from app.shared.schemas.alert import AlertMessage, AlertType, Severity
@@ -47,6 +49,27 @@ _RENDERERS: dict[DeliverySource, Callable[[dict[str, Any]], Rendered]] = {
     DeliverySource.ALERT: _render_alert,
     DeliverySource.ALERTMANAGER: _render_alertmanager,
 }
+
+
+_DECISION_LABELS = {
+    "DECISION_CONFIRMED": "confirmed",
+    "DECISION_DISMISSED": "dismissed",
+    "DECISION_UNSURE": "unsure",
+}
+
+
+DECISION_PROMPT = (
+    "<b>operator decision</b>\n"
+    "is this a theft?\n"
+    "<i>this judgement becomes a labelled training case</i>"
+)
+
+
+def render_decision_outcome(decision: str, decided_by: str, decided_at: datetime) -> str:
+    label = _DECISION_LABELS.get(decision, "decided")
+    who = html.escape(decided_by) if decided_by else "unknown"
+    when = decided_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    return f"<b>operator decision</b>\n<b>{label}</b> · {who} · {when}"
 
 
 def render(source: DeliverySource, payload: dict[str, Any]) -> Rendered:

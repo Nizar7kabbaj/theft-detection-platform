@@ -36,6 +36,16 @@ class Settings(BaseSettings):
     TELEGRAM_PHOTO_TIMEOUT_SEC: int = 15
     TELEGRAM_CLIP_TIMEOUT_SEC: int = 60
     TELEGRAM_CAPTION_MAX_CHARS: int = 1024
+    TELEGRAM_VIDEO_MAX_BYTES: int = 48 * 1024 * 1024
+    TELEGRAM_CALLBACK_KEY_FILE: Path = Path("/run/secrets/telegram_callback_key")
+    TELEGRAM_BUTTON_TTL_SEC: int = 43200
+    TELEGRAM_POLL_TIMEOUT_SEC: int = 25
+    POLLER_LEASE_KEY: str = "notify:telegram:poller"
+    POLLER_LEASE_TTL_SEC: int = 60
+    POLLER_UPDATE_DEDUPE_TTL_SEC: int = 86400
+    DECISION_TARGET: str = "theft-backend:50055"
+    AUTH_TARGET: str = "auth:50053"
+    DECISION_CALL_TIMEOUT_SEC: float = 3.0
     SNAPSHOTS_DIR: str = "/app/snapshots"
     ANNOTATED_SNAPSHOT_SUFFIX: str = "-annotated"
     CLIP_WAIT_SEC: float = 5.0

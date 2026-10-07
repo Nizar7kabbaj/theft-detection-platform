@@ -27,7 +27,8 @@ usage: ${SCRIPT_NAME} [options]
 
 options:
     -s|--service NAME    generate one service only, repeatable
-    -f|--force           regenerate even when the existing certificate is still valid
+    -f|--force           regenerate service certificates even when still valid, the ca is kept
+    --rotate-ca          regenerate the certificate authority and reissue every service certificate
     -h|--help            show this help message
     --version            show version information
 
@@ -59,6 +60,7 @@ EOM
 
 function main() {
     local force=false
+    local rotate_ca=false
     local selected=()
 
     while [ $# -gt 0 ]; do
@@ -73,6 +75,9 @@ function main() {
             ;;
         -f | --force)
             force=true
+            ;;
+        --rotate-ca)
+            rotate_ca=true
             ;;
         --version)
             echo "${SCRIPT_NAME} version ${VERSION}"
@@ -90,6 +95,14 @@ function main() {
     done
 
     exit_on_missing_tools "${DEPENDENCIES[@]}"
+
+    if [ "${rotate_ca}" = true ]; then
+        if [ ${#selected[@]} -ne 0 ]; then
+            echo "error: --rotate-ca reissues every service certificate, drop --service" >&2
+            exit 1
+        fi
+        force=true
+    fi
 
     if [ ${#selected[@]} -eq 0 ]; then
         selected=("${SERVICES[@]}")
@@ -117,7 +130,7 @@ function main() {
         fi
     done
 
-    ensure_ca "${force}"
+    ensure_ca "${rotate_ca}"
 
     for name in "${selected[@]}"; do
         ensure_leaf "${name}" "${force}"
@@ -137,7 +150,7 @@ function is_known_service() {
 
 function is_server_service() {
     case "$1" in
-    audit | ai | auth | notification | redis | redis-broker | redis-stream)
+    api | audit | ai | auth | notification | redis | redis-broker | redis-stream)
         return 0
         ;;
     *)
@@ -178,6 +191,9 @@ function service_dns_names() {
         ;;
     redis-stream)
         echo "redis-stream theft-redis-stream"
+        ;;
+    api)
+        echo "api backend theft-backend"
         ;;
     *)
         echo "$1"
@@ -224,8 +240,8 @@ function ensure_ca() {
     fi
 
     mkdir -p "${CA_DIR}"
-    mv "${tmp_crt}" "${CA_CERT}"
-    mv "${tmp_key}" "${CA_KEY}"
+    mv -f "${tmp_crt}" "${CA_CERT}"
+    mv -f "${tmp_key}" "${CA_KEY}"
     chmod 644 "${CA_CERT}"
     chmod 600 "${CA_KEY}"
     trap - EXIT
@@ -301,8 +317,8 @@ EOM
     fi
 
     mkdir -p "${service_dir}"
-    mv "${tmp_crt}" "${cert_file}"
-    mv "${tmp_key}" "${key_file}"
+    mv -f "${tmp_crt}" "${cert_file}"
+    mv -f "${tmp_key}" "${key_file}"
     rm -f "${tmp_csr}" "${tmp_ext}"
     chmod 644 "${cert_file}"
 

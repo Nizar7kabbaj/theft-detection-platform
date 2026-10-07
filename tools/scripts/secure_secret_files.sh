@@ -13,6 +13,8 @@ readonly SECRETS=(
     "config/mongodb/secrets/mongo_exporter.env 600 -"
     "config/grafana/admin_password 640 grafana-conf"
     "config/alertmanager/webhook_token 640 alertmanager-conf"
+    "config/telegram/bot_token 600 -"
+    "config/telegram/callback_key 600 -"
     "services/api/.env 600 -"
     "services/notification/.env 600 -"
 )

@@ -43,6 +43,7 @@ from app.grpc_gen.alert_pb2_grpc import AlertServiceStub
 from app.grpc_gen.audit_pb2_grpc import AuditServiceStub
 from app.grpc_gen.auth_pb2_grpc import AuthServiceStub
 from app.grpc_gen.inference_pb2_grpc import InferenceServiceStub
+from app.grpc_server.server import start_decision_server
 from app.observability import setup_observability
 from app.services.audit_drain import run_drain
 from app.services.broadcast_service import BroadcastService
@@ -170,10 +171,14 @@ async def _services(app: FastAPI):
     app.state.audit_drain_task = asyncio.create_task(
         run_drain(get_database(), app.state.audit_stub, app.state.audit_drain_stop)
     )
+    app.state.decision_server = await start_decision_server(
+        get_database(), app.state.redis, app.state.alert_stub, app.state.auth_stub
+    )
     app.state.started = True
     logger.info("backend ready")
     yield
     app.state.started = False
+    await app.state.decision_server.stop(grace=settings.SHUTDOWN_TASK_TIMEOUT_SECONDS)
     app.state.reconcile_stop.set()
     app.state.audit_drain_stop.set()
     budget = settings.SHUTDOWN_TASK_TIMEOUT_SECONDS

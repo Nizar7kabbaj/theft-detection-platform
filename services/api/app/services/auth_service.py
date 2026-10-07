@@ -33,6 +33,15 @@ class VerifyResult:
         return self.status == pb.VerificationStatus.VERIFICATION_STATUS_VALID
 
 
+@dataclass(frozen=True, slots=True)
+class OperatorLookup:
+    found: bool
+    user_id: str
+    username: str
+    roles: frozenset[str]
+    active: bool
+
+
 class AuthClient:
     def __init__(self, stub: AuthServiceStub) -> None:
         self._stub = stub
@@ -73,6 +82,40 @@ class AuthClient:
                 username=response.username,
                 roles=frozenset(response.roles),
                 session_id=response.session_id,
+            )
+
+    async def lookup_operator(
+        self,
+        *,
+        telegram_user_id: int | None = None,
+        user_id: str | None = None,
+    ) -> OperatorLookup:
+        if telegram_user_id is not None:
+            request = pb.LookupOperatorRequest(telegram_user_id=telegram_user_id)
+        else:
+            request = pb.LookupOperatorRequest(user_id=user_id or "")
+        with tracer.start_as_current_span("auth.lookup_operator") as span:
+            try:
+                response = await self._stub.LookupOperator(
+                    request,
+                    timeout=settings.AUTH_VERIFY_TIMEOUT_SECONDS,
+                )
+            except grpc.aio.AioRpcError as exc:
+                if exc.code() in _TRANSIENT_CODES:
+                    logger.warning(
+                        "auth call failed code=%s detail=%s",
+                        exc.code().name,
+                        exc.details(),
+                    )
+                    raise AuthUnavailableError("auth service unavailable") from exc
+                raise
+            span.set_attribute("auth.operator_found", response.found)
+            return OperatorLookup(
+                found=response.found,
+                user_id=response.user_id,
+                username=response.username,
+                roles=frozenset(response.roles),
+                active=response.active,
             )
 
     async def session_active(self, session_id: str) -> tuple[bool, frozenset[str]]:

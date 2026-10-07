@@ -188,4 +188,5 @@ async def decide_alert(
     user: CurrentUser = Depends(require_permission(Permission.ALERT_ACKNOWLEDGE)),
     usecase: AlertUseCase = Depends(get_alert_usecase),
 ) -> AlertDetail:
-    return await usecase.decide(alert_id, payload.decision, user.user_id)
+    result = await usecase.decide(alert_id, payload.decision, user.user_id, user.username)
+    return result.detail

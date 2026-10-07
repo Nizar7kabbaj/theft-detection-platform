@@ -16,6 +16,7 @@ from grpc_reflection.v1alpha import reflection
 from sqlalchemy import text
 
 from app.api.v1.auth import router as auth_router
+from app.api.v1.telegram import router as telegram_router
 from app.api.v1.users import router as users_router
 from app.core.config import get_settings
 from app.core.database import dispose_engine, get_sessionmaker
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(users_router)
+    app.include_router(telegram_router)
     return app
 
 

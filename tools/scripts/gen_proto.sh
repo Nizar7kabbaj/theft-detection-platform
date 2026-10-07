@@ -26,9 +26,9 @@ resolve_outdir() {
 
 resolve_entry_protos() {
   case "$1" in
-    backend)              echo "inference.proto alert.proto audit.proto auth.proto" ;;
+    backend)              echo "inference.proto alert.proto audit.proto auth.proto decision.proto" ;;
     ai-service)           echo "inference.proto alert.proto presence.proto" ;;
-    notification-service) echo "alert.proto" ;;
+    notification-service) echo "alert.proto auth.proto decision.proto" ;;
     camera-service)       echo "inference.proto alert.proto" ;;
     detect-gate-service)  echo "common.proto presence.proto" ;;
     auth-service)         echo "audit.proto auth.proto" ;;

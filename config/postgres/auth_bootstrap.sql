@@ -30,7 +30,7 @@ ALTER TABLE alembic_version OWNER TO auth_owner;
 ALTER SEQUENCE audit_outbox_id_seq OWNER TO auth_owner;
 ALTER SEQUENCE audit_outbox_dead_id_seq OWNER TO auth_owner;
 
-GRANT USAGE ON SCHEMA public TO auth_owner;
+GRANT USAGE, CREATE ON SCHEMA public TO auth_owner;
 GRANT USAGE ON SCHEMA public TO auth_app;
 
 GRANT SELECT, INSERT, UPDATE ON users TO auth_app;

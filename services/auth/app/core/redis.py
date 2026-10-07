@@ -156,6 +156,26 @@ async def is_token_revoked(jti: str, session_id: str) -> bool:
     return await get_redis().exists(f"revoked:jti:{jti}", f"revoked:sid:{session_id}") > 0
 
 
+def _telegram_link_key(token_hash: str) -> str:
+    return f"telegram:link:{token_hash}"
+
+
+def _telegram_owner_key(user_id: str) -> str:
+    return f"telegram:link:user:{user_id}"
+
+
+async def store_telegram_link(user_id: str, token_hash: str, ttl_seconds: int) -> None:
+    client = get_redis()
+    await client.set(_telegram_link_key(token_hash), user_id, ex=ttl_seconds)
+    previous = await client.set(_telegram_owner_key(user_id), token_hash, ex=ttl_seconds, get=True)
+    if previous and previous != token_hash:
+        await client.delete(_telegram_link_key(previous))
+
+
+async def consume_telegram_link(token_hash: str) -> str | None:
+    return await get_redis().getdel(_telegram_link_key(token_hash))
+
+
 async def close_redis() -> None:
     global _client
     if _client is not None:

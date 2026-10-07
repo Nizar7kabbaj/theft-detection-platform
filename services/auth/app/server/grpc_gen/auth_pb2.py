@@ -25,15 +25,17 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nauth.proto\x12\x11theftdetection.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"e\n\x12VerifyTokenRequest\x12\r\n\x05token\x18\x01 \x01(\t\x12\x19\n\x11\x65xpected_audience\x18\x02 \x01(\t\x12\x11\n\tsource_ip\x18\x03 \x01(\t\x12\x12\n\nuser_agent\x18\x04 \x01(\t\"\xbf\x01\n\x10VerifyTokenReply\x12\x35\n\x06status\x18\x01 \x01(\x0e\x32%.theftdetection.v1.VerificationStatus\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x10\n\x08username\x18\x03 \x01(\t\x12\r\n\x05roles\x18\x04 \x03(\t\x12.\n\nexpires_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x12\n\nsession_id\x18\x06 \x01(\t\".\n\x18IntrospectSessionRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\"\xd0\x01\n\x16IntrospectSessionReply\x12\x0e\n\x06\x61\x63tive\x18\x01 \x01(\x08\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12-\n\tissued_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x30\n\x0clast_used_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tsource_ip\x18\x05 \x01(\t\x12\x12\n\nuser_agent\x18\x06 \x01(\t\x12\r\n\x05roles\x18\x07 \x03(\t\"N\n\x14RevokeSessionRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x0e\n\x06reason\x18\x02 \x01(\t\x12\x12\n\nrevoked_by\x18\x03 \x01(\t\"U\n\x12RevokeSessionReply\x12\x0f\n\x07revoked\x18\x01 \x01(\x08\x12.\n\nrevoked_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp*\xba\x02\n\x12VerificationStatus\x12#\n\x1fVERIFICATION_STATUS_UNSPECIFIED\x10\x00\x12\x1d\n\x19VERIFICATION_STATUS_VALID\x10\x01\x12\x1f\n\x1bVERIFICATION_STATUS_EXPIRED\x10\x02\x12\x1f\n\x1bVERIFICATION_STATUS_REVOKED\x10\x03\x12!\n\x1dVERIFICATION_STATUS_MALFORMED\x10\x04\x12)\n%VERIFICATION_STATUS_SIGNATURE_INVALID\x10\x05\x12)\n%VERIFICATION_STATUS_AUDIENCE_MISMATCH\x10\x06\x12%\n!VERIFICATION_STATUS_USER_DISABLED\x10\x07\x32\xb6\x02\n\x0b\x41uthService\x12Y\n\x0bVerifyToken\x12%.theftdetection.v1.VerifyTokenRequest\x1a#.theftdetection.v1.VerifyTokenReply\x12k\n\x11IntrospectSession\x12+.theftdetection.v1.IntrospectSessionRequest\x1a).theftdetection.v1.IntrospectSessionReply\x12_\n\rRevokeSession\x12\'.theftdetection.v1.RevokeSessionRequest\x1a%.theftdetection.v1.RevokeSessionReplyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nauth.proto\x12\x11theftdetection.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"e\n\x12VerifyTokenRequest\x12\r\n\x05token\x18\x01 \x01(\t\x12\x19\n\x11\x65xpected_audience\x18\x02 \x01(\t\x12\x11\n\tsource_ip\x18\x03 \x01(\t\x12\x12\n\nuser_agent\x18\x04 \x01(\t\"\xbf\x01\n\x10VerifyTokenReply\x12\x35\n\x06status\x18\x01 \x01(\x0e\x32%.theftdetection.v1.VerificationStatus\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x10\n\x08username\x18\x03 \x01(\t\x12\r\n\x05roles\x18\x04 \x03(\t\x12.\n\nexpires_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x12\n\nsession_id\x18\x06 \x01(\t\".\n\x18IntrospectSessionRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\"\xd0\x01\n\x16IntrospectSessionReply\x12\x0e\n\x06\x61\x63tive\x18\x01 \x01(\x08\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12-\n\tissued_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x30\n\x0clast_used_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tsource_ip\x18\x05 \x01(\t\x12\x12\n\nuser_agent\x18\x06 \x01(\t\x12\r\n\x05roles\x18\x07 \x03(\t\"N\n\x14RevokeSessionRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x0e\n\x06reason\x18\x02 \x01(\t\x12\x12\n\nrevoked_by\x18\x03 \x01(\t\"U\n\x12RevokeSessionReply\x12\x0f\n\x07revoked\x18\x01 \x01(\x08\x12.\n\nrevoked_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"Q\n\x15LookupOperatorRequest\x12\x1a\n\x10telegram_user_id\x18\x01 \x01(\x03H\x00\x12\x11\n\x07user_id\x18\x02 \x01(\tH\x00\x42\t\n\x07subject\"f\n\x13LookupOperatorReply\x12\r\n\x05\x66ound\x18\x01 \x01(\x08\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x10\n\x08username\x18\x03 \x01(\t\x12\r\n\x05roles\x18\x04 \x03(\t\x12\x0e\n\x06\x61\x63tive\x18\x05 \x01(\x08\"C\n\x13\x42indTelegramRequest\x12\x12\n\nlink_token\x18\x01 \x01(\t\x12\x18\n\x10telegram_user_id\x18\x02 \x01(\x03\"\\\n\x11\x42indTelegramReply\x12\x35\n\x06status\x18\x01 \x01(\x0e\x32%.theftdetection.v1.BindTelegramStatus\x12\x10\n\x08username\x18\x02 \x01(\t*\xba\x02\n\x12VerificationStatus\x12#\n\x1fVERIFICATION_STATUS_UNSPECIFIED\x10\x00\x12\x1d\n\x19VERIFICATION_STATUS_VALID\x10\x01\x12\x1f\n\x1bVERIFICATION_STATUS_EXPIRED\x10\x02\x12\x1f\n\x1bVERIFICATION_STATUS_REVOKED\x10\x03\x12!\n\x1dVERIFICATION_STATUS_MALFORMED\x10\x04\x12)\n%VERIFICATION_STATUS_SIGNATURE_INVALID\x10\x05\x12)\n%VERIFICATION_STATUS_AUDIENCE_MISMATCH\x10\x06\x12%\n!VERIFICATION_STATUS_USER_DISABLED\x10\x07*\xab\x01\n\x12\x42indTelegramStatus\x12$\n BIND_TELEGRAM_STATUS_UNSPECIFIED\x10\x00\x12\x1e\n\x1a\x42IND_TELEGRAM_STATUS_BOUND\x10\x01\x12&\n\"BIND_TELEGRAM_STATUS_TOKEN_INVALID\x10\x02\x12\'\n#BIND_TELEGRAM_STATUS_ACCOUNT_IN_USE\x10\x03\x32\xf8\x03\n\x0b\x41uthService\x12Y\n\x0bVerifyToken\x12%.theftdetection.v1.VerifyTokenRequest\x1a#.theftdetection.v1.VerifyTokenReply\x12k\n\x11IntrospectSession\x12+.theftdetection.v1.IntrospectSessionRequest\x1a).theftdetection.v1.IntrospectSessionReply\x12_\n\rRevokeSession\x12\'.theftdetection.v1.RevokeSessionRequest\x1a%.theftdetection.v1.RevokeSessionReply\x12\x62\n\x0eLookupOperator\x12(.theftdetection.v1.LookupOperatorRequest\x1a&.theftdetection.v1.LookupOperatorReply\x12\\\n\x0c\x42indTelegram\x12&.theftdetection.v1.BindTelegramRequest\x1a$.theftdetection.v1.BindTelegramReplyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'auth_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_VERIFICATIONSTATUS']._serialized_start=790
-  _globals['_VERIFICATIONSTATUS']._serialized_end=1104
+  _globals['_VERIFICATIONSTATUS']._serialized_start=1140
+  _globals['_VERIFICATIONSTATUS']._serialized_end=1454
+  _globals['_BINDTELEGRAMSTATUS']._serialized_start=1457
+  _globals['_BINDTELEGRAMSTATUS']._serialized_end=1628
   _globals['_VERIFYTOKENREQUEST']._serialized_start=66
   _globals['_VERIFYTOKENREQUEST']._serialized_end=167
   _globals['_VERIFYTOKENREPLY']._serialized_start=170
@@ -46,6 +48,14 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_REVOKESESSIONREQUEST']._serialized_end=700
   _globals['_REVOKESESSIONREPLY']._serialized_start=702
   _globals['_REVOKESESSIONREPLY']._serialized_end=787
-  _globals['_AUTHSERVICE']._serialized_start=1107
-  _globals['_AUTHSERVICE']._serialized_end=1417
+  _globals['_LOOKUPOPERATORREQUEST']._serialized_start=789
+  _globals['_LOOKUPOPERATORREQUEST']._serialized_end=870
+  _globals['_LOOKUPOPERATORREPLY']._serialized_start=872
+  _globals['_LOOKUPOPERATORREPLY']._serialized_end=974
+  _globals['_BINDTELEGRAMREQUEST']._serialized_start=976
+  _globals['_BINDTELEGRAMREQUEST']._serialized_end=1043
+  _globals['_BINDTELEGRAMREPLY']._serialized_start=1045
+  _globals['_BINDTELEGRAMREPLY']._serialized_end=1137
+  _globals['_AUTHSERVICE']._serialized_start=1631
+  _globals['_AUTHSERVICE']._serialized_end=2135
 # @@protoc_insertion_point(module_scope)

@@ -13,6 +13,7 @@ from app.shared.schemas.delivery import (
     DeliveryIntentCreate,
     DeliverySource,
     DeliveryStatus,
+    TelegramMessageRef,
 )
 
 
@@ -70,6 +71,25 @@ class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
         )
         return [self._to_model(doc) async for doc in cursor]
 
+    async def mark_snapshot_sent(self, intent_id: str, snapshot: TelegramMessageRef) -> None:
+        await self._col.update_one(
+            {"_id": self._oid(intent_id)},
+            {"$set": {"telegram_snapshot": snapshot.model_dump(), "updated_at": _utcnow()}},
+        )
+
+    async def claim_display(self, intent_id: str, shown_at: datetime) -> bool:
+        result = await self._col.update_one(
+            {
+                "_id": self._oid(intent_id),
+                "$or": [
+                    {"telegram_shown_at": None},
+                    {"telegram_shown_at": {"$lte": shown_at}},
+                ],
+            },
+            {"$set": {"telegram_shown_at": shown_at}},
+        )
+        return result.matched_count == 1
+
     async def list_by_source_refs(
         self,
         source: DeliverySource,
@@ -100,18 +120,20 @@ class DeliveryIntentRepository(BaseRepository[DeliveryIntent]):
         )
         return self._to_model(doc) if doc else None
 
-    async def mark_sent(self, intent_id: str) -> DeliveryIntent | None:
+    async def mark_sent(
+        self, intent_id: str, telegram: TelegramMessageRef | None = None
+    ) -> DeliveryIntent | None:
         now = _utcnow()
+        changes: dict[str, object] = {
+            "status": DeliveryStatus.SENT.value,
+            "attempt_started_at": None,
+            "updated_at": now,
+        }
+        if telegram is not None:
+            changes["telegram"] = telegram.model_dump()
         doc = await self._col.find_one_and_update(
             {"_id": self._oid(intent_id)},
-            {
-                "$set": {
-                    "status": DeliveryStatus.SENT.value,
-                    "attempt_started_at": None,
-                    "updated_at": now,
-                },
-                "$inc": {"attempts": 1},
-            },
+            {"$set": changes, "$inc": {"attempts": 1}},
             return_document=ReturnDocument.AFTER,
         )
         return self._to_model(doc) if doc else None

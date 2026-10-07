@@ -100,6 +100,24 @@ def alert_acknowledged(alert_id: str, actor_user_id: str) -> PreparedEvent:
     return _freeze(event, occurred_at)
 
 
+def alert_decided(
+    alert_id: str,
+    actor_user_id: str,
+    decision: str,
+    previous_decision: str,
+    channel: str,
+) -> PreparedEvent:
+    occurred_at = datetime.now(UTC)
+    event = _new_event(actor_user_id, common_pb2.SEVERITY_INFO, occurred_at)
+    decided = event.alert_decided
+    decided.alert_id = alert_id
+    decided.actor_user_id = actor_user_id
+    decided.decision = common_pb2.Decision.Value(decision)
+    decided.previous_decision = common_pb2.Decision.Value(previous_decision)
+    decided.channel = common_pb2.DecisionChannel.Value(channel)
+    return _freeze(event, occurred_at)
+
+
 def config_changed(
     actor_user_id: str,
     resource_id: str,
@@ -173,6 +191,23 @@ class AuditClient:
         prepared = alert_acknowledged(
             alert_id=alert_id,
             actor_user_id=actor_user_id,
+        )
+        await self._enqueue(prepared)
+
+    async def emit_alert_decided(
+        self,
+        alert_id: str,
+        actor_user_id: str,
+        decision: str,
+        previous_decision: str,
+        channel: str,
+    ) -> None:
+        prepared = alert_decided(
+            alert_id=alert_id,
+            actor_user_id=actor_user_id,
+            decision=decision,
+            previous_decision=previous_decision,
+            channel=channel,
         )
         await self._enqueue(prepared)
 

@@ -1,20 +1,21 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from bson import ObjectId
 
 from app.shared.recipient import UNCONFIGURED_RECIPIENT
-from app.shared.schemas.delivery import DeliveryStatus
-from app.shared.telegram_service import TelegramTransientError
+from app.shared.schemas.delivery import DeliveryStatus, TelegramMessageRef
+from app.shared.telegram_service import MessageKind, SentMessage, TelegramTransientError
 from app.worker import tasks
 
 pytestmark = pytest.mark.integration
 
 
 async def test_marks_sent_on_success(intent_repo, dlq_repo, make_create, monkeypatch) -> None:
-    dispatch = MagicMock(return_value=True)
+    sent = SentMessage(chat_id=-100, message_id=42, kind=MessageKind.VIDEO)
+    dispatch = AsyncMock(return_value=sent)
     monkeypatch.setattr(tasks, "_dispatch", dispatch)
     intent = await intent_repo.acquire(make_create())
 
@@ -25,11 +26,12 @@ async def test_marks_sent_on_success(intent_repo, dlq_repo, make_create, monkeyp
     assert refetched.status == DeliveryStatus.SENT
     assert refetched.attempts == 1
     assert await dlq_repo.find_by_intent_id(intent.id) is None
-    dispatch.assert_called_once()
+    assert refetched.telegram == TelegramMessageRef(chat_id=-100, message_id=42, kind="video")
+    dispatch.assert_awaited_once()
 
 
 async def test_dead_on_decline(intent_repo, dlq_repo, make_create, monkeypatch) -> None:
-    monkeypatch.setattr(tasks, "_dispatch", MagicMock(return_value=False))
+    monkeypatch.setattr(tasks, "_dispatch", AsyncMock(return_value=None))
     intent = await intent_repo.acquire(make_create())
 
     result = await tasks._deliver(intent.id, final_attempt=False)
@@ -46,7 +48,7 @@ async def test_retry_on_transport_error_non_final(
     monkeypatch.setattr(
         tasks,
         "_dispatch",
-        MagicMock(side_effect=TelegramTransientError("net")),
+        AsyncMock(side_effect=TelegramTransientError("net")),
     )
     intent = await intent_repo.acquire(make_create())
     with pytest.raises(TelegramTransientError):
@@ -63,7 +65,7 @@ async def test_dead_on_transport_error_final(
     monkeypatch.setattr(
         tasks,
         "_dispatch",
-        MagicMock(side_effect=TelegramTransientError("net")),
+        AsyncMock(side_effect=TelegramTransientError("net")),
     )
     intent = await intent_repo.acquire(make_create())
     result = await tasks._deliver(intent.id, final_attempt=True)
@@ -74,7 +76,7 @@ async def test_dead_on_transport_error_final(
 
 
 async def test_dead_on_render_failure(intent_repo, dlq_repo, make_create, monkeypatch) -> None:
-    dispatch = MagicMock(return_value=True)
+    dispatch = AsyncMock(return_value=True)
     monkeypatch.setattr(tasks, "_dispatch", dispatch)
     broken = {"session_id": 1, "occurred_at": "2026-06-18T00:00:00Z"}
     intent = await intent_repo.acquire(make_create(payload=broken))
@@ -91,7 +93,7 @@ async def test_dead_on_render_failure(intent_repo, dlq_repo, make_create, monkey
 async def test_dead_on_unconfigured_recipient(
     intent_repo, dlq_repo, make_create, monkeypatch
 ) -> None:
-    dispatch = MagicMock(return_value=True)
+    dispatch = AsyncMock(return_value=True)
     monkeypatch.setattr(tasks, "_dispatch", dispatch)
     intent = await intent_repo.acquire(make_create(recipient=UNCONFIGURED_RECIPIENT))
 
@@ -105,7 +107,7 @@ async def test_dead_on_unconfigured_recipient(
 
 
 async def test_skips_already_sent(intent_repo, make_create, monkeypatch) -> None:
-    dispatch = MagicMock(return_value=True)
+    dispatch = AsyncMock(return_value=True)
     monkeypatch.setattr(tasks, "_dispatch", dispatch)
     intent = await intent_repo.acquire(make_create())
     await intent_repo.mark_sent(intent.id)
@@ -117,13 +119,13 @@ async def test_skips_already_sent(intent_repo, make_create, monkeypatch) -> None
 
 
 async def test_drops_missing_intent(test_db, monkeypatch) -> None:
-    monkeypatch.setattr(tasks, "_dispatch", MagicMock(return_value=True))
+    monkeypatch.setattr(tasks, "_dispatch", AsyncMock(return_value=True))
     result = await tasks._deliver(str(ObjectId()), final_attempt=False)
     assert result["reason"] == "missing"
 
 
 async def test_not_claimed_on_dead(intent_repo, make_create, monkeypatch) -> None:
-    dispatch = MagicMock(return_value=True)
+    dispatch = AsyncMock(return_value=True)
     monkeypatch.setattr(tasks, "_dispatch", dispatch)
     intent = await intent_repo.acquire(make_create())
     await intent_repo.mark_dead(intent.id, "x")

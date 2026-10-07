@@ -8,6 +8,7 @@ from app.repositories.base import BaseRepository
 
 SORT_CREATED = "created_at"
 SORT_DECIDED = "decided_at"
+_UNDECIDED = "DECISION_UNSPECIFIED"
 
 
 class AlertRepository(BaseRepository[dict[str, Any]]):
@@ -126,25 +127,34 @@ class AlertRepository(BaseRepository[dict[str, Any]]):
         doc = await self.get(id_)
         return doc, False
 
+    async def get_by_alert_id(self, alert_id: str) -> dict[str, Any] | None:
+        return await self._col.find_one({"alert_id": alert_id})
+
     async def decide(
         self,
         id_: str,
         decision: str,
         actor_id: str,
-    ) -> tuple[dict[str, Any] | None, bool]:
+        *,
+        only_if_undecided: bool = False,
+    ) -> tuple[dict[str, Any] | None, str | None]:
         oid = self._oid(id_)
         changes: dict[str, Any] = {"decision": decision}
-        if decision == "DECISION_UNSPECIFIED":
+        if decision == _UNDECIDED:
             changes["decided_at"] = None
             changes["decided_by"] = None
         else:
             changes["decided_at"] = datetime.now(UTC)
             changes["decided_by"] = actor_id
-        updated = await self._col.find_one_and_update(
-            {"_id": oid, "decision": {"$ne": decision}},
+        if only_if_undecided:
+            match: dict[str, Any] = {"_id": oid, "decision": {"$in": [_UNDECIDED, None]}}
+        else:
+            match = {"_id": oid, "decision": {"$ne": decision}}
+        before = await self._col.find_one_and_update(
+            match,
             {"$set": changes},
-            return_document=True,
+            return_document=False,
         )
-        if updated is not None:
-            return updated, True
-        return await self.get(id_), False
+        if before is not None:
+            return {**before, **changes}, before.get("decision") or _UNDECIDED
+        return await self.get(id_), None

@@ -49,6 +49,11 @@ class AlertServiceStub(object):
                 request_serializer=alert__pb2.DeliveryStatusBatchRequest.SerializeToString,
                 response_deserializer=alert__pb2.DeliveryStatusBatchReply.FromString,
                 _registered_method=True)
+        self.NotifyDecision = channel.unary_unary(
+                '/theftdetection.v1.AlertService/NotifyDecision',
+                request_serializer=alert__pb2.DecisionNotice.SerializeToString,
+                response_deserializer=alert__pb2.DecisionNoticeReply.FromString,
+                _registered_method=True)
 
 
 class AlertServiceServicer(object):
@@ -72,6 +77,12 @@ class AlertServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def NotifyDecision(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AlertServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -89,6 +100,11 @@ def add_AlertServiceServicer_to_server(servicer, server):
                     servicer.GetDeliveryStatusBatch,
                     request_deserializer=alert__pb2.DeliveryStatusBatchRequest.FromString,
                     response_serializer=alert__pb2.DeliveryStatusBatchReply.SerializeToString,
+            ),
+            'NotifyDecision': grpc.unary_unary_rpc_method_handler(
+                    servicer.NotifyDecision,
+                    request_deserializer=alert__pb2.DecisionNotice.FromString,
+                    response_serializer=alert__pb2.DecisionNoticeReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -172,6 +188,33 @@ class AlertService(object):
             '/theftdetection.v1.AlertService/GetDeliveryStatusBatch',
             alert__pb2.DeliveryStatusBatchRequest.SerializeToString,
             alert__pb2.DeliveryStatusBatchReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def NotifyDecision(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/theftdetection.v1.AlertService/NotifyDecision',
+            alert__pb2.DecisionNotice.SerializeToString,
+            alert__pb2.DecisionNoticeReply.FromString,
             options,
             channel_credentials,
             insecure,

@@ -4,6 +4,7 @@ import asyncio
 import base64
 import binascii
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,7 @@ from app.schemas.alert import (
     AlertSort,
     AlertType,
     Decision,
+    DecisionChannel,
     Severity,
 )
 from app.schemas.delivery import DeliveryState, DeliveryStatusView, DeliverySummary
@@ -194,6 +196,12 @@ def _to_detail(doc: dict[str, Any]) -> AlertDetail:
             "dispatch_failed": bool(doc.get("dispatch_failed", False)),
         }
     )
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionResult:
+    detail: AlertDetail
+    changed: bool
 
 
 class AlertUseCase:
@@ -439,19 +447,39 @@ class AlertUseCase:
             )
         return response
 
-    async def decide(self, alert_id: str, decision: Decision, actor_id: str) -> AlertDetail:
-        updated, changed = await self._repo.decide(alert_id, decision.value, actor_id)
+    async def decide(
+        self,
+        alert_id: str,
+        decision: Decision,
+        actor_id: str,
+        actor_name: str,
+        *,
+        channel: DecisionChannel = DecisionChannel.CONSOLE,
+        only_if_undecided: bool = False,
+    ) -> DecisionResult:
+        updated, previous = await self._repo.decide(
+            alert_id, decision.value, actor_id, only_if_undecided=only_if_undecided
+        )
         if updated is None:
             raise NotFoundError(f"alert {alert_id} not found")
-        if changed:
+        if previous is not None:
             await invalidate_prefix(self._redis, self.LIST_PREFIX)
             await invalidate_prefix(self._redis, self.COUNT_PREFIX)
             await self._publish("decided", _to_response(updated))
-            await self._audit.emit_alert_acknowledged(
+            await self._audit.emit_alert_decided(
                 alert_id=str(updated["_id"]),
                 actor_user_id=actor_id,
+                decision=decision.value,
+                previous_decision=previous,
+                channel=channel.value,
             )
-        return _to_detail(updated)
+            await self._alert_client.notify_decision(
+                alert_id=updated["alert_id"],
+                decision=decision.value,
+                decided_by="" if decision == Decision.DECISION_UNSPECIFIED else actor_name,
+                decided_at=updated.get("decided_at") or datetime.now(UTC),
+            )
+        return DecisionResult(detail=_to_detail(updated), changed=previous is not None)
 
     async def delete(self, alert_id: str, actor_id: str) -> None:
         doc = await self._repo.get(alert_id)

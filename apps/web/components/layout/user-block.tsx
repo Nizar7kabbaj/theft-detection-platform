@@ -1,8 +1,9 @@
 "use client"
 import { Menu } from "@base-ui/react/menu"
-import { ChevronsUpDown, LogOut } from "lucide-react"
+import { ChevronsUpDown, LogOut, Send } from "lucide-react"
 import { useCallback, useRef, useState } from "react"
 import { ThemeMenuItems } from "@/components/layout/theme-menu-items"
+import { TelegramDialog } from "@/features/auth/components/telegram-dialog"
 import { CSRF_HEADER_NAME, readCsrfToken } from "@/lib/api/csrf"
 import { cn } from "@/lib/utils"
 
@@ -37,6 +38,7 @@ function initials(username: string): string {
 export function UserBlock({ username, roles }: { username: string; roles: readonly string[] }) {
   const [pending, setPending] = useState(false)
   const inFlight = useRef(false)
+  const [telegramOpen, setTelegramOpen] = useState(false)
   const role = roles.length === 0 ? "no role" : roles.join(", ")
   const onLogout = useCallback(async () => {
     if (inFlight.current) {
@@ -87,6 +89,10 @@ export function UserBlock({ username, roles }: { username: string; roles: readon
               </div>
               <Menu.Separator className="-mx-1 my-1 h-px bg-border" />
               <ThemeMenuItems />
+              <Menu.Item onClick={() => setTelegramOpen(true)} className={SIGN_OUT_CLASS}>
+                <Send className="size-4" />
+                telegram
+              </Menu.Item>
               <Menu.Separator className="-mx-1 my-1 h-px bg-border" />
               <Menu.Item
                 onClick={onLogout}
@@ -101,6 +107,7 @@ export function UserBlock({ username, roles }: { username: string; roles: readon
           </Menu.Positioner>
         </Menu.Portal>
       </Menu.Root>
+      <TelegramDialog open={telegramOpen} onOpenChange={setTelegramOpen} />
     </div>
   )
 }
