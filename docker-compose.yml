@@ -994,6 +994,12 @@ services:
         bind:
           create_host_path: false
       - type: bind
+        source: ./config/telegram/callback_key
+        target: /run/secrets/telegram_callback_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
         source: ./config/redis/broker_redis_password
         target: /run/secrets/broker_redis_password
         read_only: true
@@ -1024,6 +1030,88 @@ services:
         bind:
           create_host_path: false
       - ai_snapshots:/app/snapshots:ro
+    depends_on:
+      redis-broker:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    restart: "no"
+
+  notification-telegram:
+    build:
+      context: ./services/notification
+      target: worker
+    image: notification-worker:dev
+    container_name: notification-telegram
+    networks:
+      data:
+      observability:
+        ipv4_address: 172.21.0.21
+    user: "1000:1000"
+    command: ["python", "-m", "app.telegram.main"]
+    stop_grace_period: 10s
+    env_file:
+      - ./services/notification/.env
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: "notification-telegram"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=theft,deployment.environment=local,service.version=0.1.0,service.name=notification-telegram"
+      PROMETHEUS_EXPORTER_PORT: "9466"
+    volumes:
+      - type: bind
+        source: ./config/mongodb/tls/ca.crt
+        target: /run/secrets/mongo_ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/mongodb/secrets/mongo_notification_password
+        target: /run/secrets/mongo_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/telegram/bot_token
+        target: /run/secrets/telegram_bot_token
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/telegram/callback_key
+        target: /run/secrets/telegram_callback_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/broker_redis_password
+        target: /run/secrets/broker_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/redis/notify_redis_password
+        target: /run/secrets/notify_redis_password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/notification/tls.crt
+        target: /run/secrets/notification_tls_cert
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/notification/tls.key
+        target: /run/secrets/notification_tls_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/pki/ca/ca.crt
+        target: /run/secrets/notification_tls_ca
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       redis-broker:
         condition: service_healthy

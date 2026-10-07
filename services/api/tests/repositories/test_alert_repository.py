@@ -233,3 +233,56 @@ class TestAcknowledge:
         doc, flipped = await repo.acknowledge(VALID_OID)
         assert doc is not None
         assert flipped is False
+
+
+class TestDecide:
+    async def test_console_decision_matches_any_other_value(self, repo, mock_collection):
+        mock_collection.find_one_and_update.return_value = {
+            "_id": ObjectId(VALID_OID),
+            "alert_id": "cam-a-1-28409-3",
+            "decision": "DECISION_UNSURE",
+        }
+        doc, previous = await repo.decide(VALID_OID, "DECISION_CONFIRMED", "user-1")
+        match, update = mock_collection.find_one_and_update.call_args.args
+        assert match["decision"] == {"$ne": "DECISION_CONFIRMED"}
+        assert mock_collection.find_one_and_update.call_args.kwargs["return_document"] is False
+        assert update["$set"]["decided_by"] == "user-1"
+        assert previous == "DECISION_UNSURE"
+        assert doc["decision"] == "DECISION_CONFIRMED"
+        assert doc["decided_by"] == "user-1"
+
+    async def test_telegram_decision_only_matches_an_undecided_alert(self, repo, mock_collection):
+        mock_collection.find_one_and_update.return_value = {"_id": ObjectId(VALID_OID)}
+        _, previous = await repo.decide(
+            VALID_OID, "DECISION_DISMISSED", "user-1", only_if_undecided=True
+        )
+        match = mock_collection.find_one_and_update.call_args.args[0]
+        assert match["decision"] == {"$in": ["DECISION_UNSPECIFIED", None]}
+        assert previous == "DECISION_UNSPECIFIED"
+
+    async def test_no_change_returns_the_current_document_and_no_previous(
+        self, repo, mock_collection, mocker
+    ):
+        mock_collection.find_one_and_update.return_value = None
+        current = {"_id": ObjectId(VALID_OID), "decision": "DECISION_CONFIRMED"}
+        mocker.patch.object(repo, "get", new=mocker.AsyncMock(return_value=current))
+        doc, previous = await repo.decide(
+            VALID_OID, "DECISION_DISMISSED", "user-1", only_if_undecided=True
+        )
+        assert doc is current
+        assert previous is None
+
+    async def test_clearing_wipes_who_and_when(self, repo, mock_collection):
+        mock_collection.find_one_and_update.return_value = {
+            "_id": ObjectId(VALID_OID),
+            "decision": "DECISION_CONFIRMED",
+        }
+        await repo.decide(VALID_OID, "DECISION_UNSPECIFIED", "user-1")
+        changes = mock_collection.find_one_and_update.call_args.args[1]["$set"]
+        assert changes["decided_at"] is None
+        assert changes["decided_by"] is None
+
+    async def test_lookup_by_detector_alert_id(self, repo, mock_collection):
+        mock_collection.find_one.return_value = {"alert_id": "cam-a-1-28409-3"}
+        await repo.get_by_alert_id("cam-a-1-28409-3")
+        mock_collection.find_one.assert_awaited_once_with({"alert_id": "cam-a-1-28409-3"})

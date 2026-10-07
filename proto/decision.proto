@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package theftdetection.v1;
+
+import "google/protobuf/timestamp.proto";
+import "common.proto";
+
+enum DecideOutcome {
+  DECIDE_OUTCOME_UNSPECIFIED = 0;
+  DECIDE_OUTCOME_DECIDED = 1;
+  DECIDE_OUTCOME_ALREADY_DECIDED = 2;
+  DECIDE_OUTCOME_ALERT_NOT_FOUND = 3;
+  DECIDE_OUTCOME_OPERATOR_UNKNOWN = 4;
+  DECIDE_OUTCOME_OPERATOR_FORBIDDEN = 5;
+}
+
+message DecideAlertRequest {
+  string alert_id = 1;
+  Decision decision = 2;
+  int64 telegram_user_id = 3;
+}
+
+message DecideAlertReply {
+  DecideOutcome outcome = 1;
+  Decision decision = 2;
+  string decided_by = 3;
+  google.protobuf.Timestamp decided_at = 4;
+}
+
+service AlertDecisionService {
+  rpc DecideAlert(DecideAlertRequest) returns (DecideAlertReply);
+}

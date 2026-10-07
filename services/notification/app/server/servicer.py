@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 import grpc
 from google.protobuf.json_format import MessageToDict
@@ -161,6 +161,37 @@ class AlertServicer(alert_pb2_grpc.AlertServiceServicer):
                 status=alert_pb2.STATUS_ACCEPTED,
                 delivered_at=now,
             )
+
+    async def NotifyDecision(
+        self,
+        request: alert_pb2.DecisionNotice,
+        context: grpc.aio.ServicerContext,
+    ) -> alert_pb2.DecisionNoticeReply:
+        await _require_trusted_caller(context, "notify decision")
+        alert_id = request.alert_id.strip()
+        if not alert_id:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "alert_id required")
+        try:
+            decision = common_pb2.Decision.Name(request.decision)
+        except ValueError:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "unknown decision")
+        decided_at = (
+            request.decided_at.ToDatetime(tzinfo=UTC)
+            if request.HasField("decided_at")
+            else datetime.now(UTC)
+        )
+        with tracer.start_as_current_span("notify_decision") as span:
+            span.set_attribute("alert.id", alert_id)
+            try:
+                await asyncio.to_thread(
+                    celery_app.send_task,
+                    "app.worker.tasks.apply_decision_task",
+                    args=[alert_id, decision, request.decided_by[:64], decided_at.isoformat()],
+                )
+            except Exception as exc:
+                logger.warning("decision display enqueue failed for alert %s: %s", alert_id, exc)
+                return alert_pb2.DecisionNoticeReply(messages_queued=0)
+        return alert_pb2.DecisionNoticeReply(messages_queued=1)
 
     async def GetDeliveryStatus(
         self,

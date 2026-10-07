@@ -56,8 +56,42 @@ message RevokeSessionReply {
   google.protobuf.Timestamp revoked_at = 2;
 }
 
+message LookupOperatorRequest {
+  oneof subject {
+    int64 telegram_user_id = 1;
+    string user_id = 2;
+  }
+}
+
+message LookupOperatorReply {
+  bool found = 1;
+  string user_id = 2;
+  string username = 3;
+  repeated string roles = 4;
+  bool active = 5;
+}
+
+enum BindTelegramStatus {
+  BIND_TELEGRAM_STATUS_UNSPECIFIED = 0;
+  BIND_TELEGRAM_STATUS_BOUND = 1;
+  BIND_TELEGRAM_STATUS_TOKEN_INVALID = 2;
+  BIND_TELEGRAM_STATUS_ACCOUNT_IN_USE = 3;
+}
+
+message BindTelegramRequest {
+  string link_token = 1;
+  int64 telegram_user_id = 2;
+}
+
+message BindTelegramReply {
+  BindTelegramStatus status = 1;
+  string username = 2;
+}
+
 service AuthService {
   rpc VerifyToken(VerifyTokenRequest) returns (VerifyTokenReply);
   rpc IntrospectSession(IntrospectSessionRequest) returns (IntrospectSessionReply);
   rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionReply);
+  rpc LookupOperator(LookupOperatorRequest) returns (LookupOperatorReply);
+  rpc BindTelegram(BindTelegramRequest) returns (BindTelegramReply);
 }

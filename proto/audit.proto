@@ -131,6 +131,7 @@ enum AuthorizationChannel {
   AUTHORIZATION_CHANNEL_UNSPECIFIED = 0;
   AUTHORIZATION_CHANNEL_HTTP = 1;
   AUTHORIZATION_CHANNEL_WEBSOCKET = 2;
+  AUTHORIZATION_CHANNEL_TELEGRAM = 3;
 }
 message ClientContext {
   string source_ip = 1;
@@ -189,6 +190,13 @@ message AlertDispatched {
 message AlertAcknowledged {
   string alert_id = 1;
   string actor_user_id = 2;
+}
+message AlertDecided {
+  string alert_id = 1;
+  string actor_user_id = 2;
+  Decision decision = 3;
+  Decision previous_decision = 4;
+  DecisionChannel channel = 5;
 }
 message ConfigChanged {
   string actor_user_id = 1;
@@ -275,6 +283,7 @@ message AuditEvent {
     AuthorizationDenied authorization_denied = 33;
     TokenRefreshed token_refreshed = 34;
     RefreshTokenReuseDetected refresh_token_reuse_detected = 35;
+    AlertDecided alert_decided = 36;
   }
 }
 enum AppendStatus {

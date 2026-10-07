@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC
+from datetime import UTC, datetime
 
 import grpc
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -145,6 +145,33 @@ class AlertClient:
                     status_name,
                 )
                 raise AlertRejectedError(f"alert refused: {status_name}")
+
+    async def notify_decision(
+        self,
+        alert_id: str,
+        decision: str,
+        decided_by: str,
+        decided_at: datetime | None,
+    ) -> None:
+        notice = pb.DecisionNotice(
+            alert_id=alert_id,
+            decision=common_pb2.Decision.Value(decision),
+            decided_by=decided_by,
+        )
+        if decided_at is not None:
+            notice.decided_at.FromDatetime(decided_at)
+        with tracer.start_as_current_span("alert.notify_decision") as span:
+            span.set_attribute("alert.id", alert_id)
+            try:
+                response = await self._stub.NotifyDecision(notice, timeout=1.0)
+            except grpc.aio.AioRpcError as exc:
+                logger.warning(
+                    "decision notice not delivered for %s code=%s",
+                    alert_id,
+                    exc.code().name,
+                )
+                return
+            span.set_attribute("notice.queued", response.messages_queued)
 
     async def delivery_status(self, alert_id: str) -> DeliveryStatusView | None:
         with tracer.start_as_current_span("alert.delivery_status") as span:

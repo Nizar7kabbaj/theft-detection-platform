@@ -91,7 +91,9 @@ defaults:
 
 identities:
   api:
-    server: false
+    server: true
+    dnsNames:
+      - backend
   auth:
     server: true
   audit:
@@ -317,6 +319,7 @@ metrics:
     notification: notification-service
     notification-worker: notification-worker
     notification-beat: notification-beat
+    notification-telegram: notification-telegram
     ai: ai
     camera: camera
     detect-gate: detect-gate
@@ -367,12 +370,17 @@ components:
         containerPort: 9464
       - name: health
         containerPort: 8081
+      - name: grpc
+        containerPort: 50055
     service:
       enabled: true
       ports:
         - name: http
           port: 8000
           targetPort: http
+        - name: grpc
+          port: 50055
+          targetPort: grpc
     env:
       PROMETHEUS_EXPORTER_PORT: "9464"
       STORE_TIME_ZONE: "{{ .Values.global.storeTimeZone }}"
@@ -536,6 +544,10 @@ components:
       AUTH_REDIS_HOST: redis
       AUTH_AUDIT_TARGET: audit:50054
       AUTH_TRUSTED_PROXIES: '["127.0.0.0/8","::1/128"]'
+    secretEnv:
+      - name: AUTH_TELEGRAM_BOT_USERNAME
+        secret: auth-env
+        key: telegram_bot_username
     secret:
       enabled: true
       name: auth-secrets
@@ -789,6 +801,98 @@ components:
         memory: 256Mi
       limits:
         memory: 256Mi
+    extraVolumes: []
+    extraVolumeMounts: []
+    gpu:
+      enabled: false
+
+  notification-telegram:
+    enabled: true
+    replicas: 1
+    strategy:
+      type: Recreate
+    egress:
+      - to: collector
+        ports: [4318]
+      - to: mongo
+        ports: [27017]
+      - to: redis-broker
+        ports: [6380]
+      - to: telegram
+        ports: [443]
+      - to: backend
+        ports: [50055]
+      - to: auth
+        ports: [50053]
+    image:
+      repository: theft-notification-worker
+      tag: dev
+      digest: ""
+    otel:
+      enabled: true
+      serviceName: notification-telegram
+    command:
+      - python
+      - -m
+      - app.telegram.main
+    writablePaths:
+      - /tmp
+      - /app/run
+    lifecycle: {}
+    readinessProbe: {}
+    startupProbe:
+      exec:
+        command:
+          - sh
+          - -c
+          - test $(( $(date +%s) - $(stat -c %Y /app/run/heartbeat) )) -lt 180
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 60
+    livenessProbe:
+      exec:
+        command:
+          - sh
+          - -c
+          - test $(( $(date +%s) - $(stat -c %Y /app/run/heartbeat) )) -lt 180
+      periodSeconds: 30
+      timeoutSeconds: 3
+      failureThreshold: 2
+    ports:
+      - name: metrics
+        containerPort: 9466
+    service:
+      enabled: false
+    env:
+      PROMETHEUS_EXPORTER_PORT: "9466"
+      DATABASE_NAME: theft_detection_db
+      MONGODB_HOST: mongo:27017
+      REDIS_HOST: redis-broker
+      DECISION_TARGET: backend:50055
+      AUTH_TARGET: auth:50053
+    secretEnv:
+      - name: TELEGRAM_CHAT_ID
+        secret: notification-env
+        key: telegram_chat_id
+    secret:
+      enabled: true
+      name: notification-telegram-secrets
+      mountPath: /run/secrets
+    tls:
+      identity: notification
+      filePrefix: notification
+      caAliases:
+        - mongo_ca.crt
+    snapshots:
+      mount: false
+      readOnly: true
+      path: /app/snapshots
+    resources:
+      requests:
+        cpu: 50m
+        memory: 192Mi
+      limits:
+        memory: 192Mi
     extraVolumes: []
     extraVolumeMounts: []
     gpu:

@@ -10,7 +10,7 @@ UNIT=theft-container-egress.service
 UNIT_PATH=/etc/systemd/system/${UNIT}
 LIMITED_SUBNETS=(172.31.240.0/24 172.21.0.0/24)
 PRIVATE_RANGES=(10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.0/8 169.254.0.0/16)
-TELEGRAM_SOURCE=172.21.0.20/32
+TELEGRAM_SOURCES=(172.21.0.20/32 172.21.0.21/32)
 TELEGRAM_RANGES=(
     91.108.56.0/22 91.108.4.0/22 91.108.8.0/22 91.108.16.0/22 91.108.12.0/22
     149.154.160.0/20 91.105.192.0/23 91.108.20.0/22 185.76.151.0/24
@@ -19,7 +19,7 @@ TELEGRAM_RANGES=(
 function usage() {
     cat <<EOM
 limit internet egress from the edge and observability container networks.
-private ranges stay reachable, the notification worker may resolve names and reach telegram on 443, everything else is rejected.
+private ranges stay reachable, the notification worker and the telegram poller may resolve names and reach telegram on 443, everything else is rejected.
 
 usage: sudo ${SCRIPT_NAME} <apply|remove|status|install>
 
@@ -42,15 +42,17 @@ function check_deps() {
 }
 
 function rules() {
-    local range subnet
+    local range subnet source
     echo "*filter"
     echo ":${CHAIN} - [0:0]"
     echo "-A ${CHAIN} -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN"
-    for range in "${TELEGRAM_RANGES[@]}"; do
-        echo "-A ${CHAIN} -s ${TELEGRAM_SOURCE} -d ${range} -p tcp --dport 443 -j RETURN"
+    for source in "${TELEGRAM_SOURCES[@]}"; do
+        for range in "${TELEGRAM_RANGES[@]}"; do
+            echo "-A ${CHAIN} -s ${source} -d ${range} -p tcp --dport 443 -j RETURN"
+        done
+        echo "-A ${CHAIN} -s ${source} -p udp --dport 53 -j RETURN"
+        echo "-A ${CHAIN} -s ${source} -p tcp --dport 53 -j RETURN"
     done
-    echo "-A ${CHAIN} -s ${TELEGRAM_SOURCE} -p udp --dport 53 -j RETURN"
-    echo "-A ${CHAIN} -s ${TELEGRAM_SOURCE} -p tcp --dport 53 -j RETURN"
     for subnet in "${LIMITED_SUBNETS[@]}"; do
         echo "-A ${CHAIN} -s ${subnet} -p udp --dport 53 -j REJECT --reject-with icmp-port-unreachable"
         echo "-A ${CHAIN} -s ${subnet} -p tcp --dport 53 -j REJECT --reject-with tcp-reset"

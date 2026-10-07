@@ -93,6 +93,7 @@ write_values() {
       printf '  %s:\n    image:\n      repository: %s\n      tag: "%s"\n      digest: %s\n' "$name" "$repo" "$tag" "$digest"
       if [[ "$name" == "notification-worker" ]]; then
         printf '  notification-beat:\n    image:\n      repository: %s\n      tag: "%s"\n      digest: %s\n' "$repo" "$tag" "$digest"
+        printf '  notification-telegram:\n    image:\n      repository: %s\n      tag: "%s"\n      digest: %s\n' "$repo" "$tag" "$digest"
       fi
     done
     if [[ -f "${DIGEST_DIR}/ai-models" ]]; then

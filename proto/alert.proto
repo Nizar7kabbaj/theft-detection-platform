@@ -93,8 +93,20 @@ message DeliveryStatusBatchReply {
   repeated DeliveryStatusEntry entries = 1;
 }
 
+message DecisionNotice {
+  string alert_id = 1;
+  Decision decision = 2;
+  string decided_by = 3;
+  google.protobuf.Timestamp decided_at = 4;
+}
+
+message DecisionNoticeReply {
+  uint32 messages_queued = 1;
+}
+
 service AlertService {
   rpc SendAlert(Alert) returns (SendAlertReply);
   rpc GetDeliveryStatus(DeliveryStatusRequest) returns (DeliveryStatusReply);
   rpc GetDeliveryStatusBatch(DeliveryStatusBatchRequest) returns (DeliveryStatusBatchReply);
+  rpc NotifyDecision(DecisionNotice) returns (DecisionNoticeReply);
 }

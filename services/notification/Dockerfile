@@ -58,6 +58,9 @@ COPY --chmod=u=rwX,go=rX app/shared /app/app/shared
 COPY --chmod=u=rwX,go=rX app/repositories /app/app/repositories
 COPY --chmod=u=rwX,go=rX app/core /app/app/core
 COPY --chmod=u=rwX,go=rX app/worker /app/app/worker
+COPY --chmod=u=rwX,go=rX app/telegram /app/app/telegram
+COPY --chmod=u=rwX,go=rX app/server/__init__.py /app/app/server/__init__.py
+COPY --chmod=u=rwX,go=rX app/server/grpc_gen /app/app/server/grpc_gen
 RUN mkdir -p /app/run && chown app:app /app/run
 USER app
 EXPOSE 9465

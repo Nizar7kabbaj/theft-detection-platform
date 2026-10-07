@@ -6,7 +6,7 @@ import pytest
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.shared.config import settings
-from app.shared.schemas.delivery import DeliveryStatus
+from app.shared.schemas.delivery import DeliveryStatus, TelegramMessageRef
 
 pytestmark = pytest.mark.integration
 
@@ -122,3 +122,32 @@ async def test_find_stale_ignores_fresh_sending(intent_repo, make_create, age_do
     await age_doc(COLL, intent.id, _now(), status=DeliveryStatus.SENDING.value)
     cutoff = _now() - timedelta(minutes=1)
     assert await intent_repo.find_stale(DeliveryStatus.SENDING, cutoff) == []
+
+
+async def test_mark_sent_stores_the_telegram_handle(intent_repo, make_create) -> None:
+    intent = await intent_repo.acquire(make_create())
+    handle = TelegramMessageRef(chat_id=-100, message_id=42, kind="video")
+    sent = await intent_repo.mark_sent(intent.id, handle)
+    assert sent is not None
+    assert sent.telegram == handle
+    stored = await intent_repo.get_by_id(intent.id)
+    assert stored is not None
+    assert stored.telegram == handle
+
+
+async def test_mark_snapshot_sent_keeps_the_snapshot_handle(intent_repo, make_create) -> None:
+    intent = await intent_repo.acquire(make_create())
+    snapshot = TelegramMessageRef(chat_id=-100, message_id=41, kind="photo")
+    await intent_repo.mark_snapshot_sent(intent.id, snapshot)
+    stored = await intent_repo.get_by_id(intent.id)
+    assert stored is not None
+    assert stored.telegram_snapshot == snapshot
+
+
+async def test_claim_display_refuses_an_older_notice(intent_repo, make_create) -> None:
+    intent = await intent_repo.acquire(make_create())
+    newer = datetime(2026, 10, 7, 11, 51, 43, tzinfo=UTC)
+    older = newer - timedelta(seconds=3)
+    assert await intent_repo.claim_display(intent.id, newer) is True
+    assert await intent_repo.claim_display(intent.id, older) is False
+    assert await intent_repo.claim_display(intent.id, newer) is True

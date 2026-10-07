@@ -29,6 +29,11 @@ class Decision(str, Enum):
     DECISION_UNSURE = "DECISION_UNSURE"
 
 
+class DecisionChannel(str, Enum):
+    CONSOLE = "DECISION_CHANNEL_CONSOLE"
+    TELEGRAM = "DECISION_CHANNEL_TELEGRAM"
+
+
 class AlertSort(str, Enum):
     CREATED_AT = "created_at"
     DECIDED_AT = "decided_at"

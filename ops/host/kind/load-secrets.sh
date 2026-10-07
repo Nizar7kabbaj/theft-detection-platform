@@ -156,7 +156,15 @@ main() {
     mongo_password=mongodb/secrets/mongo_notification_password \
     broker_redis_password=redis/broker_redis_password \
     notify_redis_password=redis/notify_redis_password \
-    telegram_bot_token=telegram/bot_token
+    telegram_bot_token=telegram/bot_token \
+    telegram_callback_key=telegram/callback_key
+
+  apply_secret notification-telegram-secrets \
+    mongo_password=mongodb/secrets/mongo_notification_password \
+    broker_redis_password=redis/broker_redis_password \
+    notify_redis_password=redis/notify_redis_password \
+    telegram_bot_token=telegram/bot_token \
+    telegram_callback_key=telegram/callback_key
 
   apply_secret notification-beat-secrets \
     mongo_password=mongodb/secrets/mongo_notification_password \
@@ -197,6 +205,7 @@ main() {
   apply_configmap mongo-init 001-create-service-users.sh=mongodb/init/001-create-service-users.sh
   apply_seed_secret auth-seed-secrets auth/seed detector-ai=auth/detector_password
   apply_env_secret notification-env telegram_chat_id services/notification/.env TELEGRAM_CHAT_ID
+  apply_env_secret auth-env telegram_bot_username services/auth/.env AUTH_TELEGRAM_BOT_USERNAME
   log "secrets applied to ${NAMESPACE}"
 }
 

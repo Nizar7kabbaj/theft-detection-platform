@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -38,6 +38,14 @@ class MongoModel(BaseModel):
         return str(v) if v is not None else v
 
 
+class TelegramMessageRef(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    chat_id: int
+    message_id: int
+    kind: Literal["video", "photo", "text"]
+
+
 class DeliveryIntentCreate(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -69,6 +77,9 @@ class DeliveryIntent(MongoModel):
     requeue_count: int = 0
     attempt_started_at: datetime | None = None
     last_error: str | None = None
+    telegram: TelegramMessageRef | None = None
+    telegram_snapshot: TelegramMessageRef | None = None
+    telegram_shown_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

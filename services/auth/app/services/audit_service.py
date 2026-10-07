@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 _SCHEMA_VERSION = 1
 _SUBJECT_DOMAIN = "auth-login-subject"
+_TELEGRAM_DOMAIN = "auth-telegram-account"
 
 _ROLE_BY_NAME = {
     "admin": common_pb2.ROLE_ADMIN,
@@ -207,6 +208,30 @@ def _admin_action(
     payload.target_kind = target_kind
     payload.target_id = target_id
     payload.reason_code = reason_code
+    return _freeze(event, occurred_at)
+
+
+def _telegram_digest(telegram_user_id: int | None) -> bytes:
+    if telegram_user_id is None:
+        return b""
+    try:
+        return pseudonymize(_TELEGRAM_DOMAIN, str(telegram_user_id))
+    except PseudonymKeyError:
+        logger.error("pseudonym key unavailable, telegram link change recorded without digest")
+        return b""
+
+
+def telegram_link_changed(
+    actor_user_id: str, before: int | None, after: int | None
+) -> PreparedEvent:
+    event, occurred_at = _new_event(actor_user_id, common_pb2.SEVERITY_NOTICE)
+    changed = event.config_changed
+    changed.actor_user_id = actor_user_id
+    changed.resource_kind = pb.CONFIG_RESOURCE_KIND_NOTIFICATION_ROUTE
+    changed.resource_id = actor_user_id
+    changed.field_path = "telegram_user_id"
+    changed.before_value_hash = _telegram_digest(before)
+    changed.after_value_hash = _telegram_digest(after)
     return _freeze(event, occurred_at)
 
 

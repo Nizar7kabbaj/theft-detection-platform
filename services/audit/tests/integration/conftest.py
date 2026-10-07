@@ -78,6 +78,7 @@ def database_environment(postgres_container: PostgresContainer) -> Iterator[dict
         "AUDIT_POSTGRES_HOST": host,
         "AUDIT_POSTGRES_PORT": str(port),
         "AUDIT_POSTGRES_DB": "auditdb",
+        "AUDIT_POSTGRES_SSL_MODE": "disable",
     }
     previous = {name: os.environ.get(name) for name in pinned}
     for name, value in pinned.items():

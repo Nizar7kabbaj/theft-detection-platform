@@ -5,6 +5,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import httpx
 from opentelemetry import trace
 from opentelemetry.trace import Link
 from pydantic import ValidationError
@@ -19,39 +20,110 @@ from app.repositories.delivery_intent import DeliveryIntentRepository
 from app.shared import gate
 from app.shared.celery_app import celery_app
 from app.shared.config import settings
+from app.shared.decision_token import decision_keyboard
+from app.shared.metrics import telegram_messages_total
 from app.shared.observability import extract_context
 from app.shared.recipient import UNCONFIGURED_RECIPIENT
 from app.shared.schemas.delivery import (
     DeadLetterCreate,
     DeliveryIntent,
+    DeliverySource,
     DeliveryStatus,
+    TelegramMessageRef,
 )
 from app.shared.telegram_service import (
+    MessageKind,
+    SentMessage,
     TelegramError,
     TelegramPermanentError,
     TelegramTransientError,
     TelegramUnreachableError,
     clip_missing,
+    edit_message,
+    open_client,
     prefer_annotated,
     probe,
-    send_media_group,
     send_message,
     send_photo,
+    send_video,
 )
-from app.worker.renderers import render
+from app.worker.renderers import DECISION_PROMPT, render, render_decision_outcome
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer("notification.worker")
 
 
-def _dispatch(text: str, photo_path: str | None, clip_path: str | None) -> bool:
-    if photo_path:
-        photo_path = prefer_annotated(photo_path)
-    if photo_path and clip_path and send_media_group(photo_path, clip_path, text):
+def _keyboard_for(intent: DeliveryIntent) -> dict[str, Any] | None:
+    if intent.source != DeliverySource.ALERT:
+        return None
+    try:
+        return decision_keyboard(intent.id)
+    except (OSError, RuntimeError, ValueError) as exc:
+        logger.error("intent %s decision buttons unavailable: %s", intent.id, exc)
+        telegram_messages_total.add(1, {"method": "keyboard", "result": "unavailable"})
+        return None
+
+
+def _compose(base: str, block: str) -> str:
+    return f"{base}\n\n{block}" if base else block
+
+
+async def _send_snapshot(
+    client: httpx.AsyncClient,
+    intent: DeliveryIntent,
+    intent_repo: DeliveryIntentRepository,
+    cover: str,
+    text: str,
+) -> bool:
+    if intent.telegram_snapshot is not None:
         return True
-    if photo_path and send_photo(photo_path, text):
-        return True
-    return send_message(text)
+    snapshot = await send_photo(client, cover, text)
+    if snapshot is None:
+        return False
+    await intent_repo.mark_snapshot_sent(
+        intent.id,
+        TelegramMessageRef(
+            chat_id=snapshot.chat_id, message_id=snapshot.message_id, kind=snapshot.kind.value
+        ),
+    )
+    return True
+
+
+async def _send_plain(
+    client: httpx.AsyncClient, text: str, cover: str | None, clip_path: str | None
+) -> SentMessage | None:
+    if clip_path:
+        sent = await send_video(client, clip_path, cover, text)
+        if sent is not None:
+            return sent
+    if cover:
+        sent = await send_photo(client, cover, text)
+        if sent is not None:
+            return sent
+    return await send_message(client, text)
+
+
+async def _dispatch(
+    intent: DeliveryIntent,
+    intent_repo: DeliveryIntentRepository,
+    text: str,
+    photo_path: str | None,
+    clip_path: str | None,
+) -> SentMessage | None:
+    keyboard = _keyboard_for(intent)
+    cover = prefer_annotated(photo_path) if photo_path else None
+    async with open_client() as client:
+        if keyboard is None:
+            return await _send_plain(client, text, cover, clip_path)
+        has_snapshot = cover is not None and await _send_snapshot(
+            client, intent, intent_repo, cover, text
+        )
+        prompt = DECISION_PROMPT if has_snapshot else _compose(text, DECISION_PROMPT)
+        if clip_path:
+            sent = await send_video(client, clip_path, cover, prompt, reply_markup=keyboard)
+            if sent is not None:
+                return sent
+        return await send_message(client, prompt, reply_markup=keyboard)
 
 
 async def _await_clip(clip_path: str) -> bool:
@@ -143,7 +215,7 @@ async def _deliver(intent_id: str, final_attempt: bool) -> dict[str, Any]:
             return {"intent_id": intent_id, "delivered": False, "reason": "render"}
         try:
             await _require_clip(intent_id, clip_path, final_attempt, intent_repo)
-            sent = await asyncio.to_thread(_dispatch, text, photo_path, clip_path)
+            sent = await _dispatch(intent, intent_repo, text, photo_path, clip_path)
         except TelegramUnreachableError as exc:
             error = str(exc)
             gate.gate_set(error)
@@ -190,7 +262,7 @@ async def _deliver(intent_id: str, final_attempt: bool) -> dict[str, Any]:
             await intent_repo.mark_failed(intent.id, error)
             logger.warning("intent %s failed, will retry: %s", intent_id, error)
             raise
-        if not sent:
+        if sent is None:
             await intent_repo.mark_dead(intent.id, "telegram declined")
             await dlq_repo.create(
                 DeadLetterCreate(
@@ -207,8 +279,13 @@ async def _deliver(intent_id: str, final_attempt: bool) -> dict[str, Any]:
             )
             logger.error("intent %s dead, telegram declined", intent_id)
             return {"intent_id": intent_id, "delivered": False, "reason": "declined"}
-        await intent_repo.mark_sent(intent.id)
-        logger.info("intent %s delivered", intent_id)
+        await intent_repo.mark_sent(
+            intent.id,
+            TelegramMessageRef(
+                chat_id=sent.chat_id, message_id=sent.message_id, kind=sent.kind.value
+            ),
+        )
+        logger.info("intent %s delivered message=%d", intent_id, sent.message_id)
         return {"intent_id": intent_id, "delivered": True}
     finally:
         await close_mongodb_connection()
@@ -338,11 +415,94 @@ async def _drain_buffer() -> dict[str, int]:
         await close_mongodb_connection()
 
 
+_UNDECIDED = "DECISION_UNSPECIFIED"
+
+
+async def _show_decision(
+    client: httpx.AsyncClient,
+    intent: DeliveryIntent,
+    intent_repo: DeliveryIntentRepository,
+    decision: str,
+    decided_by: str,
+    decided_at: datetime,
+) -> str:
+    ref = intent.telegram
+    if ref is None:
+        return "skipped"
+    if not await intent_repo.claim_display(intent.id, decided_at):
+        return "stale"
+    text, _, _ = render(intent.source, intent.payload)
+    base = "" if intent.telegram_snapshot is not None else text
+    if decision == _UNDECIDED:
+        markup = _keyboard_for(intent)
+        body = _compose(base, DECISION_PROMPT) if markup is not None else (base or text)
+    else:
+        markup = None
+        body = _compose(base, render_decision_outcome(decision, decided_by, decided_at))
+    try:
+        await edit_message(client, ref.chat_id, ref.message_id, MessageKind(ref.kind), body, markup)
+    except TelegramPermanentError as exc:
+        logger.warning("intent %s decision not shown: %s", intent.id, exc)
+        return "failed"
+    return "edited"
+
+
+async def _apply_decision(
+    alert_id: str, decision: str, decided_by: str, decided_at: datetime
+) -> dict[str, int]:
+    await connect_to_mongodb()
+    try:
+        intent_repo = DeliveryIntentRepository(get_collection(settings.DELIVERY_INTENT_COLLECTION))
+        intents = await intent_repo.list_by_source_ref(DeliverySource.ALERT, alert_id)
+        tally = {"edited": 0, "stale": 0, "failed": 0, "skipped": 0}
+        if not intents:
+            return tally
+        async with open_client() as client:
+            for intent in intents:
+                outcome = await _show_decision(
+                    client, intent, intent_repo, decision, decided_by, decided_at
+                )
+                tally[outcome] += 1
+        logger.info(
+            "decision shown alert=%s edited=%d stale=%d failed=%d",
+            alert_id,
+            tally["edited"],
+            tally["stale"],
+            tally["failed"],
+        )
+        return tally
+    finally:
+        await close_mongodb_connection()
+
+
+@celery_app.task(
+    name="app.worker.tasks.apply_decision_task",
+    max_retries=settings.CELERY_TASK_MAX_RETRIES,
+    default_retry_delay=settings.CELERY_TASK_RETRY_DELAY_SEC,
+    autoretry_for=(TelegramTransientError, TelegramUnreachableError),
+    retry_backoff=True,
+    retry_backoff_max=60,
+    retry_jitter=True,
+    acks_late=True,
+)
+def apply_decision_task(
+    alert_id: str, decision: str, decided_by: str, decided_at: str
+) -> dict[str, int]:
+    return asyncio.run(
+        _apply_decision(alert_id, decision, decided_by, datetime.fromisoformat(decided_at))
+    )
+
+
+async def _probe_telegram() -> bool:
+    async with open_client() as client:
+        return await probe(client)
+
+
 @celery_app.task(name="app.worker.tasks.probe_gate_task")
 def probe_gate_task() -> dict[str, int]:
     if not gate.gate_is_raised():
         return {"released": 0, "probed": 0}
-    if not probe():
+    if not asyncio.run(_probe_telegram()):
         gate.gate_refresh()
         logger.info("gate probe: telegram still unreachable, gate refreshed")
         return {"released": 0, "probed": 1}

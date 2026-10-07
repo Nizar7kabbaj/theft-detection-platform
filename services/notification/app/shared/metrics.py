@@ -14,6 +14,12 @@ telegram_messages_total = _meter.create_counter(
     unit="1",
 )
 
+telegram_callbacks_total = _meter.create_counter(
+    name="theft_alert_telegram_callbacks_total",
+    description="telegram button presses and link requests handled, by outcome",
+    unit="1",
+)
+
 webhook_duration_seconds = _meter.create_histogram(
     name="theft_alert_webhook_duration_seconds",
     description="end-to-end duration of alertmanager webhook handling",

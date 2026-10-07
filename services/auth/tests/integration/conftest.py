@@ -26,6 +26,7 @@ _REDIS_USER = "auth"
 _REDIS_PASSWORD = "harness-redis-password"
 _DEFAULT_REDIS_PASSWORD = "harness-default-password"
 _TABLES = (
+    "telegram_bindings",
     "audit_outbox_dead",
     "audit_outbox",
     "refresh_tokens",
@@ -80,6 +81,7 @@ def postgres_env(postgres_container: PostgresContainer) -> None:
     os.environ["AUTH_POSTGRES_DB"] = _DATABASE
     os.environ["AUTH_POSTGRES_APP_USER"] = _ROLE
     os.environ["AUTH_POSTGRES_OWNER_USER"] = _ROLE
+    os.environ["AUTH_POSTGRES_SSL_MODE"] = "disable"
 
     from app.core.config import get_settings
 
@@ -101,6 +103,7 @@ def redis_container() -> Iterator[RedisContainer]:
             f">{_REDIS_PASSWORD}",
             "~login:fail:*",
             "~revoked:*",
+            "~telegram:link:*",
             "&session:revoked",
             "+@read",
             "+@write",

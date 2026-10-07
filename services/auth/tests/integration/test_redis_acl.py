@@ -47,3 +47,10 @@ async def test_scripting_is_permitted(redis_client):
 async def test_dangerous_commands_are_refused(redis_client):
     with pytest.raises(NoPermissionError):
         await redis_client.execute_command("CONFIG", "GET", "maxmemory")
+
+
+async def test_granted_telegram_link_pattern_is_single_use(redis_client):
+    await redis_client.set("telegram:link:abc", "user-1")
+
+    assert await redis_client.getdel("telegram:link:abc") == "user-1"
+    assert await redis_client.get("telegram:link:abc") is None
