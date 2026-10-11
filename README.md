@@ -28,7 +28,7 @@ camera, its own light, its own shelves.**
 [![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Status — academic project, under active development.**
+**Status — academic project, completed.**
 Final-year engineering project (PFE) at **Digital Capital**, in partnership with **ISGA × Aivancity**, 2025–2026 cycle. Not for commercial use.
 
 </div>
@@ -39,6 +39,7 @@ Final-year engineering project (PFE) at **Digital Capital**, in partnership with
 
 - [Theft Detection Platform](#theft-detection-platform)
   - [Contents](#contents)
+  - [Demo](#demo)
   - [What this platform is](#what-this-platform-is)
   - [Why a per-store model](#why-a-per-store-model)
   - [Architecture](#architecture)
@@ -52,6 +53,26 @@ Final-year engineering project (PFE) at **Digital Capital**, in partnership with
   - [Documentation](#documentation)
   - [License](#license)
   - [Acknowledgments](#acknowledgments)
+
+---
+
+## Demo
+
+A walkthrough of the web console.
+
+https://github.com/user-attachments/assets/bf2da8c2-f506-44b4-99cd-2a07924baceb
+
+<p align="center">
+  <img src="docs/assets/camera-feed.gif" width="720" alt="live camera feed with pose keypoints and object boxes">
+</p>
+
+<p align="center"><em>Camera feed with skeletal tracking and object detection.</em></p>
+
+<p align="center">
+  <img src="docs/assets/telegram-alert.gif" width="300" alt="telegram alert on the operator's phone">
+</p>
+
+<p align="center"><em>The alert as it lands on the operator's phone.</em></p>
 
 ---
 
@@ -297,27 +318,37 @@ cd infra/terraform/environments/dev
 ```
 theft-detection-platform/
 ├── apps/
-│   └── web/           Next.js 15 console (App Router, TypeScript)
+│   └── web/              Next.js 15 console (App Router, TypeScript)
 ├── services/
-│   ├── ai/            inference: pose, tracking, rules, incident state
-│   ├── api/           FastAPI backend: alerts, auth, WebSocket fan-out
-│   ├── camera/        V4L2 capture, MJPG publisher, USB recovery
-│   ├── detect-gate/   presence gate reading the frame stream
-│   └── notification/  Celery delivery pipeline: Telegram, retries, DLQ
-├── proto/             protobuf contracts for every service boundary
-├── ml/                models, training notebooks, evaluation, inference scripts
-├── config/            per-service config: mongo, redis, telegram, observability
+│   ├── ai/               inference: pose, tracking, rules, incident state
+│   ├── api/              FastAPI backend: alerts, WebSocket fan-out
+│   ├── auth/             JWT issuance, refresh rotation, RBAC, Postgres + Alembic
+│   ├── audit/            hash-chained append-only audit log, Postgres + Alembic
+│   ├── camera/           V4L2 capture, MJPG publisher, USB recovery
+│   ├── detect-gate/      presence gate reading the frame stream
+│   └── notification/     Celery delivery pipeline: Telegram, retries, DLQ
+├── proto/                protobuf contracts for every service boundary
+├── ml/                   models, training notebook, evaluation, inference scripts
+├── config/               per-service config: mongo, redis, postgres, pki, observability
+├── deploy/
+│   ├── cluster/          namespaces, network policies, mesh policies
+│   ├── helm/             charts for the platform and its data services
+│   └── platform/         Istio, cert-manager, CloudNativePG, gateway, metrics
 ├── infra/
-│   └── terraform/     Azure IaC: modules, environments, OPA policies
+│   ├── kind/             local Kubernetes cluster definition
+│   └── terraform/        Azure IaC: modules, environments, OPA policies
 ├── ops/
-│   ├── backup/        restic backup script and excludes
-│   └── host/gpu/      persistence and clock-lock units for the edge GPU
+│   ├── backup/           restic backup script and excludes
+│   └── host/             firewall, GPU units, Helm and kind host setup
 ├── tools/
-│   ├── calibration/   camera calibration
-│   ├── scripts/       proto generation, cert generation, preflight checks
-│   └── smoke/         end-to-end smoke tests
-├── fixtures/          test clips for the presence gate
-├── docs/              architecture and operations chapters, PlantUML diagrams
+│   ├── calibration/      camera calibration
+│   ├── codegen/          TypeScript code generation
+│   ├── hpa-proof/        load tests and autoscaling measurements
+│   ├── mesh-proof/       mTLS and mesh policy probes
+│   ├── scripts/          proto, cert and secret generation, preflight checks
+│   └── smoke/            end-to-end smoke tests
+├── fixtures/             test clips for the presence gate
+├── docs/                 architecture and operations chapters, diagrams, demo media
 └── docker-compose*.yml
 ```
 
