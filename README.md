@@ -40,6 +40,7 @@ Final-year engineering project (PFE) at **Digital Capital**, in partnership with
 - [Theft Detection Platform](#theft-detection-platform)
   - [Contents](#contents)
   - [Demo](#demo)
+    - [Monitoring](#monitoring)
   - [What this platform is](#what-this-platform-is)
   - [Why a per-store model](#why-a-per-store-model)
   - [Architecture](#architecture)
@@ -62,17 +63,79 @@ A walkthrough of the web console.
 
 https://github.com/user-attachments/assets/bf2da8c2-f506-44b4-99cd-2a07924baceb
 
-<p align="center">
-  <img src="docs/assets/camera-feed.gif" width="720" alt="live camera feed with pose keypoints and object boxes">
-</p>
+<div align="center">
 
-<p align="center"><em>Camera feed with skeletal tracking and object detection.</em></p>
+<table>
+<tr>
+<td align="center" width="560">
 
-<p align="center">
-  <img src="docs/assets/telegram-alert.gif" width="300" alt="telegram alert on the operator's phone">
-</p>
+**Live camera feed with skeletal tracking**
 
-<p align="center"><em>The alert as it lands on the operator's phone.</em></p>
+<img src="docs/assets/camera-feed.gif" width="540" alt="live camera feed with pose keypoints and object boxes"/>
+
+</td>
+<td align="center" width="340">
+
+**Alert on the operator's phone**
+
+<img src="docs/assets/telegram-alert.gif" width="280" alt="telegram alert on the operator's phone"/>
+
+</td>
+</tr>
+</table>
+
+</div>
+
+*A trigger on the camera feed reaches Telegram in under 500 ms, then the vision-language verdict follows on the same alert.*
+
+> On phones, GitHub wraps the table in a horizontal scroll. Swipe left or right to see both at full size.
+
+### Monitoring
+
+<div align="center">
+
+<img src="docs/assets/grafana-ai-pipeline.png" width="880" alt="grafana dashboard with fps, inference latency and gpu metrics">
+
+*AI pipeline dashboard: FPS per session, p95 inference latency, GPU utilisation, temperature, VRAM, and power draw.*
+
+<table>
+<tr>
+<td align="center" width="450">
+
+**Distributed trace, camera to inference**
+
+<img src="docs/assets/tempo-trace.png" width="430" alt="tempo trace from camera service through ai service">
+
+</td>
+<td align="center" width="450">
+
+**Service logs in Loki**
+
+<img src="docs/assets/loki-logs.png" width="430" alt="loki log explorer filtered to one service">
+
+</td>
+</tr>
+<tr>
+<td align="center" width="450">
+
+**Container stack**
+
+<img src="docs/assets/portainer.png" width="430" alt="portainer view of the running containers">
+
+</td>
+<td align="center" width="450">
+
+**Host metrics**
+
+<img src="docs/assets/netdata.png" width="430" alt="netdata host cpu memory and pressure metrics">
+
+</td>
+</tr>
+</table>
+
+</div>
+
+*p95 inference latency holds near 46 ms on the RTX 3070, and a single trace follows a frame from capture to classification in 43.6 ms.*
 
 ---
 

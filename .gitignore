@@ -36,6 +36,7 @@ ml/data/processed/
 *.png
 *.mp4
 !ml/notebooks/*.png
+!docs/assets/*.png
 ml/outputs/*
 !ml/outputs/evaluation/
 !ml/outputs/evaluation/*.png
