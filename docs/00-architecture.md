@@ -197,41 +197,7 @@ Every arrow between services. gRPC channels are insecure today; Istio adds mTLS 
 
 OTLP traces export from every internal service to Alloy at `http://theft-alloy:4318`. Every gRPC service exposes `grpc.health.v1.Health` Check and Watch. Every service exposes `/metrics`, with target wiring in `config/prometheus/prometheus.yml`.
 
-### New protos
-
-All five share package `theftdetection.v1`, the same namespace as `inference.proto`, `notification.proto`, and `common.proto`.
-
-#### audit.proto
-
-Defined in `audit.proto`.
-
-A typed `oneof` replaces an untyped struct so every audit category passes the proto type system. The cost is one message per new category, which is rare.
-
-#### presence.proto
-
-Defined in `presence.proto`.
-
-A bidi stream amortizes connection cost across the high-frequency flow, carries backpressure, and returns an explicit ack per event. A dropped person-entered event would leave the heavy path asleep, so the ack is load-bearing. The event kind is an enum because both kinds carry identical fields.
-
-#### camera_control.proto
-
-Defined in `camera_control.proto`.
-
-The edge box opens the stream outbound, which solves NAT without inbound reachability. Pending commands sit in Redis under `camera_pending:{camera_id}` and survive a backend restart. The channel carries control only; frames take the local path.
-
-#### defense.proto
-
-Defined in `defense.proto`.
-
-The call is unary because it sits on the synchronous path of the heavy classifier. The server stays stateless by taking velocity context in the request, which makes it scale horizontally without coordination. Three verdicts instead of two let a mildly suspicious result feed the classifier with a confidence penalty rather than being thrown away.
-
-#### auth.proto
-
-Defined in `auth.proto`.
-
-gRPC carries service-to-service verification; login stays on HTTP because the frontend never speaks gRPC. The three RPCs split by authorization scope: every backend service calls VerifyToken, while Introspect and Revoke belong to admin paths. Eight statuses map to eight downstream behaviors, where expired hints a refresh, revoked forces re-login, and malformed flags the request as suspicious.
-
-### Existing protos
+### Protos
 
 `common.proto` holds `Bbox` as four floats and `Keypoint` as three, shared by `inference.proto`, `notification.proto`, and `defense.proto`. `inference.proto` defines `InferenceService.Analyze(Frame)` returning `Detection`; the backend calls the unary form. `notification.proto` defines `NotificationService.SendAlert(Alert)` returning a reply, with the worker handling channel delivery.
 
@@ -239,54 +205,62 @@ gRPC carries service-to-service verification; login stays on HTTP because the fr
 
 ### Use cases
 
-<div style="overflow-x: auto;">
-  <img src="diagrams/Use-case.png" alt="use case diagram">
-</div>
+![use case diagram](diagrams/Use-case.png)
 
-### Components
+### Components: detection path
 
-<div style="overflow-x: auto;">
-  <img src="diagrams/component.png" alt="component diagram">
-</div>
+![component diagram, detection path](diagrams/component-detection.png)
+
+### Components: request path
+
+![component diagram, request path](diagrams/component-request.png)
 
 ### Deployment
 
-<div style="overflow-x: auto;">
-  <img src="diagrams/deployment.png" alt="deployment diagram">
-</div>
+![deployment diagram](diagrams/deployment.png)
 
-### Sequence: runtime detection, login to alert
+### Sequence: login
 
-<div style="overflow-x: auto;">
-  <img src="diagrams/sequence-1.png" alt="sequence diagram, runtime detection from login to alert">
-</div>
+![sequence diagram, login](diagrams/sequence-login.png)
 
-### Sequence: training, ingest to promote
+### Sequence: detection
 
-<div style="overflow-x: auto;">
-  <img src="diagrams/sequence-2.png" alt="sequence diagram, training from ingest to promote">
-</div>
+![sequence diagram, detection from frame to alert](diagrams/sequence-detection.png)
 
 ### Activity: frame to alert
 
-<div style="overflow-x: auto;">
-  <img src="diagrams/activity-frame_to_alert.png" alt="activity diagram, frame to alert">
-</div>
+![activity diagram, frame to alert](diagrams/activity-frame_to_alert.png)
+
+### Activity: alert delivery
+
+![activity diagram, alert delivery](diagrams/activity-alert_delivery.png)
 
 ### Activity: camera configuration
 
-<div style="overflow-x: auto;">
-  <img src="diagrams/activity-admin_config.png" alt="activity diagram, camera configuration">
-</div>
+![activity diagram, camera configuration](diagrams/activity-admin_config.png)
 
 ### Activity: model lifecycle
 
-<div style="overflow-x: auto;">
-  <img src="diagrams/activity-ml_lifecycle.png" alt="activity diagram, model lifecycle">
-</div>
+![activity diagram, model lifecycle](diagrams/activity-ml_lifecycle.png)
 
 ### Domain model
 
-<div style="overflow-x: auto;">
-  <img src="diagrams/class.png" alt="class diagram">
-</div>
+#### Backend
+
+![class diagram, backend](diagrams/class-backend.png)
+
+#### Auth
+
+![class diagram, auth service](diagrams/class-auth.png)
+
+#### Audit
+
+![class diagram, audit service](diagrams/class-audit.png)
+
+#### Notification
+
+![class diagram, notification service](diagrams/class-notification.png)
+
+#### Outbox
+
+![class diagram, outbox](diagrams/class-outbox.png)
