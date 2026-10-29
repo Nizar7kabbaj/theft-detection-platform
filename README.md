@@ -8,7 +8,7 @@ feed, checks new incidents against a memory of past cases, calls a local
 vision-language model only when precedent can't settle it, and puts the
 final word in a human's hands. Alerts reach security staff in under half
 a second, every verdict carries its reason, and the system labels its own
-training data as it runs — each store grows a model trained on its own
+training data as it runs each store grows a model trained on its own
 camera, its own light, its own shelves.**
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
@@ -28,16 +28,22 @@ camera, its own light, its own shelves.**
 [![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Status — academic project, completed.**
-Final-year engineering project (PFE) at **Digital Capital**, in partnership with **ISGA × Aivancity**, 2025–2026 cycle. Not for commercial use.
+**Status:** working prototype, tested end to end on a live camera (RTX 3070, alerts in under 500 ms). Built at **Digital Capital**, 2025–2026.
 
 </div>
+
+---
+
+## Who it's for
+
+For retail stores that already have cameras and want theft alerts on staff phones. The video is analyzed on the store's own machine, the staff makes the final decision, and faces are blurred in everything stored for training.
 
 ---
 
 ## Contents
 
 - [Theft Detection Platform](#theft-detection-platform)
+  - [Who it's for](#who-its-for)
   - [Contents](#contents)
   - [Demo](#demo)
     - [Monitoring](#monitoring)
@@ -87,8 +93,6 @@ https://github.com/user-attachments/assets/bf2da8c2-f506-44b4-99cd-2a07924baceb
 </div>
 
 *A trigger on the camera feed reaches Telegram in under 500 ms, then the vision-language verdict follows on the same alert.*
-
-> On phones, GitHub wraps the table in a horizontal scroll. Swipe left or right to see both at full size.
 
 ### Monitoring
 
@@ -143,9 +147,9 @@ https://github.com/user-attachments/assets/bf2da8c2-f506-44b4-99cd-2a07924baceb
 
 A surveillance system that recognizes theft behavior from body motion and object movement, organized as a cascade where each stage is cheaper than the one after it and no stage makes a call above its pay grade.
 
-The first stage is a rule engine reading skeletal keypoints and object boxes — dwell time, reach-toward-body, object-in-hand followed by object-vanish. It fires early and often by design: its job is recall, not precision. The second stage is a memory router. Before any expensive judgment, the incident is fingerprinted and compared against past cases; a strong, consistent precedent resolves it on the spot, in either direction. Only incidents without precedent reach the third stage, a vision-language model (Qwen3-VL) running on the local GPU behind an OpenAI-compatible endpoint. It reads the actual pixels of the clip and returns a structured verdict — class, confidence, and a plain-language reason. The verdict lands on Telegram, where an operator confirms, dismisses, or flags it unsure. That tap is the last word, and it is also a label: every human-verified case enters the training set.
+The first stage is a rule engine reading skeletal keypoints and object boxes - dwell time, reach-toward-body, object-in-hand followed by object-vanish. It fires early and often by design: its job is recall, not precision. The second stage is a memory router. Before any expensive judgment, the incident is fingerprinted and compared against past cases; a strong, consistent precedent resolves it on the spot, in either direction. Only incidents without precedent reach the third stage, a vision-language model (Qwen3-VL) running on the local GPU behind an OpenAI-compatible endpoint. It reads the actual pixels of the clip and returns a structured verdict - class, confidence, and a plain-language reason. The verdict lands on Telegram, where an operator confirms, dismisses, or flags it unsure. That tap is the last word, and it is also a label: every human-verified case enters the training set.
 
-The system judges behavior, never identity. Detection runs on skeletons, motion, and objects; faces are blurred before any frame persists and no face ever reaches storage or an alert. There is no face recognition and no per-person profiling anywhere in the pipeline.
+The system judges behavior, never identity. Detection runs on skeletons, motion, and objects. Faces are blurred before any frame is stored for training or for the case file. The live alert sent to staff shows the original clip so they can judge it. There is no face recognition and no per-person profiling anywhere in the pipeline.
 
 Around the cascade sits the rest of the platform: gRPC service contracts, a hardened Linux edge host, Terraform-managed Azure infrastructure, an observability stack with distributed tracing, a versioned ML pipeline built for retraining, and a diagnostic agent that reads the system's own logs and metrics when something breaks and reports the likely cause.
 
@@ -155,7 +159,7 @@ Around the cascade sits the rest of the platform: gRPC service contracts, a hard
 
 Models trained on public shoplifting datasets degrade badly on a camera they were not filmed with. Each public dataset carries its own camera height, lens, lighting, and shelf geometry; a classifier that scores well on the benchmark can fall apart on a different mounting. The first training cycle here, an LSTM on public pose data, showed exactly that gap on live footage.
 
-The platform's answer is to stop depending on other people's cameras. The camera is fixed, the store is fixed, and every confirmed alert produces one labeled example from the exact distribution the model serves in — the vision-language model judges, the human confirms, and the clip files itself into the store's own dataset with no manual annotation. Once enough verified cases accumulate, a PoseConv3D classifier fine-tunes on them and joins the cascade as a filter ahead of the vision-language model, dropping the easy negatives cheaply. Each store ends up with a model trained on its own footage, and the model improves for as long as the system runs. Public datasets serve as bootstrap material only.
+The platform's answer is to stop depending on other people's cameras. The camera is fixed, the store is fixed, and every confirmed alert produces one labeled example from the exact distribution the model serves in - the vision-language model judges, the human confirms, and the clip files itself into the store's own dataset with no manual annotation. Once enough verified cases accumulate, a PoseConv3D classifier fine-tunes on them and joins the cascade as a filter ahead of the vision-language model, dropping the easy negatives cheaply. Each store ends up with a model trained on its own footage, and the model improves for as long as the system runs. Public datasets serve as bootstrap material only.
 
 ---
 
@@ -165,15 +169,15 @@ The platform is organized into planes. Each service boundary is a protobuf contr
 
 **Inference plane.** Camera capture publishes native MJPG onto a Redis stream that doubles as a rolling 30-second pre-trigger buffer. YOLO26-pose extracts skeletal keypoints and object boxes (bottle, phone, bag) in a single pass; its NMS-free head keeps per-frame cost flat regardless of crowding. ByteTrack assigns stable identities, a keypoint hygiene pass interpolates gaps and smooths jitter, and a presence gate keeps GPU load proportional to store traffic. The pose model serves as a TensorRT FP16 engine; the vision-language model shares the card in the leftover VRAM under a lower-priority cgroup slice, so judgment never starves the eyes.
 
-**Detection plane.** The rule engine, the per-track incident state machine (severity escalates from a single fire through conceal-then-move to conceal-and-exit), zone calibration mapping track positions to aisle, shelf edge, and exit polygons, and clip extraction that samples densely around the trigger moment — the concealment has to be inside the frames the judge sees.
+**Detection plane.** The rule engine, the per-track incident state machine (severity escalates from a single fire through conceal-then-move to conceal-and-exit), zone calibration mapping track positions to aisle, shelf edge, and exit polygons, and clip extraction that samples densely around the trigger moment - the concealment has to be inside the frames the judge sees.
 
-**Memory plane.** MongoDB holds the permanent case file per incident: clip reference (faces blurred), motion signature, verdict, reason, zone, timestamp, and the human's tap. A Redis vector index holds incident fingerprints for similarity recall, and a graph store beside MongoDB holds the relationships between cases — same track across visits, same zone, prior incidents — so repeat patterns surface as connected incidents, not isolated events. The memory router reads all three.
+**Memory plane.** MongoDB holds the permanent case file per incident: clip reference (faces blurred), motion signature, verdict, reason, zone, timestamp, and the human's tap. A Redis vector index holds incident fingerprints for similarity recall, and a graph store beside MongoDB holds the relationships between cases - same track across visits, same zone, prior incidents - so repeat patterns surface as connected incidents, not isolated events. The memory router reads all three.
 
-**Data plane.** MongoDB for alerts, detections, and delivery records; Redis in three separated roles — frame stream, task broker, vector catalog — each with its own ACL users and its own memory policy.
+**Data plane.** MongoDB for alerts, detections, and delivery records; Redis in three separated roles - frame stream, task broker, vector catalog - each with its own ACL users and its own memory policy.
 
-**ML platform plane.** DVC versions the dataset against an Azure Blob remote, MLflow on Postgres tracks every run, Pandera validates every sample at the door, and training runs on Kaggle from a PYSKL pretrained checkpoint — the edge host serves, it never trains. A regression gate blocks any model that fails to beat the incumbent on a frozen golden evaluation set, and confidence is temperature-calibrated before an operating point is picked.
+**ML platform plane.** DVC versions the dataset against an Azure Blob remote, MLflow on Postgres tracks every run, Pandera validates every sample at the door, and training runs on Kaggle from a PYSKL pretrained checkpoint - the edge host serves, it never trains. A regression gate blocks any model that fails to beat the incumbent on a frozen golden evaluation set, and confidence is temperature-calibrated before an operating point is picked.
 
-**Diagnostics plane.** Alertmanager feeds a diagnostic agent that pulls the relevant logs from Loki, metrics from Prometheus, and traces from Tempo, forms a single hypothesis with a confidence, and reports it to an engineer-only channel — with a web-search tool for unknown error signatures and a memory of past failures so repeat incidents arrive with their known fix attached. It recommends; it never executes.
+**Diagnostics plane.** Alertmanager feeds a diagnostic agent that pulls the relevant logs from Loki, metrics from Prometheus, and traces from Tempo, forms a single hypothesis with a confidence, and reports it to an engineer-only channel - with a web-search tool for unknown error signatures and a memory of past failures so repeat incidents arrive with their known fix attached. It recommends; it never executes.
 
 **Identity, security, and compliance plane.** JWT auth with refresh rotation and RBAC, a hash-chained append-only audit log, and privacy controls designed for GDPR and the EU AI Act: face blurring before persistence, timed retention, a right-to-erasure endpoint, and a model card stating intended use, measured limits, and fairness checks.
 
@@ -181,7 +185,7 @@ The platform is organized into planes. Each service boundary is a protobuf contr
 
 ```mermaid
 flowchart TB
-    subgraph edge["Inference plane — edge GPU host"]
+    subgraph edge["Inference plane - edge GPU host"]
         cam[Camera<br/>V4L2 · MJPG passthrough] --> stream[(Redis stream<br/>30s rolling buffer)]
         stream --> pose[YOLO26-pose<br/>keypoints + object boxes]
         pose --> track[ByteTrack] --> hygiene[Keypoint hygiene<br/>interpolate · smooth]
@@ -254,36 +258,36 @@ The full component and deployment views live in [`docs/00-architecture.md`](docs
 
 A frame travels from the lens to the guard's phone through two clocks.
 
-1. **Capture.** V4L2 device handling with automatic recovery on USB disconnect. Native MJPG passes straight from the device onto the Redis stream — no decode/re-encode. Frame rate adapts to the scene through the presence gate.
+1. **Capture.** V4L2 device handling with automatic recovery on USB disconnect. Native MJPG passes straight from the device onto the Redis stream - no decode/re-encode. Frame rate adapts to the scene through the presence gate.
 2. **Perception.** YOLO26-pose extracts keypoints and object boxes in one pass on the local GPU; ByteTrack holds identities across frames; the hygiene pass fills keypoint gaps and smooths jitter before anything downstream reads them.
 3. **Rules.** The tripwire scores dwell, reach-toward-body, and object-in-hand/object-vanish per track. Fires accumulate in the incident state machine; severity escalates as concealment turns to movement and movement turns toward the exit.
-4. **Fast clock.** On a trigger, a provisional alert reaches Telegram in under 500ms through the Celery delivery pipeline — retries, exponential backoff, dead-letter queue. An alert either arrives or leaves an inspectable record of why it didn't.
+4. **Fast clock.** On a trigger, a provisional alert reaches Telegram in under 500ms through the Celery delivery pipeline - retries, exponential backoff, dead-letter queue. An alert either arrives or leaves an inspectable record of why it didn't.
 5. **Slow clock.** The memory router fingerprints the incident and pulls the nearest past cases. Strong consistent precedent resolves it; anything else goes to the vision-language model, which reads frames sampled densely around the trigger and returns a schema-enforced verdict with its reason. The verdict upgrades the provisional alert to confirmed, dismissed, or timed out.
-6. **Last word.** The operator's tap closes the case and files the label. Suppressions — cases the memory silenced — are logged append-only, and a sampled fraction still goes through the judge as a spot check. Silence is never unaudited.
+6. **Last word.** The operator's tap closes the case and files the label. Suppressions - cases the memory silenced - are logged append-only, and a sampled fraction still goes through the judge as a spot check. Silence is never unaudited.
 
 ---
 
 ## The memory layer
 
-Two stores split the work by what each is built for. Redis holds the fast, volatile side: the frame stream, the task broker, and the vector catalog that returns the nearest past cases in milliseconds no matter how large the archive grows. MongoDB holds the permanent side: the full case file per incident, which is simultaneously the audit trail and the training set. The graph store adds the dimension similarity can't express — whether this incident connects to that one through the same track, the same zone, the same pattern across days.
+Two stores split the work by what each is built for. Redis holds the fast, volatile side: the frame stream, the task broker, and the vector catalog that returns the nearest past cases in milliseconds no matter how large the archive grows. MongoDB holds the permanent side: the full case file per incident, which is simultaneously the audit trail and the training set. The graph store adds the dimension similarity can't express - whether this incident connects to that one through the same track, the same zone, the same pattern across days.
 
-The router in front of them is deliberately plain: thresholds, not a language model deciding. When it stays silent, the log answers why with the past cases that justified it. Retrieval quality is measured on a held-out set — the risk in a memory system was never the archive size, it's pulling the wrong five cases.
+The router in front of them is deliberately plain: thresholds, not a language model deciding. When it stays silent, the log answers why with the past cases that justified it. Retrieval quality is measured on a held-out set - the risk in a memory system was never the archive size, it's pulling the wrong five cases.
 
 ---
 
 ## The data flywheel
 
-Every confirmed alert writes three things: a case file to MongoDB, a fingerprint to the vector index, and a labeled sample toward the next training cycle. Pandera validates keypoint schema and clip bounds before anything enters the dataset; DVC versions each snapshot against Azure Blob; MLflow records which data, which parameters, which score. Training runs on Kaggle from a PYSKL pretrained PoseConv3D checkpoint — checkpointed per epoch, resumable across the session cap — and the resulting model sits its exam against the frozen golden set before promotion. Promoted, it takes a seat between the rules and the vision-language model, dropping easy negatives at skeleton cost. It never makes the final call; it can't see the object.
+Every confirmed alert writes three things: a case file to MongoDB, a fingerprint to the vector index, and a labeled sample toward the next training cycle. Pandera validates keypoint schema and clip bounds before anything enters the dataset; DVC versions each snapshot against Azure Blob; MLflow records which data, which parameters, which score. Training runs on Kaggle from a PYSKL pretrained PoseConv3D checkpoint - checkpointed per epoch and resumable and the resulting model is scored against the frozen golden set before promotion. Promoted, it takes a seat between the rules and the vision-language model, dropping easy negatives at skeleton cost. It never makes the final call; it can't see the object.
 
-The golden set itself is built to resist self-deception: hard negatives — innocent actions that look like theft — with frozen ground truth that thresholds are never tuned against. Judge prompts are versioned like code, and every prompt change re-scores against the set; a regression fails the change.
+The golden set itself is built to resist self-deception: hard negatives - innocent actions that look like theft with frozen ground truth that thresholds are never tuned against. Judge prompts are versioned like code, and every prompt change re-scores against the set; a regression fails the change.
 
 ---
 
 ## Self-diagnosis
 
-A detection system that fails silently is worse than none, so the platform watches itself with the same cascade shape it uses on the shop floor. Prometheus rules — container down, latency budget breach, low VRAM headroom, keypoint drift from the per-session KS-test — fire into Alertmanager, which wakes the diagnostic agent. The agent pulls the logs, metrics, and traces around the alert, forms one hypothesis with a stated confidence, and posts it to an engineer-only Telegram channel, kept fully separate from the store's alert feed. Unknown error signatures go through a web-search tool and come back with the relevant issue thread linked. Every diagnosis files into a failure memory, so a repeat incident arrives with its precedent: when it last happened, what fixed it, whether the fix held.
+A detection system that fails silently is worse than none, so the platform watches itself with the same cascade shape it uses on the shop floor. Prometheus rules - container down, latency budget breach, low VRAM headroom, keypoint drift from the per-session KS-test - fire into Alertmanager, which wakes the diagnostic agent. The agent pulls the logs, metrics, and traces around the alert, forms one hypothesis with a stated confidence, and posts it to an engineer-only Telegram channel, kept fully separate from the store's alert feed. Unknown error signatures go through a web-search tool and come back with the relevant issue thread linked. Every diagnosis files into a failure memory, so a repeat incident arrives with its precedent: when it last happened, what fixed it, whether the fix held.
 
-Model updates run through the same discipline as everything else. When a new vision-language model or pose model releases, the agent evaluates it against the golden set overnight in the low-priority GPU slice and reports the numbers; the swap happens only on an engineer's approval, and only as a configuration change — the judge speaks to an OpenAI-compatible local endpoint, so backends exchange without code changes. Nothing updates itself.
+Model updates run through the same discipline as everything else. When a new vision-language model or pose model releases, the agent evaluates it against the golden set overnight in the low-priority GPU slice and reports the numbers; the swap happens only on an engineer's approval, and only as a configuration change - the judge speaks to an OpenAI-compatible local endpoint, so backends exchange without code changes. Nothing updates itself.
 
 ---
 
@@ -291,7 +295,7 @@ Model updates run through the same discipline as everything else. When a new vis
 
 **Observability.** Every service is instrumented with OpenTelemetry. Traces flow to Tempo, metrics to Prometheus, logs to Loki via Alloy, and all three meet in Grafana. Trace context survives process boundaries, including Celery task hops, so a single alert can be followed from frame capture to Telegram delivery. A GPU exporter tracks VRAM, temperature, and per-camera FPS.
 
-**Security.** The edge host runs hardened Ubuntu: ufw default-deny, fail2ban, AppArmor, auditd with an immutable rule set, unattended upgrades. MongoDB and the three Redis roles bind to loopback with per-service ACL users, hashed passwords in config, and plaintext only in 600-mode files owned by the container user. Model weights verify against published hashes before first load. The vision-language endpoint is reachable only on the internal Docker network. Remote access goes through a WireGuard mesh, not exposed ports. Pre-commit hooks run gitleaks, pip-audit, tflint, tfsec, checkov, and conftest on every commit, and service images build non-root with vulnerability scanning in CI. Telegram commands are gated by an operator whitelist, rate-limited, and audit-logged — a muted zone is a chosen blind spot, and the log says who chose it.
+**Security.** The edge host runs hardened Ubuntu: ufw default-deny, fail2ban, AppArmor, auditd with an immutable rule set, unattended upgrades. MongoDB and the three Redis roles bind to loopback with per-service ACL users, hashed passwords in config, and plaintext only in 600-mode files owned by the container user. Model weights verify against published hashes before first load. The vision-language endpoint is reachable only on the internal Docker network. Remote access goes through a WireGuard mesh, not exposed ports. Pre-commit hooks run gitleaks, pip-audit, tflint, tfsec, checkov, and conftest on every commit, and service images build non-root with vulnerability scanning in CI. Telegram commands are gated by an operator whitelist, rate-limited, and audit-logged - a muted zone is a chosen blind spot, and the log says who chose it.
 
 **Infrastructure as code.** Terraform 1.10+ with azurerm 4.x manages the Azure footprint from [`infra/terraform/`](infra/terraform/): modules for resource groups, networking, and Key Vault, separate dev and prod environments, and OPA Rego policies enforcing cost control, security baseline, and naming conventions before any plan applies. Auth is Azure AD only, no storage keys. Remote state lives in a backend that survives `terraform destroy`.
 
@@ -364,7 +368,7 @@ docker compose \
   -f docker-compose.linux.yml down
 ```
 
-Azure infrastructure is optional for local work and costs credit while it exists:
+Azure infrastructure is optional for local work and is billed while it runs:
 
 ```bash
 cd infra/terraform/environments/dev
@@ -451,9 +455,8 @@ MIT. See [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-- **Digital Capital** — host company for the final-year project
-- **ISGA** and **Aivancity** — academic supervision
-- **PoseLift** (TeCSAR-UNCC, WACV 2025) — bootstrap dataset for the first training cycle. [Repository](https://github.com/TeCSAR-UNCC/PoseLift) · [Paper](https://arxiv.org/abs/2501.06591)
-- **Ultralytics** — YOLO26-pose backbone
-- **Qwen team** — Qwen3-VL vision-language model
-- **PYSKL** — PoseConv3D pretrained checkpoints
+- **Digital Capital** - host company
+- **PoseLift** (TeCSAR-UNCC, WACV 2025) - bootstrap dataset for the first training cycle. [Repository](https://github.com/TeCSAR-UNCC/PoseLift) · [Paper](https://arxiv.org/abs/2501.06591)
+- **Ultralytics** - YOLO26-pose backbone
+- **Qwen team** - Qwen3-VL vision-language model
+- **PYSKL** - PoseConv3D pretrained checkpoints
